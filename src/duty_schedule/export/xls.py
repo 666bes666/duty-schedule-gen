@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -9,9 +10,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from duty_schedule.models import Schedule, ShiftType
+from duty_schedule.models import City, Schedule
 
-# Цветовая схема по ТЗ
+# Цветовая схема
 COLORS = {
     "morning": "00B050",  # зелёный
     "evening": "003366",  # тёмно-синий
@@ -20,14 +21,19 @@ COLORS = {
     "day_off": "FF6600",  # оранжевый
     "vacation": "CC99FF",  # сиреневый
     "header": "404040",  # тёмно-серый
-    "name": "D9D9D9",  # светло-серый (столбец имён)
-    "weekend": "F2F2F2",  # чуть серее белого (выходная дата)
+    "name": "D9D9D9",  # светло-серый
+    "weekend": "F2F2F2",  # выходная дата
+    "ok": "E2EFDA",  # светло-зелёный (норма выполнена)
+    "warn": "FFF2CC",  # жёлтый (немного недобирает)
+    "bad": "FCE4D6",  # красный (значительно недобирает)
+    "over": "DDEBF7",  # голубой (перевыполнение)
+    "stat_header": "2F4F8F",  # тёмно-синий заголовок статистики
+    "stat_section": "BDD7EE",  # раздел статистики
+    "total_row": "595959",  # строка итогов
 }
 
-# Ключи смен с белым шрифтом
 WHITE_FONT_KEYS = {"evening", "header", "workday", "night"}
 
-# Краткие обозначения смен в ячейках
 SHIFT_LABELS = {
     "morning": "Утро",
     "evening": "Вечер",
@@ -38,7 +44,39 @@ SHIFT_LABELS = {
 }
 
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-MONTHS_RU = ["", "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+MONTHS_RU = [
+    "",
+    "Январь",
+    "Февраль",
+    "Март",
+    "Апрель",
+    "Май",
+    "Июнь",
+    "Июль",
+    "Август",
+    "Сентябрь",
+    "Октябрь",
+    "Ноябрь",
+    "Декабрь",
+]
+MONTHS_RU_SHORT = [
+    "",
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "май",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
+]
+
+
+# ── Утилиты стиля ────────────────────────────────────────────────────────────
 
 
 def _fill(hex_color: str) -> PatternFill:
@@ -54,8 +92,11 @@ def _align(horizontal: str = "center") -> Alignment:
     return Alignment(wrap_text=True, vertical="center", horizontal=horizontal)
 
 
+# ── Построение индекса назначений ────────────────────────────────────────────
+
+
 def _build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
-    """Построить индекс: имя сотрудника → дата → ключ смены."""
+    """Построить индекс: имя → дата → ключ смены."""
     result: dict[str, dict[date, str]] = {}
     for day in schedule.days:
         mapping = {
@@ -72,12 +113,133 @@ def _build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
     return result
 
 
+# ── Структура статистики ─────────────────────────────────────────────────────
+
+
+@dataclass
+class EmployeeStats:
+    name: str
+    city: str
+    total_working: int  # всего рабочих дней
+    target: int  # норма
+    morning: int  # утренних смен
+    evening: int  # вечерних смен
+    night: int  # ночных смен
+    workday: int  # рабочих дней (не дежурство)
+    day_off: int  # выходных
+    vacation: int  # отпуск
+    holiday_work: int  # работал в праздники/выходные
+    max_streak_work: int  # макс. серия рабочих дней подряд
+    max_streak_rest: int  # макс. серия выходных подряд
+
+    @property
+    def deviation(self) -> int:
+        return self.total_working - self.target
+
+    @property
+    def pct_norm(self) -> float:
+        return (self.total_working / self.target * 100) if self.target else 0.0
+
+    @property
+    def deviation_color(self) -> str:
+        d = self.deviation
+        if d >= 0:
+            return COLORS["over"] if d > 2 else COLORS["ok"]
+        return COLORS["warn"] if d >= -3 else COLORS["bad"]
+
+    @property
+    def top_shift(self) -> str:
+        """Самый частый тип дежурной смены."""
+        counts = {
+            "Утро": self.morning,
+            "Вечер": self.evening,
+            "Ночь": self.night,
+        }
+        top = max(counts, key=lambda k: counts[k])
+        return top if counts[top] > 0 else "—"
+
+
+def _compute_stats(
+    schedule: Schedule,
+    assignments: dict[str, dict[date, str]],
+    production_days: int,
+) -> list[EmployeeStats]:
+    """Вычислить статистику для каждого сотрудника."""
+    holiday_dates = {day.date for day in schedule.days if day.is_holiday}
+    sorted_dates = sorted(day.date for day in schedule.days)
+
+    result = []
+    for emp in schedule.config.employees:
+        emp_days = assignments.get(emp.name, {})
+        city = "Москва" if emp.city == City.MOSCOW else "Хабаровск"
+
+        morning = sum(1 for v in emp_days.values() if v == "morning")
+        evening = sum(1 for v in emp_days.values() if v == "evening")
+        night = sum(1 for v in emp_days.values() if v == "night")
+        workday = sum(1 for v in emp_days.values() if v == "workday")
+        day_off = sum(1 for v in emp_days.values() if v == "day_off")
+        vacation = sum(1 for v in emp_days.values() if v == "vacation")
+        total_working = morning + evening + night + workday
+
+        # Работал в выходные / праздники
+        holiday_work = sum(
+            1
+            for d, v in emp_days.items()
+            if d in holiday_dates and v in ("morning", "evening", "night", "workday")
+        )
+
+        # Макс. серии
+        max_streak_work = _max_streak(sorted_dates, emp_days, working=True)
+        max_streak_rest = _max_streak(sorted_dates, emp_days, working=False)
+
+        result.append(
+            EmployeeStats(
+                name=emp.name,
+                city=city,
+                total_working=total_working,
+                target=production_days,
+                morning=morning,
+                evening=evening,
+                night=night,
+                workday=workday,
+                day_off=day_off,
+                vacation=vacation,
+                holiday_work=holiday_work,
+                max_streak_work=max_streak_work,
+                max_streak_rest=max_streak_rest,
+            )
+        )
+    return result
+
+
+def _max_streak(
+    sorted_dates: list[date],
+    emp_days: dict[date, str],
+    working: bool,
+) -> int:
+    """Вычислить максимальную серию рабочих или нерабочих дней подряд."""
+    working_keys = {"morning", "evening", "night", "workday"}
+    max_s = cur = 0
+    for d in sorted_dates:
+        key = emp_days.get(d, "day_off")
+        is_working = key in working_keys
+        if is_working == working:
+            cur += 1
+            max_s = max(max_s, cur)
+        else:
+            cur = 0
+    return max_s
+
+
+# ── Главный экспорт ──────────────────────────────────────────────────────────
+
+
 def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     """
-    Сгенерировать .xlsx файл: строки — сотрудники, столбцы — даты.
-
-    Каждая ячейка на пересечении показывает тип смены сотрудника в этот день
-    с цветовым кодированием.
+    Сгенерировать .xlsx файл с тремя листами:
+      1. «График дежурств» — строки=сотрудники, столбцы=даты
+      2. «Статистика» — детальные показатели каждого сотрудника за месяц
+      3. «Легенда» — расшифровка цветов
 
     Returns:
         Путь к созданному файлу.
@@ -92,68 +254,272 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     days = schedule.days
     employees = schedule.config.employees
     assignments = _build_assignments(schedule)
+    production_days = schedule.metadata.get("production_working_days", 21)
+    stats = _compute_stats(schedule, assignments, production_days)
 
-    # ── Строка 1: заголовок с датами ────────────────────────────────────────
+    # ── Лист 1: График ──────────────────────────────────────────────────────
+    _build_schedule_sheet(ws, days, employees, assignments)
+
+    # ── Лист 2: Статистика ──────────────────────────────────────────────────
+    ws_stat = wb.create_sheet(title="Статистика")
+    _build_stats_sheet(ws_stat, stats, schedule)
+
+    # ── Лист 3: Легенда ─────────────────────────────────────────────────────
+    _add_legend(wb)
+
+    wb.save(filename)
+    return filename
+
+
+def _build_schedule_sheet(ws, days, employees, assignments) -> None:  # noqa: ANN001
+    """Заполнить лист «График дежурств»."""
     ws.row_dimensions[1].height = 36
 
-    # Ячейка A1 — «Сотрудник»
-    header_cell = ws.cell(row=1, column=1, value="Сотрудник")
-    header_cell.fill = _fill(COLORS["header"])
-    header_cell.font = _font(bold=True, white=True, size=11)
-    header_cell.alignment = _align()
+    # A1 — «Сотрудник»
+    h = ws.cell(row=1, column=1, value="Сотрудник")
+    h.fill = _fill(COLORS["header"])
+    h.font = _font(bold=True, white=True, size=11)
+    h.alignment = _align()
 
+    # Заголовки дат
     for col_idx, day in enumerate(days, start=2):
         d = day.date
-        dow = DAYS_RU[d.weekday()]
-        label = f"{d.day}\n{dow}"
+        label = f"{d.day}\n{DAYS_RU[d.weekday()]}"
         cell = ws.cell(row=1, column=col_idx, value=label)
-        bg = COLORS["weekend"] if day.is_holiday else "FFFFFF"
-        cell.fill = _fill(bg)
+        cell.fill = _fill(COLORS["weekend"] if day.is_holiday else "FFFFFF")
         cell.font = _font(bold=day.is_holiday, size=9)
         cell.alignment = _align()
 
-    # ── Строки 2+: по одной на каждого сотрудника ───────────────────────────
+    # Столбец "Итого" после дат
+    total_col = len(days) + 2
+    tc = ws.cell(row=1, column=total_col, value="Итого\nдней")
+    tc.fill = _fill(COLORS["header"])
+    tc.font = _font(bold=True, white=True, size=9)
+    tc.alignment = _align()
+
+    # Строки сотрудников
     for row_idx, emp in enumerate(employees, start=2):
         ws.row_dimensions[row_idx].height = 20
+        nc = ws.cell(row=row_idx, column=1, value=emp.name)
+        nc.fill = _fill(COLORS["name"])
+        nc.font = _font(bold=True, size=10)
+        nc.alignment = _align(horizontal="left")
 
-        # Столбец A: имя сотрудника
-        name_cell = ws.cell(row=row_idx, column=1, value=emp.name)
-        name_cell.fill = _fill(COLORS["name"])
-        name_cell.font = _font(bold=True, size=10)
-        name_cell.alignment = _align(horizontal="left")
-
-        # Столбцы B+: смена на каждую дату
         emp_days = assignments.get(emp.name, {})
+        working_total = 0
         for col_idx, day in enumerate(days, start=2):
             shift_key = emp_days.get(day.date, "day_off")
+            if shift_key in ("morning", "evening", "night", "workday"):
+                working_total += 1
             label = SHIFT_LABELS.get(shift_key, "?")
             color = COLORS.get(shift_key, "FFFFFF")
-
             cell = ws.cell(row=row_idx, column=col_idx, value=label)
             cell.fill = _fill(color)
             cell.font = _font(white=shift_key in WHITE_FONT_KEYS, size=9)
             cell.alignment = _align()
 
-    # ── Ширина столбцов ─────────────────────────────────────────────────────
-    ws.column_dimensions["A"].width = 18  # имена
+        # Итого дней
+        itogo = ws.cell(row=row_idx, column=total_col, value=working_total)
+        itogo.fill = _fill(COLORS["name"])
+        itogo.font = _font(bold=True, size=10)
+        itogo.alignment = _align()
+
+    ws.column_dimensions["A"].width = 18
     for col_idx in range(2, len(days) + 2):
         ws.column_dimensions[get_column_letter(col_idx)].width = 5.5
-
-    # ── Добавляем легенду на отдельный лист ─────────────────────────────────
-    _add_legend(wb)
-
-    # Заморозить первый столбец и первую строку
+    ws.column_dimensions[get_column_letter(total_col)].width = 8
     ws.freeze_panes = "B2"
 
-    wb.save(filename)
-    return filename
+
+def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> None:  # noqa: ANN001
+    """
+    Заполнить лист «Статистика».
+
+    Метрики, которые важны дежурному:
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  Сотрудник │ Город │ Рабочих │ Норма │ +/- │ % нормы           │
+    │  Утро │ Вечер │ Ночь │ РД │ Выходных │ Отпуск              │
+    │  В праздники │ Макс. серия работы │ Макс. серия отдыха    │
+    │  Любимая смена                                             │
+    └─────────────────────────────────────────────────────────────────┘
+    """
+    month = schedule.config.month
+    year = schedule.config.year
+    title = f"Статистика дежурств — {MONTHS_RU[month]} {year}"
+
+    # ── Заголовок листа ──────────────────────────────────────────────────────
+    ws.merge_cells("A1:O1")
+    title_cell = ws.cell(row=1, column=1, value=title)
+    title_cell.fill = _fill(COLORS["stat_header"])
+    title_cell.font = _font(bold=True, white=True, size=14)
+    title_cell.alignment = _align()
+    ws.row_dimensions[1].height = 30
+
+    # ── Группы заголовков (строка 2) ─────────────────────────────────────────
+    groups = [
+        (1, 1, ""),
+        (2, 2, ""),
+        (3, 6, "Норма"),
+        (7, 10, "Смены"),
+        (11, 13, "Отдых"),
+        (14, 14, "Нагрузка"),
+        (15, 15, ""),
+    ]
+    for start, end, label in groups:
+        if label:
+            ws.merge_cells(start_row=2, start_column=start, end_row=2, end_column=end)
+        cell = ws.cell(row=2, column=start, value=label)
+        cell.fill = _fill(COLORS["stat_section"])
+        cell.font = _font(bold=True, size=9)
+        cell.alignment = _align()
+    ws.row_dimensions[2].height = 16
+
+    # ── Заголовки столбцов (строка 3) ────────────────────────────────────────
+    headers = [
+        "Сотрудник",  # A
+        "Город",  # B
+        "Рабочих\nдней",  # C
+        "Норма",  # D
+        "+/−\nк норме",  # E
+        "% нормы",  # F
+        "Утро",  # G
+        "Вечер",  # H
+        "Ночь",  # I
+        "РД",  # J
+        "Выходных",  # K
+        "Отпуск\n(дней)",  # L
+        "Работал в\nпраздники",  # M
+        "Макс. серия\nработы",  # N
+        "Макс. серия\nотдыха",  # O
+    ]
+    ws.row_dimensions[3].height = 32
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=3, column=col_idx, value=h)
+        cell.fill = _fill(COLORS["header"])
+        cell.font = _font(bold=True, white=True, size=9)
+        cell.alignment = _align()
+
+    # ── Строки сотрудников (с 4-й) ───────────────────────────────────────────
+    totals = {
+        "total": 0,
+        "morning": 0,
+        "evening": 0,
+        "night": 0,
+        "workday": 0,
+        "day_off": 0,
+        "vacation": 0,
+        "holiday_work": 0,
+    }
+
+    for row_idx, st in enumerate(stats, start=4):
+        ws.row_dimensions[row_idx].height = 20
+
+        # Имя
+        nc = ws.cell(row=row_idx, column=1, value=st.name)
+        nc.fill = _fill(COLORS["name"])
+        nc.font = _font(bold=True, size=10)
+        nc.alignment = _align(horizontal="left")
+
+        # Город
+        city_color = "D6E4F0" if st.city == "Хабаровск" else "E8F5E9"
+        cc = ws.cell(row=row_idx, column=2, value=st.city)
+        cc.fill = _fill(city_color)
+        cc.font = _font(size=9)
+        cc.alignment = _align()
+
+        # Рабочих дней
+        _stat_cell(ws, row_idx, 3, st.total_working, COLORS["name"])
+        # Норма
+        _stat_cell(ws, row_idx, 4, st.target, COLORS["name"])
+        # +/- к норме
+        dev_label = f"+{st.deviation}" if st.deviation > 0 else str(st.deviation)
+        _stat_cell(ws, row_idx, 5, dev_label, st.deviation_color, bold=True)
+        # % нормы
+        pct_label = f"{st.pct_norm:.0f}%"
+        pct_color = (
+            COLORS["ok"]
+            if st.pct_norm >= 95
+            else (COLORS["warn"] if st.pct_norm >= 80 else COLORS["bad"])
+        )
+        _stat_cell(ws, row_idx, 6, pct_label, pct_color)
+
+        # Смены
+        _stat_cell(ws, row_idx, 7, st.morning or "—", COLORS["morning"], white=False)
+        _stat_cell(ws, row_idx, 8, st.evening or "—", COLORS["evening"], white=True)
+        _stat_cell(ws, row_idx, 9, st.night or "—", COLORS["night"])
+        _stat_cell(ws, row_idx, 10, st.workday or "—", COLORS["workday"], white=True)
+
+        # Выходной / отпуск
+        _stat_cell(ws, row_idx, 11, st.day_off, COLORS["day_off"])
+        _stat_cell(ws, row_idx, 12, st.vacation or "—", COLORS["vacation"])
+
+        # Работал в праздники
+        hw_color = COLORS["warn"] if st.holiday_work > 0 else COLORS["ok"]
+        _stat_cell(ws, row_idx, 13, st.holiday_work or "—", hw_color)
+
+        # Макс. серии
+        streak_w_color = COLORS["bad"] if st.max_streak_work >= 5 else COLORS["ok"]
+        _stat_cell(ws, row_idx, 14, st.max_streak_work, streak_w_color)
+        streak_r_color = COLORS["warn"] if st.max_streak_rest >= 3 else COLORS["ok"]
+        _stat_cell(ws, row_idx, 15, st.max_streak_rest, streak_r_color)
+
+        # Накапливаем итоги
+        totals["total"] += st.total_working
+        totals["morning"] += st.morning
+        totals["evening"] += st.evening
+        totals["night"] += st.night
+        totals["workday"] += st.workday
+        totals["day_off"] += st.day_off
+        totals["vacation"] += st.vacation
+        totals["holiday_work"] += st.holiday_work
+
+    # ── Строка итогов по команде ──────────────────────────────────────────────
+    total_row = len(stats) + 4
+    ws.row_dimensions[total_row].height = 22
+    _stat_cell(ws, total_row, 1, "ИТОГО по команде", COLORS["total_row"], white=True, bold=True)
+    _stat_cell(ws, total_row, 2, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 3, totals["total"], COLORS["total_row"], white=True, bold=True)
+    _stat_cell(ws, total_row, 4, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 5, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 6, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 7, totals["morning"], COLORS["morning"], bold=True)
+    _stat_cell(ws, total_row, 8, totals["evening"], COLORS["evening"], white=True, bold=True)
+    _stat_cell(ws, total_row, 9, totals["night"], COLORS["night"], bold=True)
+    _stat_cell(ws, total_row, 10, totals["workday"], COLORS["workday"], white=True, bold=True)
+    _stat_cell(ws, total_row, 11, totals["day_off"], COLORS["day_off"], bold=True)
+    _stat_cell(ws, total_row, 12, totals["vacation"], COLORS["vacation"], bold=True)
+    _stat_cell(ws, total_row, 13, totals["holiday_work"], COLORS["total_row"], white=True)
+    _stat_cell(ws, total_row, 14, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 15, "", COLORS["total_row"])
+
+    # ── Ширина столбцов ───────────────────────────────────────────────────────
+    col_widths = [20, 12, 10, 8, 10, 9, 7, 7, 7, 7, 10, 10, 14, 16, 16]
+    for i, w in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = "A4"
+
+
+def _stat_cell(
+    ws,  # noqa: ANN001
+    row: int,
+    col: int,
+    value: object,
+    bg: str,
+    white: bool = False,
+    bold: bool = False,
+) -> None:
+    cell = ws.cell(row=row, column=col, value=value)
+    cell.fill = _fill(bg)
+    cell.font = _font(bold=bold, white=white, size=10)
+    cell.alignment = _align()
 
 
 def _add_legend(wb: Workbook) -> None:
     """Добавить лист с легендой цветов."""
     ws = wb.create_sheet(title="Легенда")
     ws.column_dimensions["A"].width = 10
-    ws.column_dimensions["B"].width = 25
+    ws.column_dimensions["B"].width = 30
 
     items = [
         ("Утро", "morning", "08:00–17:00 МСК"),
@@ -163,25 +529,15 @@ def _add_legend(wb: Workbook) -> None:
         ("Отп", "vacation", "Отпуск"),
         ("—", "day_off", "Выходной"),
     ]
-
     ws.cell(row=1, column=1, value="Обозн.").font = _font(bold=True, size=11)
     ws.cell(row=1, column=2, value="Описание").font = _font(bold=True, size=11)
 
     for i, (label, key, desc) in enumerate(items, start=2):
-        color = COLORS[key]
-        cell_label = ws.cell(row=i, column=1, value=label)
-        cell_label.fill = _fill(color)
-        cell_label.font = _font(white=key in WHITE_FONT_KEYS, bold=True, size=10)
-        cell_label.alignment = _align()
-
-        cell_desc = ws.cell(row=i, column=2, value=desc)
-        cell_desc.font = _font(size=10)
-        cell_desc.alignment = _align(horizontal="left")
-
+        c1 = ws.cell(row=i, column=1, value=label)
+        c1.fill = _fill(COLORS[key])
+        c1.font = _font(white=key in WHITE_FONT_KEYS, bold=True, size=10)
+        c1.alignment = _align()
+        c2 = ws.cell(row=i, column=2, value=desc)
+        c2.font = _font(size=10)
+        c2.alignment = _align(horizontal="left")
         ws.row_dimensions[i].height = 20
-
-
-def _shift_key_for(name: str, day_schedule, shift_types: list[ShiftType]) -> str:
-    """Вспомогательная функция — не используется в основном потоке."""
-    _ = (name, day_schedule, shift_types)
-    return "day_off"
