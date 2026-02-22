@@ -1,0 +1,71 @@
+# Пример конфигурации — реальный состав команды
+# Запуск: uv run duty-schedule generate examples/config.yaml
+
+month: 3
+year: 2025
+timezone: Europe/Moscow
+seed: 42
+
+employees:
+  # ── Москва — дежурные (5 человек) ────────────────────────────────────────
+  - name: "Амир"
+    city: moscow
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Милана"
+    city: moscow
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Ваня"
+    city: moscow
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Тимофей"
+    city: moscow
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Петя"
+    city: moscow
+    schedule_type: flexible
+    on_duty: true
+
+  # ── Москва — не дежурные ──────────────────────────────────────────────────
+  - name: "Слава"
+    city: moscow
+    schedule_type: "5/2"
+    on_duty: false           # Инженер, без дежурств, пятидневка
+
+  - name: "Дима"
+    city: moscow
+    schedule_type: "5/2"
+    on_duty: false
+    team_lead: true          # Тимлид
+
+  # ── Хабаровск — дежурные (3 человека) ────────────────────────────────────
+  # Ночные смены: 00:00–08:00 MSK = 07:00–15:00 по местному времени
+  # Рабочий день: 09:00–18:00 по местному времени (Asia/Vladivostok)
+  - name: "Вика"
+    city: khabarovsk
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Андрей"
+    city: khabarovsk
+    schedule_type: flexible
+    on_duty: true
+
+  - name: "Глеб"
+    city: khabarovsk
+    schedule_type: flexible
+    on_duty: true
+
+  # ── Хабаровск — тимлид (не дежурный) ────────────────────────────────────
+  - name: "Паша"
+    city: khabarovsk
+    schedule_type: flexible
+    on_duty: false
+    team_lead: true
