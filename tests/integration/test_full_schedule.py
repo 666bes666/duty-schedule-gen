@@ -102,7 +102,9 @@ class TestXlsExport:
         path = export_xls(schedule, tmp_path)
         wb = load_workbook(path)
         ws = wb.active
-        assert ws.max_row >= 32  # заголовок + 31 день
+        # Новый формат: строки = сотрудники, столбцы = даты
+        assert ws.max_column >= 32  # заголовок + 31 день
+        assert ws.max_row >= 7  # заголовок + минимум 6 сотрудников
 
 
 class TestIcsExport:

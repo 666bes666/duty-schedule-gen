@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from duty_schedule.models import DaySchedule, Schedule
+from duty_schedule.models import Schedule, ShiftType
 
 # Цветовая схема по ТЗ
 COLORS = {
@@ -17,43 +18,66 @@ COLORS = {
     "night": "00B0F0",  # бирюзовый
     "workday": "0070C0",  # ярко-синий
     "day_off": "FF6600",  # оранжевый
-    "header": "404040",  # тёмно-серый
-    "date": "E0E0E0",  # светло-серый
     "vacation": "CC99FF",  # сиреневый
+    "header": "404040",  # тёмно-серый
+    "name": "D9D9D9",  # светло-серый (столбец имён)
+    "weekend": "F2F2F2",  # чуть серее белого (выходная дата)
 }
 
-# Белый шрифт на тёмном фоне
-DARK_BG = {"evening", "header"}
+# Ключи смен с белым шрифтом
+WHITE_FONT_KEYS = {"evening", "header", "workday", "night"}
+
+# Краткие обозначения смен в ячейках
+SHIFT_LABELS = {
+    "morning": "Утро",
+    "evening": "Вечер",
+    "night": "Ночь",
+    "workday": "РД",
+    "day_off": "—",
+    "vacation": "Отп",
+}
+
+DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+MONTHS_RU = ["", "янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
 
 
 def _fill(hex_color: str) -> PatternFill:
     return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
 
 
-def _font(bold: bool = False, white: bool = False) -> Font:
+def _font(bold: bool = False, white: bool = False, size: int = 10) -> Font:
     color = "FFFFFF" if white else "000000"
-    return Font(bold=bold, color=color, name="Calibri", size=11)
+    return Font(bold=bold, color=color, name="Calibri", size=size)
 
 
-def _align_wrap() -> Alignment:
-    return Alignment(wrap_text=True, vertical="top", horizontal="center")
+def _align(horizontal: str = "center") -> Alignment:
+    return Alignment(wrap_text=True, vertical="center", horizontal=horizontal)
 
 
-HEADERS = [
-    "Дата",
-    "Утро\n08:00–17:00",
-    "Вечер\n15:00–00:00",
-    "Ночь\n00:00–08:00",
-    "Рабочий\nдень",
-    "Выходной",
-]
-
-SHIFT_COLS = ["morning", "evening", "night", "workday", "day_off"]
+def _build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
+    """Построить индекс: имя сотрудника → дата → ключ смены."""
+    result: dict[str, dict[date, str]] = {}
+    for day in schedule.days:
+        mapping = {
+            "morning": day.morning,
+            "evening": day.evening,
+            "night": day.night,
+            "workday": day.workday,
+            "day_off": day.day_off,
+            "vacation": day.vacation,
+        }
+        for shift_key, names in mapping.items():
+            for name in names:
+                result.setdefault(name, {})[day.date] = shift_key
+    return result
 
 
 def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     """
-    Сгенерировать .xlsx файл с цветовым кодированием смен.
+    Сгенерировать .xlsx файл: строки — сотрудники, столбцы — даты.
+
+    Каждая ячейка на пересечении показывает тип смены сотрудника в этот день
+    с цветовым кодированием.
 
     Returns:
         Путь к созданному файлу.
@@ -65,85 +89,99 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     ws = wb.active
     ws.title = "График дежурств"
 
-    # ── Заголовок (строка 1) ────────────────────────────────────────────────
-    ws.row_dimensions[1].height = 40
-    for col_idx, header in enumerate(HEADERS, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.fill = _fill(COLORS["header"])
-        cell.font = _font(bold=True, white=True)
-        cell.alignment = _align_wrap()
+    days = schedule.days
+    employees = schedule.config.employees
+    assignments = _build_assignments(schedule)
 
-    # ── Данные (строки 2+) ──────────────────────────────────────────────────
-    for row_idx, day in enumerate(schedule.days, start=2):
-        ws.row_dimensions[row_idx].height = _row_height(day)
+    # ── Строка 1: заголовок с датами ────────────────────────────────────────
+    ws.row_dimensions[1].height = 36
 
-        # Столбец 1: Дата
-        date_cell = ws.cell(
-            row=row_idx,
-            column=1,
-            value=_format_date(day),
-        )
-        date_cell.fill = _fill(COLORS["date"])
-        date_cell.font = _font(bold=day.is_holiday)
-        date_cell.alignment = _align_wrap()
+    # Ячейка A1 — «Сотрудник»
+    header_cell = ws.cell(row=1, column=1, value="Сотрудник")
+    header_cell.fill = _fill(COLORS["header"])
+    header_cell.font = _font(bold=True, white=True, size=11)
+    header_cell.alignment = _align()
 
-        # Столбцы 2–6: Смены
-        for col_idx, shift_key in enumerate(SHIFT_COLS, start=2):
-            names = getattr(day, shift_key, [])
-            # Добавляем отпускников в выходной столбец
-            if shift_key == "day_off":
-                names = names + day.vacation
-            value = "\n".join(names) if names else ""
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            color_key = shift_key
-            if shift_key == "day_off" and day.vacation and not getattr(day, shift_key):
-                color_key = "vacation"
-            cell.fill = _fill(COLORS.get(color_key, "FFFFFF"))
-            cell.font = _font(white=color_key in DARK_BG)
-            cell.alignment = _align_wrap()
+    for col_idx, day in enumerate(days, start=2):
+        d = day.date
+        dow = DAYS_RU[d.weekday()]
+        label = f"{d.day}\n{dow}"
+        cell = ws.cell(row=1, column=col_idx, value=label)
+        bg = COLORS["weekend"] if day.is_holiday else "FFFFFF"
+        cell.fill = _fill(bg)
+        cell.font = _font(bold=day.is_holiday, size=9)
+        cell.alignment = _align()
 
-    # ── Ширина столбцов ────────────────────────────────────────────────────
-    col_widths = [14, 22, 22, 22, 22, 22]
-    for i, width in enumerate(col_widths, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = width
+    # ── Строки 2+: по одной на каждого сотрудника ───────────────────────────
+    for row_idx, emp in enumerate(employees, start=2):
+        ws.row_dimensions[row_idx].height = 20
 
-    # Заморозить заголовок
-    ws.freeze_panes = "A2"
+        # Столбец A: имя сотрудника
+        name_cell = ws.cell(row=row_idx, column=1, value=emp.name)
+        name_cell.fill = _fill(COLORS["name"])
+        name_cell.font = _font(bold=True, size=10)
+        name_cell.alignment = _align(horizontal="left")
+
+        # Столбцы B+: смена на каждую дату
+        emp_days = assignments.get(emp.name, {})
+        for col_idx, day in enumerate(days, start=2):
+            shift_key = emp_days.get(day.date, "day_off")
+            label = SHIFT_LABELS.get(shift_key, "?")
+            color = COLORS.get(shift_key, "FFFFFF")
+
+            cell = ws.cell(row=row_idx, column=col_idx, value=label)
+            cell.fill = _fill(color)
+            cell.font = _font(white=shift_key in WHITE_FONT_KEYS, size=9)
+            cell.alignment = _align()
+
+    # ── Ширина столбцов ─────────────────────────────────────────────────────
+    ws.column_dimensions["A"].width = 18  # имена
+    for col_idx in range(2, len(days) + 2):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 5.5
+
+    # ── Добавляем легенду на отдельный лист ─────────────────────────────────
+    _add_legend(wb)
+
+    # Заморозить первый столбец и первую строку
+    ws.freeze_panes = "B2"
 
     wb.save(filename)
     return filename
 
 
-def _format_date(day: DaySchedule) -> str:
-    DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-    MONTHS_RU = [
-        "",
-        "янв",
-        "фев",
-        "мар",
-        "апр",
-        "май",
-        "июн",
-        "июл",
-        "авг",
-        "сен",
-        "окт",
-        "ноя",
-        "дек",
+def _add_legend(wb: Workbook) -> None:
+    """Добавить лист с легендой цветов."""
+    ws = wb.create_sheet(title="Легенда")
+    ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["B"].width = 25
+
+    items = [
+        ("Утро", "morning", "08:00–17:00 МСК"),
+        ("Вечер", "evening", "15:00–00:00 МСК"),
+        ("Ночь", "night", "00:00–08:00 МСК (07:00–15:00 ХБ)"),
+        ("РД", "workday", "Рабочий день 09:00–18:00"),
+        ("Отп", "vacation", "Отпуск"),
+        ("—", "day_off", "Выходной"),
     ]
-    d = day.date
-    dow = DAYS_RU[d.weekday()]
-    marker = " 🔴" if day.is_holiday else ""
-    return f"{d.day} {MONTHS_RU[d.month]}\n{dow}{marker}"
+
+    ws.cell(row=1, column=1, value="Обозн.").font = _font(bold=True, size=11)
+    ws.cell(row=1, column=2, value="Описание").font = _font(bold=True, size=11)
+
+    for i, (label, key, desc) in enumerate(items, start=2):
+        color = COLORS[key]
+        cell_label = ws.cell(row=i, column=1, value=label)
+        cell_label.fill = _fill(color)
+        cell_label.font = _font(white=key in WHITE_FONT_KEYS, bold=True, size=10)
+        cell_label.alignment = _align()
+
+        cell_desc = ws.cell(row=i, column=2, value=desc)
+        cell_desc.font = _font(size=10)
+        cell_desc.alignment = _align(horizontal="left")
+
+        ws.row_dimensions[i].height = 20
 
 
-def _row_height(day: DaySchedule) -> float:
-    max_names = max(
-        len(day.morning),
-        len(day.evening),
-        len(day.night),
-        len(day.workday),
-        len(day.day_off) + len(day.vacation),
-        1,
-    )
-    return max(20.0, max_names * 15.0)
+def _shift_key_for(name: str, day_schedule, shift_types: list[ShiftType]) -> str:
+    """Вспомогательная функция — не используется в основном потоке."""
+    _ = (name, day_schedule, shift_types)
+    return "day_off"
