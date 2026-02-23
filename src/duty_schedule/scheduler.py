@@ -441,18 +441,7 @@ def _build_day(
 
     # ── Собираем DaySchedule ────────────────────────────────────────────────
     for name, shift in assigned.items():
-        if shift == ShiftType.MORNING:
-            ds.morning.append(name)
-        elif shift == ShiftType.EVENING:
-            ds.evening.append(name)
-        elif shift == ShiftType.NIGHT:
-            ds.night.append(name)
-        elif shift == ShiftType.WORKDAY:
-            ds.workday.append(name)
-        elif shift == ShiftType.VACATION:
-            ds.vacation.append(name)
-        else:
-            ds.day_off.append(name)
+        getattr(ds, shift.value).append(name)
 
     # ── Обновляем состояния ─────────────────────────────────────────────────
     for emp in employees:
@@ -470,36 +459,22 @@ def _is_working_on_day(emp_name: str, day: DaySchedule) -> bool:
     )
 
 
-def _consecutive_off_if_removed(emp_name: str, idx: int, days: list[DaySchedule]) -> int:
-    """Количество подряд выходных, если day[idx] станет выходным."""
+def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bool) -> int:
+    """Длина серии вокруг days[idx], если он становится рабочим (working=True) или выходным."""
+    def active(d: DaySchedule) -> bool:
+        return _is_working_on_day(emp_name, d) if working else (
+            emp_name in d.day_off or emp_name in d.vacation
+        )
+
     left = 0
     for i in range(idx - 1, -1, -1):
-        d = days[i]
-        if emp_name in d.day_off or emp_name in d.vacation:
+        if active(days[i]):
             left += 1
         else:
             break
     right = 0
     for i in range(idx + 1, len(days)):
-        d = days[i]
-        if emp_name in d.day_off or emp_name in d.vacation:
-            right += 1
-        else:
-            break
-    return left + 1 + right
-
-
-def _consecutive_working_if_added(emp_name: str, idx: int, days: list[DaySchedule]) -> int:
-    """Количество подряд рабочих дней, если day[idx] станет рабочим."""
-    left = 0
-    for i in range(idx - 1, -1, -1):
-        if _is_working_on_day(emp_name, days[i]):
-            left += 1
-        else:
-            break
-    right = 0
-    for i in range(idx + 1, len(days)):
-        if _is_working_on_day(emp_name, days[i]):
+        if active(days[i]):
             right += 1
         else:
             break
@@ -536,7 +511,7 @@ def _target_adjustment_pass(
                 if (
                     emp.name in day.workday
                     and not _is_weekend_or_holiday(day.date, holidays)
-                    and _consecutive_off_if_removed(emp.name, i, days) <= MAX_CONSECUTIVE_OFF
+                    and _streak_around(emp.name, i, days, working=False) <= MAX_CONSECUTIVE_OFF
                 ):
                     day.workday.remove(emp.name)
                     day.day_off.append(emp.name)
@@ -565,7 +540,7 @@ def _target_adjustment_pass(
                 if i > 0 and emp.name in days[i - 1].evening:
                     continue
                 # Не превышаем MAX + 1 рабочих дня подряд (6 — допустимо в крайнем случае)
-                if _consecutive_working_if_added(emp.name, i, days) > MAX_CONSECUTIVE_WORKING + 1:
+                if _streak_around(emp.name, i, days, working=True) > MAX_CONSECUTIVE_WORKING + 1:
                     continue
                 day.day_off.remove(emp.name)
                 day.workday.append(emp.name)
@@ -662,34 +637,6 @@ def _balance_duty_shifts(
     return days
 
 
-def _fairness_pass(
-    days: list[DaySchedule],
-    employees: list[Employee],
-) -> list[DaySchedule]:
-    """
-    Пост-обработка: логирование балансировки смен.
-    """
-    counts: dict[str, dict[ShiftType, int]] = {
-        e.name: dict.fromkeys(ShiftType, 0) for e in employees
-    }
-    for day in days:
-        for name in day.morning:
-            counts[name][ShiftType.MORNING] += 1
-        for name in day.evening:
-            counts[name][ShiftType.EVENING] += 1
-        for name in day.night:
-            counts[name][ShiftType.NIGHT] += 1
-
-    duty_employees = [e for e in employees if e.on_duty]
-    evening_counts = {e.name: counts[e.name][ShiftType.EVENING] for e in duty_employees}
-
-    if evening_counts:
-        max_ev = max(evening_counts.values())
-        min_ev = min(evening_counts.values())
-        logger.info("Баланс вечерних смен", max=max_ev, min=min_ev, diff=max_ev - min_ev)
-
-    return days
-
 
 def generate_schedule(
     config: Config,
@@ -766,9 +713,15 @@ def generate_schedule(
 
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
-    days = _fairness_pass(days, employees)
     days = _balance_duty_shifts(days, employees, holidays)
     days = _target_adjustment_pass(days, employees, states, holidays)
+
+    # Баланс вечерних смен (информационное логирование)
+    duty_employees = [e for e in employees if e.on_duty]
+    ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
+    if ev_counts:
+        max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
+        logger.info("Баланс вечерних смен", max=max_ev, min=min_ev, diff=max_ev - min_ev)
 
     # Метаданные
     total_nights = sum(len(d.night) for d in days)

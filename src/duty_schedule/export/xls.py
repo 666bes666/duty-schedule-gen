@@ -133,33 +133,6 @@ class EmployeeStats:
     max_streak_work: int  # макс. серия рабочих дней подряд
     max_streak_rest: int  # макс. серия выходных подряд
 
-    @property
-    def deviation(self) -> int:
-        return self.total_working - self.target
-
-    @property
-    def pct_norm(self) -> float:
-        return (self.total_working / self.target * 100) if self.target else 0.0
-
-    @property
-    def deviation_color(self) -> str:
-        d = self.deviation
-        if d == 0:
-            return COLORS["ok"]
-        if d > 0:
-            return COLORS["over"]
-        return COLORS["warn"] if d >= -1 else COLORS["bad"]
-
-    @property
-    def top_shift(self) -> str:
-        """Самый частый тип дежурной смены."""
-        counts = {
-            "Утро": self.morning,
-            "Вечер": self.evening,
-            "Ночь": self.night,
-        }
-        top = max(counts, key=lambda k: counts[k])
-        return top if counts[top] > 0 else "—"
 
 
 def _compute_stats(
