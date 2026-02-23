@@ -581,6 +581,85 @@ def _target_adjustment_pass(
     return days
 
 
+def _balance_duty_shifts(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+) -> list[DaySchedule]:
+    """
+    Пост-обработка: выровнять число дежурных смен между сотрудниками одного города.
+    Разница max−min должна быть ≤ 1.
+
+    Принцип: swap между перегруженным (A) и недогруженным (B) в будний день,
+    где A несёт дежурство (утро/вечер/ночь), а B стоит «рабочим днём» (WORKDAY).
+    Оба по-прежнему отрабатывают один рабочий день — итоговый счёт не меняется.
+    """
+    for city in [City.MOSCOW, City.KHABAROVSK]:
+        duty_emps = [e for e in employees if e.city == city and e.on_duty]
+        if len(duty_emps) < 2:
+            continue
+
+        duty_attrs = ["morning", "evening"] if city == City.MOSCOW else ["night"]
+
+        # Индекс дат для быстрого поиска предыдущего дня
+        day_by_date = {d.date: d for d in days}
+
+        for _ in range(len(days) * len(duty_emps)):  # safety limit
+            counts: dict[str, int] = {
+                e.name: sum(
+                    1 for d in days for attr in duty_attrs if e.name in getattr(d, attr)
+                )
+                for e in duty_emps
+            }
+            max_name = max(counts, key=counts.__getitem__)
+            min_name = min(counts, key=counts.__getitem__)
+            if counts[max_name] - counts[min_name] <= 1:
+                break
+
+            swapped = False
+            for day in days:
+                if _is_weekend_or_holiday(day.date, holidays):
+                    continue
+
+                # max_name должен нести дежурство в этот день
+                max_attr = next(
+                    (attr for attr in duty_attrs if max_name in getattr(day, attr)),
+                    None,
+                )
+                if max_attr is None:
+                    continue
+
+                # min_name должен быть на рабочем дне (WORKDAY) в этот день
+                if min_name not in day.workday:
+                    continue
+
+                # Проверяем, что min_name может работать этот тип смены
+                min_emp = next(e for e in duty_emps if e.name == min_name)
+                if max_attr == "morning" and not min_emp.can_work_morning():
+                    continue
+                if max_attr == "evening" and not min_emp.can_work_evening():
+                    continue
+
+                # Для утренней смены: нельзя ставить min_name, если вчера у него вечер
+                if max_attr == "morning":
+                    prev = day_by_date.get(day.date - timedelta(days=1))
+                    if prev and min_name in prev.evening:
+                        continue
+
+                # Выполняем замену
+                getattr(day, max_attr).remove(max_name)
+                day.workday.append(max_name)
+                day.workday.remove(min_name)
+                getattr(day, max_attr).append(min_name)
+                swapped = True
+                break
+
+            if not swapped:
+                break
+
+    return days
+
+
 def _fairness_pass(
     days: list[DaySchedule],
     employees: list[Employee],
@@ -686,6 +765,7 @@ def generate_schedule(
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
     days = _fairness_pass(days, employees)
+    days = _balance_duty_shifts(days, employees, holidays)
     days = _target_adjustment_pass(days, employees, states, holidays)
 
     # Метаданные
