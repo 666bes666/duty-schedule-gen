@@ -290,41 +290,33 @@ def _build_day(
     for emp in evening_pick:
         assigned[emp.name] = ShiftType.EVENING
 
-    # ── Фаза 2b: Дополнительные смены для выработки нормы (Москва) ─────────
-    # Динамическая квота: сколько московских дежурных должно работать сегодня,
-    # чтобы суммарный дефицит равномерно распределился по оставшимся дням.
-    # Формула: floor(total_deficit / remaining_days), но не меньше 2 (уже назначены).
-    # Это предотвращает как перевыполнение нормы, так и дефицит в конце месяца.
-    total_moscow_deficit = sum(
-        max(0, states[e.name].effective_target - states[e.name].total_working)
-        for e in moscow_duty
-    )
-    # floor-деление: не спешим набирать лишние смены; к концу месяца квота растёт
-    daily_quota = max(2, total_moscow_deficit // max(remaining_days, 1))
-    # Не можем назначить больше, чем доступно
-    daily_quota = min(daily_quota, len(moscow_available))
+    # ── Фаза 2b: Не-дежурный рабочий день (Москва) ──────────────────────────
+    # Оставшимся московским дежурным в будни назначаем рабочий день 09-18,
+    # соблюдая инвариант «не менее 1 отдыхающего из доступных», чтобы все
+    # сотрудники не исчерпали consecutive_working одновременно и были доступны
+    # для дежурных смен в выходные/праздники.
+    if not is_holiday:
+        assigned_moscow_count = sum(1 for e in moscow_duty if e.name in assigned)
+        while len(moscow_available) - assigned_moscow_count > 1:
+            extra = [
+                e
+                for e in moscow_available
+                if e.name not in assigned
+                and states[e.name].needs_more_work(remaining_days)
+                and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
+            ]
+            by_urgency = _select_by_urgency(extra, states, remaining_days, rng)
+            if not by_urgency:
+                break
+            assigned[by_urgency[0].name] = ShiftType.WORKDAY
+            assigned_moscow_count += 1
 
-    assigned_moscow_count = sum(1 for e in moscow_duty if e.name in assigned)
-    while assigned_moscow_count < daily_quota:
-        extra_moscow = [
-            e
-            for e in moscow_available
-            if e.name not in assigned
-            and states[e.name].needs_more_work(remaining_days)
-            and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
-        ]
-        extra_by_urgency = _select_by_urgency(extra_moscow, states, remaining_days, rng)
-        if not extra_by_urgency:
-            break
-        emp = extra_by_urgency[0]
-        if emp.can_work_morning() and not _resting_after_evening_for_morning(states[emp.name]):
-            assigned[emp.name] = ShiftType.MORNING
-            assigned_moscow_count += 1
-        elif emp.can_work_evening():
-            assigned[emp.name] = ShiftType.EVENING
-            assigned_moscow_count += 1
-        else:
-            break
+    # Неназначенные московские дежурные → выходной или отпуск
+    for emp in moscow_duty:
+        if emp.name not in assigned:
+            assigned[emp.name] = (
+                ShiftType.VACATION if emp.is_on_vacation(day) else ShiftType.DAY_OFF
+            )
 
     # ── Фаза 2c: Хабаровские дежурные — рабочий день по местному времени ───
     # Хабаровские сотрудники работают ТОЛЬКО ночные смены (MSK) или свой
@@ -355,13 +347,6 @@ def _build_day(
         else:
             assigned[emp.name] = ShiftType.DAY_OFF
 
-    # Оставшиеся московские дежурные → выходной/отпуск
-    for emp in moscow_duty:
-        if emp.name not in assigned:
-            assigned[emp.name] = (
-                ShiftType.VACATION if emp.is_on_vacation(day) else ShiftType.DAY_OFF
-            )
-
     # ── Фаза 3: Рабочий день (не-дежурные) ─────────────────────────────────
     # Не-дежурные сотрудники не нужны в выходные/праздники вне зависимости
     # от типа расписания (flexible или 5/2).
@@ -374,6 +359,9 @@ def _build_day(
             assigned[emp.name] = ShiftType.WORKDAY
 
     # ── Фаза 4: Ограничение максимум 3 выходных подряд ─────────────────────
+    # Если дежурный отдыхает 3+ дня подряд и ещё не выработал норму,
+    # назначаем рабочий день (только в будни). Дежурные смены уже заняты
+    # выбранными сотрудниками — добавлять вторых нельзя.
     for emp in moscow_duty + khabarovsk_duty:
         state = states[emp.name]
         if (
@@ -381,15 +369,10 @@ def _build_day(
             and state.consecutive_off >= MAX_CONSECUTIVE_OFF
             and _can_work(emp, state, day, holidays)
             and not _resting_after_night(state)
+            and state.needs_more_work(remaining_days)
+            and not is_holiday  # WORKDAY только в будни
         ):
-            if emp.city == City.KHABAROVSK:
-                # Хабаровские — только рабочий день, и только в будни
-                if not is_holiday:
-                    assigned[emp.name] = ShiftType.WORKDAY
-            elif emp.can_work_morning() and not _resting_after_evening_for_morning(state):
-                assigned[emp.name] = ShiftType.MORNING
-            elif emp.can_work_evening():
-                assigned[emp.name] = ShiftType.EVENING
+            assigned[emp.name] = ShiftType.WORKDAY
 
     # ── Собираем DaySchedule ────────────────────────────────────────────────
     for name, shift in assigned.items():
