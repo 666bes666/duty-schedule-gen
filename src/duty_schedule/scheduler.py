@@ -640,11 +640,13 @@ def _balance_duty_shifts(
                 if max_attr == "evening" and not min_emp.can_work_evening():
                     continue
 
-                # Для утренней смены: нельзя ставить min_name, если вчера у него вечер
-                if max_attr == "morning":
-                    prev = day_by_date.get(day.date - timedelta(days=1))
-                    if prev and min_name in prev.evening:
-                        continue
+                prev = day_by_date.get(day.date - timedelta(days=1))
+                # max_name получит WORKDAY — недопустимо, если вчера у него был вечер
+                if prev and max_name in prev.evening:
+                    continue
+                # min_name получит дежурство — для утра нельзя, если вчера у него был вечер
+                if max_attr == "morning" and prev and min_name in prev.evening:
+                    continue
 
                 # Выполняем замену
                 getattr(day, max_attr).remove(max_name)
