@@ -13,7 +13,7 @@ from duty_schedule.scheduler import (
     _build_day,
     _can_work,
     _is_weekend_or_holiday,
-    _resting_after_evening_for_morning,
+    _resting_after_evening,
     _resting_after_night,
 )
 
@@ -48,11 +48,11 @@ class TestRestingConstraints:
 
     def test_cannot_work_morning_after_evening(self):
         state = EmployeeState(last_shift=ShiftType.EVENING)
-        assert _resting_after_evening_for_morning(state) is True
+        assert _resting_after_evening(state) is True
 
     def test_can_work_morning_after_morning(self):
         state = EmployeeState(last_shift=ShiftType.MORNING)
-        assert _resting_after_evening_for_morning(state) is False
+        assert _resting_after_evening(state) is False
 
 
 class TestCanWork:

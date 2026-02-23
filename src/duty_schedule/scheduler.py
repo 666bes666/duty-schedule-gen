@@ -6,7 +6,7 @@ import calendar
 import copy
 import random
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
@@ -107,8 +107,9 @@ def _resting_after_night(state: EmployeeState) -> bool:
     return state.last_shift == ShiftType.NIGHT
 
 
-def _resting_after_evening_for_morning(state: EmployeeState) -> bool:
-    """После вечерней смены нельзя работать в утреннюю."""
+def _resting_after_evening(state: EmployeeState) -> bool:
+    """После вечерней смены (15:00–00:00) можно только снова вечером или выходной.
+    Утро (08:00) и рабочий день (09:00) — недопустимы: слишком мало времени отдыха."""
     return state.last_shift == ShiftType.EVENING
 
 
@@ -209,6 +210,7 @@ def _build_day(
 ) -> DaySchedule:
     """Построить расписание на один день."""
     is_holiday = _is_weekend_or_holiday(day, holidays)
+    _next_day = day + timedelta(days=1)
     ds = DaySchedule(date=day, is_holiday=is_holiday)
 
     moscow_duty = [e for e in employees if e.city == City.MOSCOW and e.on_duty]
@@ -218,11 +220,13 @@ def _build_day(
     assigned: dict[str, ShiftType] = {}
 
     # ── Фаза 1: Ночная смена (Хабаровск, обязательно каждый день) ──────────
+    # Ночная смена 00-08 МСК = 07-15 по местному времени Хабаровска.
+    # После неё 16 часов отдыха до следующей ночи и >18 часов до рабочего дня 09-18.
+    # Поэтому принудительный отдых на следующий день НЕ применяется.
     night_eligible = [
         e
         for e in khabarovsk_duty
         if not e.is_on_vacation(day)
-        and not _resting_after_night(states[e.name])
         and not (e.schedule_type == ScheduleType.FIVE_TWO and is_holiday)
         and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
     ]
@@ -254,7 +258,7 @@ def _build_day(
     morning_eligible = [
         e
         for e in moscow_available
-        if e.can_work_morning() and not _resting_after_evening_for_morning(states[e.name])
+        if e.can_work_morning() and not _resting_after_evening(states[e.name])
     ]
     evening_eligible = [e for e in moscow_available if e.can_work_evening()]
 
@@ -281,9 +285,23 @@ def _build_day(
         raise ScheduleError(
             f"Невозможно покрыть вечернюю смену {day}: все доступные дежурные заняты утром"
         )
-    evening_pick = _select_for_mandatory(
-        evening_pick_pool, states, ShiftType.EVENING, remaining_days, rng, 1
-    )
+    # Сотрудники после вечерней смены не могут взять утро или рабочий день —
+    # вечер для них единственный способ заработать рабочий день.
+    # Даём им приоритет, но только если они ещё не исчерпывают MAX (cw < MAX-1),
+    # чтобы не создавать длинные цепочки вечерних смен у одного сотрудника.
+    after_evening_deficit = [
+        e
+        for e in evening_pick_pool
+        if _resting_after_evening(states[e.name])
+        and states[e.name].needs_more_work(remaining_days)
+        and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING - 1
+    ]
+    if after_evening_deficit:
+        evening_pick = _select_fair(after_evening_deficit, states, ShiftType.EVENING, rng, 1)
+    else:
+        evening_pick = _select_for_mandatory(
+            evening_pick_pool, states, ShiftType.EVENING, remaining_days, rng, 1
+        )
 
     for emp in morning_pick:
         assigned[emp.name] = ShiftType.MORNING
@@ -291,25 +309,49 @@ def _build_day(
         assigned[emp.name] = ShiftType.EVENING
 
     # ── Фаза 2b: Не-дежурный рабочий день (Москва) ──────────────────────────
-    # Оставшимся московским дежурным в будни назначаем рабочий день 09-18,
-    # соблюдая инвариант «не менее 1 отдыхающего из доступных», чтобы все
-    # сотрудники не исчерпали consecutive_working одновременно и были доступны
-    # для дежурных смен в выходные/праздники.
+    # Всем московским дежурным с дефицитом нормы назначаем рабочий день 09-18.
+    # Нет жёсткого «один всегда отдыхает» — это приводило к систематической
+    # недовыработке. Единственное ограничение: если ЗАВТРА выходной/праздник,
+    # обеспечиваем ≥ 2 дежурных с consecutive_working < MAX для обязательных
+    # утренней/вечерней смен (иначе никого не останется на субботу/воскресенье).
     if not is_holiday:
-        assigned_moscow_count = sum(1 for e in moscow_duty if e.name in assigned)
-        while len(moscow_available) - assigned_moscow_count > 1:
+        _next_is_holiday = _is_weekend_or_holiday(_next_day, holidays)
+        _WORKING = frozenset({ShiftType.MORNING, ShiftType.EVENING, ShiftType.WORKDAY})
+
+        while True:
             extra = [
                 e
                 for e in moscow_available
                 if e.name not in assigned
                 and states[e.name].needs_more_work(remaining_days)
                 and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
+                and not _resting_after_evening(states[e.name])
             ]
+            if not extra:
+                break
             by_urgency = _select_by_urgency(extra, states, remaining_days, rng)
             if not by_urgency:
                 break
-            assigned[by_urgency[0].name] = ShiftType.WORKDAY
-            assigned_moscow_count += 1
+            candidate = by_urgency[0]
+
+            # Проверка «кануна выходного»: после этого назначения должны
+            # остаться ≥ 2 дежурных с cw < MAX для завтрашних обязательных смен.
+            if _next_is_holiday:
+                cand_cw_after = states[candidate.name].consecutive_working + 1
+                avail_tomorrow = 0
+                for e in moscow_duty:
+                    if e.name == candidate.name:
+                        if cand_cw_after < MAX_CONSECUTIVE_WORKING:
+                            avail_tomorrow += 1
+                    else:
+                        s = assigned.get(e.name)
+                        cw_ok = states[e.name].consecutive_working + 1 < MAX_CONSECUTIVE_WORKING
+                        if s is None or s not in _WORKING or cw_ok:  # day_off/vacation → cw=0
+                            avail_tomorrow += 1
+                if avail_tomorrow < 2:
+                    break
+
+            assigned[candidate.name] = ShiftType.WORKDAY
 
     # Неназначенные московские дежурные → выходной или отпуск
     for emp in moscow_duty:
@@ -330,10 +372,8 @@ def _build_day(
         if emp.is_on_vacation(day):
             assigned[emp.name] = ShiftType.VACATION
             continue
-        if _resting_after_night(states[emp.name]):
-            # Обязательный отдых после ночной смены
-            assigned[emp.name] = ShiftType.DAY_OFF
-            continue
+        # Принудительный отдых после ночи НЕ применяется: ночь 00-08 МСК =
+        # 07-15 КХСТ, после неё достаточно времени до следующего дня 09-18 КХСТ.
         if is_holiday:
             # В выходные и праздники рабочего дня (9-18) нет — только дежурства
             assigned[emp.name] = ShiftType.DAY_OFF
@@ -341,7 +381,32 @@ def _build_day(
         if states[emp.name].consecutive_working >= MAX_CONSECUTIVE_WORKING:
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
-        # Назначаем рабочий день по местному времени (для выработки нормы)
+        # Назначаем рабочий день по местному времени (для выработки нормы),
+        # но сначала проверяем: не исчерпаем ли мы всех хабаровчан одновременно.
+        # Если после WORKDAY у этого сотрудника cw достигнет MAX — нужно убедиться,
+        # что хотя бы один другой хабаровчанин будет доступен завтра для ночи.
+        emp_cw_after = states[emp.name].consecutive_working + 1
+        needs_work = states[emp.name].needs_more_work(remaining_days)
+        if emp_cw_after >= MAX_CONSECUTIVE_WORKING and needs_work:
+            others_available = 0
+            for other in khabarovsk_duty:
+                if other.name == emp.name:
+                    continue
+                if other.is_on_vacation(_next_day):
+                    continue
+                other_shift = assigned.get(other.name)
+                if other_shift == ShiftType.VACATION:
+                    pass
+                elif other_shift == ShiftType.DAY_OFF:
+                    others_available += 1  # сегодня отдыхает → cw=0 завтра
+                elif other_shift in (ShiftType.NIGHT, ShiftType.WORKDAY):
+                    if states[other.name].consecutive_working + 1 < MAX_CONSECUTIVE_WORKING:
+                        others_available += 1
+                else:
+                    others_available += 1  # не назначен или иной
+            if others_available < 1:
+                assigned[emp.name] = ShiftType.DAY_OFF
+                continue
         if states[emp.name].needs_more_work(remaining_days):
             assigned[emp.name] = ShiftType.WORKDAY
         else:
@@ -368,7 +433,7 @@ def _build_day(
             assigned.get(emp.name) == ShiftType.DAY_OFF
             and state.consecutive_off >= MAX_CONSECUTIVE_OFF
             and _can_work(emp, state, day, holidays)
-            and not _resting_after_night(state)
+            and not _resting_after_evening(state)
             and state.needs_more_work(remaining_days)
             and not is_holiday  # WORKDAY только в будни
         ):
@@ -394,6 +459,126 @@ def _build_day(
         states[emp.name].record(assigned.get(emp.name, ShiftType.DAY_OFF))
 
     return ds
+
+
+def _is_working_on_day(emp_name: str, day: DaySchedule) -> bool:
+    return (
+        emp_name in day.morning
+        or emp_name in day.evening
+        or emp_name in day.night
+        or emp_name in day.workday
+    )
+
+
+def _consecutive_off_if_removed(emp_name: str, idx: int, days: list[DaySchedule]) -> int:
+    """Количество подряд выходных, если day[idx] станет выходным."""
+    left = 0
+    for i in range(idx - 1, -1, -1):
+        d = days[i]
+        if emp_name in d.day_off or emp_name in d.vacation:
+            left += 1
+        else:
+            break
+    right = 0
+    for i in range(idx + 1, len(days)):
+        d = days[i]
+        if emp_name in d.day_off or emp_name in d.vacation:
+            right += 1
+        else:
+            break
+    return left + 1 + right
+
+
+def _consecutive_working_if_added(emp_name: str, idx: int, days: list[DaySchedule]) -> int:
+    """Количество подряд рабочих дней, если day[idx] станет рабочим."""
+    left = 0
+    for i in range(idx - 1, -1, -1):
+        if _is_working_on_day(emp_name, days[i]):
+            left += 1
+        else:
+            break
+    right = 0
+    for i in range(idx + 1, len(days)):
+        if _is_working_on_day(emp_name, days[i]):
+            right += 1
+        else:
+            break
+    return left + 1 + right
+
+
+def _target_adjustment_pass(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    states: dict[str, EmployeeState],
+    holidays: set[date],
+) -> list[DaySchedule]:
+    """
+    Пост-обработка: скорректировать WORKDAY/DAY_OFF, чтобы каждый сотрудник
+    отработал ровно столько дней, сколько предписывает производственный календарь.
+
+    - Избыток: снимаем WORKDAY (с конца месяца), не создавая цепочек выходных > MAX.
+    - Недостача: добавляем WORKDAY (с начала месяца), не создавая цепочек рабочих > MAX+1.
+    """
+    for emp in employees:
+        if not emp.on_duty:
+            continue
+
+        state = states[emp.name]
+        target = state.effective_target
+        actual = state.total_working
+
+        if actual > target:
+            excess = actual - target
+            for i in range(len(days) - 1, -1, -1):
+                if excess == 0:
+                    break
+                day = days[i]
+                if (
+                    emp.name in day.workday
+                    and not _is_weekend_or_holiday(day.date, holidays)
+                    and _consecutive_off_if_removed(emp.name, i, days) <= MAX_CONSECUTIVE_OFF
+                ):
+                    day.workday.remove(emp.name)
+                    day.day_off.append(emp.name)
+                    state.total_working -= 1
+                    excess -= 1
+            if excess > 0:
+                logger.warning(
+                    "Не удалось убрать избыток рабочих дней",
+                    employee=emp.name,
+                    excess=excess,
+                )
+
+        elif actual < target:
+            deficit = target - actual
+            for i in range(len(days)):
+                if deficit == 0:
+                    break
+                day = days[i]
+                if (
+                    emp.name not in day.day_off
+                    or _is_weekend_or_holiday(day.date, holidays)
+                    or emp.is_on_vacation(day.date)
+                ):
+                    continue
+                # Нельзя ставить рабочий день после вечерней смены
+                if i > 0 and emp.name in days[i - 1].evening:
+                    continue
+                # Не превышаем MAX + 1 рабочих дня подряд (6 — допустимо в крайнем случае)
+                if _consecutive_working_if_added(emp.name, i, days) > MAX_CONSECUTIVE_WORKING + 1:
+                    continue
+                day.day_off.remove(emp.name)
+                day.workday.append(emp.name)
+                state.total_working += 1
+                deficit -= 1
+            if deficit > 0:
+                logger.warning(
+                    "Не удалось закрыть недостачу рабочих дней",
+                    employee=emp.name,
+                    deficit=deficit,
+                )
+
+    return days
 
 
 def _fairness_pass(
@@ -501,6 +686,7 @@ def generate_schedule(
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
     days = _fairness_pass(days, employees)
+    days = _target_adjustment_pass(days, employees, states, holidays)
 
     # Метаданные
     total_nights = sum(len(d.night) for d in days)

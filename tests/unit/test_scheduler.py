@@ -109,24 +109,36 @@ class TestGenerateSchedule:
         assert "total_mornings" in schedule.metadata
         assert "total_evenings" in schedule.metadata
 
-    def test_after_night_rest_is_mandatory(self):
-        """После ночной смены следующий день — выходной (не ночь/утро/вечер/рабочий)."""
+    def test_khabarovsk_can_work_after_night(self):
+        """Хабаровские дежурные могут работать следующий день после ночной смены.
+
+        Ночная смена 00-08 МСК = 07-15 по Хабаровскому времени. После неё
+        достаточно времени для рабочего дня 09-18 КХСТ следующего дня.
+        Проверяем, что расписание генерируется без ошибок и хабаровчане
+        реально работают после ночей (т.е. ограничение снято).
+        """
         from datetime import timedelta
 
         config = Config(month=3, year=2025, seed=42, employees=_base_employees())
         schedule = generate_schedule(config, set())
         days = {d.date: d for d in schedule.days}
+        # Считаем, сколько раз хабаровский работал на следующий день после ночи
+        work_after_night = 0
         for day in schedule.days:
             next_day_date = day.date + timedelta(days=1)
             if next_day_date not in days:
                 continue
             next_day = days[next_day_date]
-            # После ночи — только day_off или vacation (не любая рабочая смена)
             for name in day.night:
                 all_working = (
                     next_day.morning + next_day.evening + next_day.night + next_day.workday
                 )
-                assert name not in all_working, f"{name} работает после ночной смены {day.date}"
+                if name in all_working:
+                    work_after_night += 1
+        # Ограничение снято — хабаровчане должны работать после ночей
+        assert work_after_night > 0, (
+            "Хабаровские никогда не работают после ночной смены — ограничение не снято"
+        )
 
     def test_khabarovsk_only_night_or_workday(self):
         """Хабаровские дежурные никогда не появляются в московских сменах (утро/вечер)."""
