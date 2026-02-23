@@ -128,7 +128,8 @@ class EmployeeStats:
     workday: int  # рабочих дней (не дежурство)
     day_off: int  # выходных
     vacation: int  # отпуск
-    holiday_work: int  # работал в праздники/выходные
+    weekend_work: int  # работал в субботу/воскресенье
+    holiday_work: int  # работал в официальные праздники (Пн–Пт)
     max_streak_work: int  # макс. серия рабочих дней подряд
     max_streak_rest: int  # макс. серия выходных подряд
 
@@ -143,9 +144,11 @@ class EmployeeStats:
     @property
     def deviation_color(self) -> str:
         d = self.deviation
-        if d >= 0:
-            return COLORS["over"] if d > 2 else COLORS["ok"]
-        return COLORS["warn"] if d >= -3 else COLORS["bad"]
+        if d == 0:
+            return COLORS["ok"]
+        if d > 0:
+            return COLORS["over"]
+        return COLORS["warn"] if d >= -1 else COLORS["bad"]
 
     @property
     def top_shift(self) -> str:
@@ -181,11 +184,20 @@ def _compute_stats(
         vacation = sum(1 for v in emp_days.values() if v == "vacation")
         total_working = morning + evening + night + workday
 
-        # Работал в выходные / праздники
+        working_keys = {"morning", "evening", "night", "workday"}
+
+        # Работал в субботу/воскресенье
+        weekend_work = sum(
+            1
+            for d, v in emp_days.items()
+            if d.weekday() >= 5 and v in working_keys
+        )
+
+        # Работал в официальные праздники (Пн–Пт, не выходные)
         holiday_work = sum(
             1
             for d, v in emp_days.items()
-            if d in holiday_dates and v in ("morning", "evening", "night", "workday")
+            if d in holiday_dates and d.weekday() < 5 and v in working_keys
         )
 
         # Макс. серии
@@ -204,6 +216,7 @@ def _compute_stats(
                 workday=workday,
                 day_off=day_off,
                 vacation=vacation,
+                weekend_work=weekend_work,
                 holiday_work=holiday_work,
                 max_streak_work=max_streak_work,
                 max_streak_rest=max_streak_rest,
@@ -348,7 +361,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     title = f"Статистика дежурств — {MONTHS_RU[month]} {year}"
 
     # ── Заголовок листа ──────────────────────────────────────────────────────
-    ws.merge_cells("A1:O1")
+    ws.merge_cells("A1:P1")
     title_cell = ws.cell(row=1, column=1, value=title)
     title_cell.fill = _fill(COLORS["stat_header"])
     title_cell.font = _font(bold=True, white=True, size=14)
@@ -361,9 +374,8 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         (2, 2, ""),
         (3, 6, "Норма"),
         (7, 10, "Смены"),
-        (11, 13, "Отдых"),
-        (14, 14, "Нагрузка"),
-        (15, 15, ""),
+        (11, 14, "Отдых"),
+        (15, 16, "Нагрузка"),
     ]
     for start, end, label in groups:
         if label:
@@ -376,21 +388,22 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
 
     # ── Заголовки столбцов (строка 3) ────────────────────────────────────────
     headers = [
-        "Сотрудник",  # A
-        "Город",  # B
-        "Рабочих\nдней",  # C
-        "Норма",  # D
-        "+/−\nк норме",  # E
-        "% нормы",  # F
-        "Утро",  # G
-        "Вечер",  # H
-        "Ночь",  # I
-        "РД",  # J
-        "Выходных",  # K
-        "Отпуск\n(дней)",  # L
-        "Работал в\nпраздники",  # M
-        "Макс. серия\nработы",  # N
-        "Макс. серия\nотдыха",  # O
+        "Сотрудник",  # A  col 1
+        "Город",  # B  col 2
+        "Рабочих\nдней",  # C  col 3
+        "Норма",  # D  col 4
+        "+/−\nк норме",  # E  col 5
+        "% нормы",  # F  col 6
+        "Утро",  # G  col 7
+        "Вечер",  # H  col 8
+        "Ночь",  # I  col 9
+        "РД",  # J  col 10
+        "Выходных",  # K  col 11
+        "Отпуск\n(дней)",  # L  col 12
+        "Работал в\nвыходные",  # M  col 13  ← Сб/Вс
+        "Работал в\nпраздники",  # N  col 14  ← официальные, Пн–Пт
+        "Макс. серия\nработы",  # O  col 15
+        "Макс. серия\nотдыха",  # P  col 16
     ]
     ws.row_dimensions[3].height = 32
     for col_idx, h in enumerate(headers, start=1):
@@ -408,6 +421,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         "workday": 0,
         "day_off": 0,
         "vacation": 0,
+        "weekend_work": 0,
         "holiday_work": 0,
     }
 
@@ -438,8 +452,8 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         pct_label = f"{st.pct_norm:.0f}%"
         pct_color = (
             COLORS["ok"]
-            if st.pct_norm >= 95
-            else (COLORS["warn"] if st.pct_norm >= 80 else COLORS["bad"])
+            if st.pct_norm >= 100
+            else (COLORS["warn"] if st.pct_norm >= 95 else COLORS["bad"])
         )
         _stat_cell(ws, row_idx, 6, pct_label, pct_color)
 
@@ -453,15 +467,19 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         _stat_cell(ws, row_idx, 11, st.day_off, COLORS["day_off"])
         _stat_cell(ws, row_idx, 12, st.vacation or "—", COLORS["vacation"])
 
-        # Работал в праздники
+        # Работал в выходные (Сб/Вс)
+        ww_color = COLORS["warn"] if st.weekend_work > 0 else COLORS["ok"]
+        _stat_cell(ws, row_idx, 13, st.weekend_work or "—", ww_color)
+
+        # Работал в праздники (официальные, Пн–Пт)
         hw_color = COLORS["warn"] if st.holiday_work > 0 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 13, st.holiday_work or "—", hw_color)
+        _stat_cell(ws, row_idx, 14, st.holiday_work or "—", hw_color)
 
         # Макс. серии
         streak_w_color = COLORS["bad"] if st.max_streak_work >= 5 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 14, st.max_streak_work, streak_w_color)
+        _stat_cell(ws, row_idx, 15, st.max_streak_work, streak_w_color)
         streak_r_color = COLORS["warn"] if st.max_streak_rest >= 3 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 15, st.max_streak_rest, streak_r_color)
+        _stat_cell(ws, row_idx, 16, st.max_streak_rest, streak_r_color)
 
         # Накапливаем итоги
         totals["total"] += st.total_working
@@ -471,6 +489,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         totals["workday"] += st.workday
         totals["day_off"] += st.day_off
         totals["vacation"] += st.vacation
+        totals["weekend_work"] += st.weekend_work
         totals["holiday_work"] += st.holiday_work
 
     # ── Строка итогов по команде ──────────────────────────────────────────────
@@ -488,12 +507,13 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     _stat_cell(ws, total_row, 10, totals["workday"], COLORS["workday"], white=True, bold=True)
     _stat_cell(ws, total_row, 11, totals["day_off"], COLORS["day_off"], bold=True)
     _stat_cell(ws, total_row, 12, totals["vacation"], COLORS["vacation"], bold=True)
-    _stat_cell(ws, total_row, 13, totals["holiday_work"], COLORS["total_row"], white=True)
-    _stat_cell(ws, total_row, 14, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 13, totals["weekend_work"], COLORS["total_row"], white=True)
+    _stat_cell(ws, total_row, 14, totals["holiday_work"], COLORS["total_row"], white=True)
     _stat_cell(ws, total_row, 15, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 16, "", COLORS["total_row"])
 
     # ── Ширина столбцов ───────────────────────────────────────────────────────
-    col_widths = [20, 12, 10, 8, 10, 9, 7, 7, 7, 7, 10, 10, 14, 16, 16]
+    col_widths = [20, 12, 10, 8, 10, 9, 7, 7, 7, 7, 10, 10, 14, 14, 16, 16]
     for i, w in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 

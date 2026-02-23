@@ -130,6 +130,31 @@ def _select_fair(
     return sorted_candidates[:count]
 
 
+def _select_for_mandatory(
+    candidates: list[Employee],
+    states: dict[str, EmployeeState],
+    shift: ShiftType,
+    remaining_days: int,
+    rng: random.Random,
+    count: int = 1,
+) -> list[Employee]:
+    """
+    Выбор для обязательных смен:
+    - Предпочтение тем, у кого есть дефицит нормы (deficit > 0)
+    - Внутри группы — справедливый выбор: минимальное число смен данного типа
+    - Если нет кандидатов с дефицитом → обычный справедливый выбор из всех
+
+    Это позволяет:
+    1. Не «перегружать» сотрудников, уже выполнивших норму (они назначаются
+       только если больше некому).
+    2. Распределять нагрузку равномерно внутри группы с дефицитом, не создавая
+       серий из 5+ рабочих дней подряд (риск при urgency-based выборе).
+    """
+    deficit_pool = [e for e in candidates if states[e.name].needs_more_work(remaining_days)]
+    pool = deficit_pool if deficit_pool else candidates
+    return _select_fair(pool, states, shift, rng, count)
+
+
 def _select_by_urgency(
     candidates: list[Employee],
     states: dict[str, EmployeeState],
@@ -207,8 +232,11 @@ def _build_day(
             f"Невозможно покрыть ночную смену {day}: нет доступных дежурных в Хабаровске"
         )
 
-    # Назначаем ровно 1 хабаровчанина на ночь (справедливо чередуя по числу ночей)
-    night_assigned = _select_fair(night_eligible, states, ShiftType.NIGHT, rng, 1)
+    # Назначаем ровно 1 хабаровчанина на ночь: сначала те, у кого дефицит нормы,
+    # затем по наименьшему числу ночных смен (справедливость).
+    night_assigned = _select_for_mandatory(
+        night_eligible, states, ShiftType.NIGHT, remaining_days, rng, 1
+    )
 
     for emp in night_assigned:
         assigned[emp.name] = ShiftType.NIGHT
@@ -239,8 +267,11 @@ def _build_day(
             f"Невозможно покрыть вечернюю смену {day}: нет доступных дежурных в Москве"
         )
 
-    # Выбираем по 1 на утро и вечер — минимально необходимые
-    morning_pick = _select_fair(morning_eligible, states, ShiftType.MORNING, rng, 1)
+    # Выбираем по 1 на утро и вечер — минимально необходимые.
+    # Приоритет — сотрудники с дефицитом нормы, внутри группы — справедливость.
+    morning_pick = _select_for_mandatory(
+        morning_eligible, states, ShiftType.MORNING, remaining_days, rng, 1
+    )
     evening_pick_pool = [
         e for e in moscow_available if e.can_work_evening() and e not in morning_pick
     ]
@@ -250,7 +281,9 @@ def _build_day(
         raise ScheduleError(
             f"Невозможно покрыть вечернюю смену {day}: все доступные дежурные заняты утром"
         )
-    evening_pick = _select_fair(evening_pick_pool, states, ShiftType.EVENING, rng, 1)
+    evening_pick = _select_for_mandatory(
+        evening_pick_pool, states, ShiftType.EVENING, remaining_days, rng, 1
+    )
 
     for emp in morning_pick:
         assigned[emp.name] = ShiftType.MORNING
@@ -258,10 +291,21 @@ def _build_day(
         assigned[emp.name] = ShiftType.EVENING
 
     # ── Фаза 2b: Дополнительные смены для выработки нормы (Москва) ─────────
-    # Добавляем экстра-назначения пока хотя бы один сотрудник остаётся на отдыхе
-    # (invariant: len(available) - assigned >= 1).
+    # Динамическая квота: сколько московских дежурных должно работать сегодня,
+    # чтобы суммарный дефицит равномерно распределился по оставшимся дням.
+    # Формула: floor(total_deficit / remaining_days), но не меньше 2 (уже назначены).
+    # Это предотвращает как перевыполнение нормы, так и дефицит в конце месяца.
+    total_moscow_deficit = sum(
+        max(0, states[e.name].effective_target - states[e.name].total_working)
+        for e in moscow_duty
+    )
+    # floor-деление: не спешим набирать лишние смены; к концу месяца квота растёт
+    daily_quota = max(2, total_moscow_deficit // max(remaining_days, 1))
+    # Не можем назначить больше, чем доступно
+    daily_quota = min(daily_quota, len(moscow_available))
+
     assigned_moscow_count = sum(1 for e in moscow_duty if e.name in assigned)
-    while len(moscow_available) - assigned_moscow_count > 1:
+    while assigned_moscow_count < daily_quota:
         extra_moscow = [
             e
             for e in moscow_available
@@ -286,6 +330,8 @@ def _build_day(
     # Хабаровские сотрудники работают ТОЛЬКО ночные смены (MSK) или свой
     # местный рабочий день (09-18 Хабаровск = ShiftType.WORKDAY).
     # Они НЕ работают в московское утро или вечер.
+    # Рабочий день (09-18) возможен только в будни — в выходные и праздники
+    # допустимы только дежурные смены (ночь и т.п.).
     for emp in khabarovsk_duty:
         if emp.name in assigned:
             continue  # уже на ночной смене
@@ -296,7 +342,8 @@ def _build_day(
             # Обязательный отдых после ночной смены
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
-        if emp.schedule_type == ScheduleType.FIVE_TWO and is_holiday:
+        if is_holiday:
+            # В выходные и праздники рабочего дня (9-18) нет — только дежурства
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
         if states[emp.name].consecutive_working >= MAX_CONSECUTIVE_WORKING:
@@ -336,8 +383,9 @@ def _build_day(
             and not _resting_after_night(state)
         ):
             if emp.city == City.KHABAROVSK:
-                # Хабаровские не работают в московские смены — только рабочий день
-                assigned[emp.name] = ShiftType.WORKDAY
+                # Хабаровские — только рабочий день, и только в будни
+                if not is_holiday:
+                    assigned[emp.name] = ShiftType.WORKDAY
             elif emp.can_work_morning() and not _resting_after_evening_for_morning(state):
                 assigned[emp.name] = ShiftType.MORNING
             elif emp.can_work_evening():
