@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import yaml
 
 from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.models import City, Config, Employee, ScheduleType, VacationPeriod
@@ -21,8 +22,12 @@ MONTHS_RU = [
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ]
 
-# Шаблон пустой строки в таблице
-_EMPTY = {
+_CITY_TO_RU   = {"moscow": "Москва", "khabarovsk": "Хабаровск"}
+_RU_TO_CITY   = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
+_STYPE_TO_RU  = {"flexible": "Гибкий", "5/2": "5/2"}
+_RU_TO_STYPE  = {"Гибкий": "flexible", "5/2": "5/2"}
+
+_EMPTY_ROW = {
     "Имя": "",
     "Город": "Москва",
     "График": "Гибкий",
@@ -31,26 +36,49 @@ _EMPTY = {
     "Только вечер": False,
     "Тимлид": False,
     "Отпуск": "",
+    "Недоступен": "",      # фича 2 (разовые блокировки), зарезервировано
 }
 
-# Начальные строки: 4 Москвы + 2 Хабаровска (минимум по правилам)
 _DEFAULT_ROWS = [
-    {**_EMPTY, "Город": "Москва"},
-    {**_EMPTY, "Город": "Москва"},
-    {**_EMPTY, "Город": "Москва"},
-    {**_EMPTY, "Город": "Москва"},
-    {**_EMPTY, "Город": "Хабаровск"},
-    {**_EMPTY, "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Город": "Хабаровск"},
 ]
 
+_TABLE_KEY_PREFIX = "employees_table"
 
-# ── Вспомогательные функции ───────────────────────────────────────────────────
 
-def _parse_vacations(text: str, year: int, emp_name: str) -> tuple[list[VacationPeriod], str | None]:
-    """Распарсить отпуска из строки вида «10.03–20.03, 25.03–31.03»."""
+# ── Session state ─────────────────────────────────────────────────────────────
+
+def _init_state() -> None:
+    if "table_version" not in st.session_state:
+        st.session_state["table_version"] = 0
+    if "employees_df" not in st.session_state:
+        st.session_state["employees_df"] = pd.DataFrame(_DEFAULT_ROWS)
+    if "cfg_month" not in st.session_state:
+        st.session_state["cfg_month"] = date.today().month
+    if "cfg_year" not in st.session_state:
+        st.session_state["cfg_year"] = date.today().year
+    if "cfg_seed" not in st.session_state:
+        st.session_state["cfg_seed"] = 42
+
+
+def _bump_table() -> None:
+    """Увеличить версию ключа таблицы, чтобы data_editor пересоздался с новыми данными."""
+    st.session_state["table_version"] += 1
+
+
+# ── Парсинг/сериализация ──────────────────────────────────────────────────────
+
+def _parse_vacations(
+    text: str, year: int, emp_name: str,
+) -> tuple[list[VacationPeriod], str | None]:
+    """Распарсить отпуска из строки «дд.мм–дд.мм, дд.мм–дд.мм»."""
     if not text.strip():
         return [], None
-
     periods: list[VacationPeriod] = []
     for raw in text.replace("–", "-").split(","):
         raw = raw.strip()
@@ -68,29 +96,112 @@ def _parse_vacations(text: str, year: int, emp_name: str) -> tuple[list[Vacation
     return periods, None
 
 
-def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[str]]:
-    """Преобразовать DataFrame в список Employee. Возвращает (employees, errors)."""
-    employees: list[Employee] = []
-    errors: list[str] = []
+def _vacations_to_str(vacations: list[dict], year: int) -> str:
+    """Преобразовать список {start, end} из YAML в строку «дд.мм–дд.мм»."""
+    parts = []
+    for v in vacations:
+        s = date.fromisoformat(str(v["start"]))
+        e = date.fromisoformat(str(v["end"]))
+        # показываем только если в том же году
+        if s.year == year and e.year == year:
+            parts.append(f"{s.day:02d}.{s.month:02d}–{e.day:02d}.{e.month:02d}")
+    return ", ".join(parts)
 
+
+def _df_to_yaml(df: pd.DataFrame, month: int, year: int, seed: int) -> str:
+    """Сериализовать таблицу сотрудников в YAML (совместимый с CLI)."""
+    employees = []
     for _, row in df.iterrows():
         name = str(row["Имя"]).strip()
         if not name:
-            continue  # пустые строки пропускаем молча
+            continue
+        vacations: list[dict] = []
+        vac_text = str(row.get("Отпуск", "")).strip()
+        for raw in vac_text.replace("–", "-").split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            parts = raw.split("-", 1)
+            if len(parts) == 2:
+                try:
+                    s = datetime.strptime(f"{parts[0].strip()}.{year}", "%d.%m.%Y").date()
+                    e = datetime.strptime(f"{parts[1].strip()}.{year}", "%d.%m.%Y").date()
+                    vacations.append({"start": s.isoformat(), "end": e.isoformat()})
+                except ValueError:
+                    pass
+        emp: dict = {
+            "name": name,
+            "city": _RU_TO_CITY.get(str(row["Город"]), "moscow"),
+            "schedule_type": _RU_TO_STYPE.get(str(row["График"]), "flexible"),
+            "on_duty": bool(row["Дежурный"]),
+            "morning_only": bool(row["Только утро"]),
+            "evening_only": bool(row["Только вечер"]),
+            "team_lead": bool(row["Тимлид"]),
+        }
+        if vacations:
+            emp["vacations"] = vacations
+        employees.append(emp)
 
-        city = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
+    config_dict = {
+        "month": int(month),
+        "year": int(year),
+        "seed": int(seed),
+        "employees": employees,
+    }
+    return yaml.dump(config_dict, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+
+def _yaml_to_df(raw_yaml: str, year: int) -> tuple[pd.DataFrame | None, int, int, int, str | None]:
+    """Загрузить YAML конфиг → (df, month, year, seed, error)."""
+    try:
+        data = yaml.safe_load(raw_yaml)
+    except yaml.YAMLError as e:
+        return None, 0, 0, 42, f"Ошибка разбора YAML: {e}"
+
+    if not isinstance(data, dict):
+        return None, 0, 0, 42, "Неверный формат файла конфигурации."
+
+    month = int(data.get("month", date.today().month))
+    year_val = int(data.get("year", year))
+    seed = int(data.get("seed", 42))
+    rows = []
+    for emp in data.get("employees", []):
+        vac_str = _vacations_to_str(emp.get("vacations", []), year_val)
+        rows.append({
+            "Имя":          emp.get("name", ""),
+            "Город":        _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
+            "График":       _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
+            "Дежурный":     bool(emp.get("on_duty", True)),
+            "Только утро":  bool(emp.get("morning_only", False)),
+            "Только вечер": bool(emp.get("evening_only", False)),
+            "Тимлид":       bool(emp.get("team_lead", False)),
+            "Отпуск":       vac_str,
+            "Недоступен":   "",
+        })
+
+    if not rows:
+        rows = _DEFAULT_ROWS.copy()
+
+    return pd.DataFrame(rows), month, year_val, seed, None
+
+
+def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[str]]:
+    """DataFrame → список Employee."""
+    employees: list[Employee] = []
+    errors: list[str] = []
+    for _, row in df.iterrows():
+        name = str(row["Имя"]).strip()
+        if not name:
+            continue
+        city  = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
         stype = ScheduleType.FLEXIBLE if row["График"] == "Гибкий" else ScheduleType.FIVE_TWO
-
-        vacations, err = _parse_vacations(str(row["Отпуск"]), year, name)
+        vacations, err = _parse_vacations(str(row.get("Отпуск", "")), year, name)
         if err:
             errors.append(err)
             continue
-
         try:
             employees.append(Employee(
-                name=name,
-                city=city,
-                schedule_type=stype,
+                name=name, city=city, schedule_type=stype,
                 on_duty=bool(row["Дежурный"]),
                 morning_only=bool(row["Только утро"]),
                 evening_only=bool(row["Только вечер"]),
@@ -99,28 +210,75 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
             ))
         except Exception as e:
             errors.append(f"«{name}»: {e}")
-
     return employees, errors
 
 
 # ── Страница ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
+_init_state()
+
 st.title("📅 График дежурств")
-st.caption("Заполните таблицу сотрудников и нажмите «Сгенерировать».")
+
+# ── Панель: загрузка конфига (sidebar) ───────────────────────────────────────
+with st.sidebar:
+    st.header("⚙️ Конфигурация")
+
+    uploaded = st.file_uploader(
+        "Загрузить конфиг (.yaml)",
+        type=["yaml", "yml"],
+        help="Файл конфигурации, ранее сохранённый через кнопку «Скачать конфиг».",
+    )
+    if uploaded is not None:
+        raw = uploaded.read().decode("utf-8")
+        df_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
+        if err:
+            st.error(err)
+        else:
+            st.session_state["employees_df"] = df_loaded
+            st.session_state["cfg_month"]    = m
+            st.session_state["cfg_year"]     = y
+            st.session_state["cfg_seed"]     = s
+            _bump_table()
+            st.success(f"Загружен конфиг: {len(df_loaded)} сотрудников")
+            st.rerun()
+
+    st.divider()
+    st.caption("Сохранить текущую конфигурацию:")
+
+    # Кнопка скачивания — работает от текущего состояния таблицы.
+    # Данные берём из session_state (data_editor записывает туда изменения).
+    _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
+    _current_df = st.session_state.get(_table_key, st.session_state["employees_df"])
+    _cfg_month  = st.session_state.get("cfg_month", date.today().month)
+    _cfg_year   = st.session_state.get("cfg_year",  date.today().year)
+    _cfg_seed   = st.session_state.get("cfg_seed",  42)
+
+    yaml_str = _df_to_yaml(_current_df, _cfg_month, _cfg_year, _cfg_seed)
+    st.download_button(
+        label="⬇️ Скачать конфиг (.yaml)",
+        data=yaml_str.encode("utf-8"),
+        file_name=f"config_{_cfg_year}_{_cfg_month:02d}.yaml",
+        mime="text/yaml",
+        use_container_width=True,
+    )
 
 # ── Выбор периода ─────────────────────────────────────────────────────────────
 col_m, col_y, _ = st.columns([2, 1, 6])
 with col_m:
-    today = date.today()
     month: int = st.selectbox(
         "Месяц",
         range(1, 13),
-        index=today.month - 1,
+        index=st.session_state["cfg_month"] - 1,
         format_func=lambda m: MONTHS_RU[m - 1],
+        key="cfg_month",
     )
 with col_y:
-    year: int = st.number_input("Год", min_value=2024, max_value=2030, value=today.year, step=1)
+    year: int = st.number_input(
+        "Год", min_value=2024, max_value=2030,
+        value=st.session_state["cfg_year"], step=1,
+        key="cfg_year",
+    )
 
 st.divider()
 
@@ -129,28 +287,26 @@ st.subheader("Сотрудники")
 st.caption(
     "Добавляйте строки кнопкой **+** снизу таблицы. "
     "Удалить строку — поставить галочку слева и нажать **Delete**. "
-    "**Отпуск**: дд.мм–дд.мм, несколько через запятую (например: `10.03–20.03, 25.03–28.03`)."
+    "**Отпуск**: дд.мм–дд.мм, несколько через запятую."
 )
 
+_table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
-    pd.DataFrame(_DEFAULT_ROWS),
+    st.session_state["employees_df"],
     column_config={
-        "Имя": st.column_config.TextColumn("Имя", width="medium"),
-        "Город": st.column_config.SelectboxColumn(
-            "Город", options=["Москва", "Хабаровск"], width="small",
-        ),
-        "График": st.column_config.SelectboxColumn(
-            "График", options=["Гибкий", "5/2"], width="small",
-        ),
-        "Дежурный":    st.column_config.CheckboxColumn("Дежурный",    width="small"),
-        "Только утро": st.column_config.CheckboxColumn("Только утро", width="small"),
-        "Только вечер":st.column_config.CheckboxColumn("Только вечер",width="small"),
-        "Тимлид":      st.column_config.CheckboxColumn("Тимлид",      width="small"),
-        "Отпуск": st.column_config.TextColumn("Отпуск (дд.мм–дд.мм)", width="large"),
+        "Имя":          st.column_config.TextColumn("Имя",          width="medium"),
+        "Город":        st.column_config.SelectboxColumn("Город",   options=["Москва", "Хабаровск"], width="small"),
+        "График":       st.column_config.SelectboxColumn("График",  options=["Гибкий", "5/2"],       width="small"),
+        "Дежурный":     st.column_config.CheckboxColumn("Дежурный",     width="small"),
+        "Только утро":  st.column_config.CheckboxColumn("Только утро",  width="small"),
+        "Только вечер": st.column_config.CheckboxColumn("Только вечер", width="small"),
+        "Тимлид":       st.column_config.CheckboxColumn("Тимлид",       width="small"),
+        "Отпуск":       st.column_config.TextColumn("Отпуск (дд.мм–дд.мм)", width="large"),
+        "Недоступен":   st.column_config.TextColumn("Недоступен (дд.мм,...)", width="large"),
     },
     num_rows="dynamic",
     use_container_width=True,
-    key="employees_table",
+    key=_table_key,
 )
 
 # ── Правила: подсказка ────────────────────────────────────────────────────────
@@ -163,6 +319,8 @@ with st.expander("ℹ️ Правила заполнения"):
 | **Только вечер** | Назначается только на вечерние смены (15:00–00:00 МСК) |
 | **Тимлид** | Не дежурит (on_duty=False автоматически) |
 | **5/2** | Не работает в субботу и воскресенье |
+| **Отпуск** | Период(ы) отпуска: `10.03–20.03` или `10.03–15.03, 25.03–28.03` |
+| **Недоступен** | Разовые недоступные дни (не отпуск): `10.03, 15.03` |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
     """)
@@ -171,40 +329,31 @@ with st.expander("ℹ️ Правила заполнения"):
 with st.expander("⚙️ Дополнительно"):
     seed: int = st.number_input(
         "Seed (для воспроизводимости результата)",
-        min_value=0, value=42, step=1,
+        min_value=0, value=st.session_state["cfg_seed"], step=1,
+        key="cfg_seed",
         help="При одинаковом seed и тех же данных всегда получается одинаковый график.",
     )
 
 st.divider()
 
 # ── Кнопка генерации ──────────────────────────────────────────────────────────
-generate = st.button(
-    "⚡ Сгенерировать расписание",
-    type="primary",
-    use_container_width=True,
-)
-
-if generate:
-    # 1. Собрать сотрудников
+if st.button("⚡ Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(edited_df, year)
 
     if errors:
         for err in errors:
             st.error(err)
         st.stop()
-
     if not employees:
         st.warning("Добавьте хотя бы одного сотрудника.")
         st.stop()
 
-    # 2. Проверить конфигурацию
     try:
         config = Config(month=month, year=year, seed=seed, employees=employees)
     except Exception as e:
         st.error(f"Ошибка конфигурации: {e}")
         st.stop()
 
-    # 3. Загрузить производственный календарь
     with st.spinner("Загружаем производственный календарь (isdayoff.ru)…"):
         try:
             holidays = fetch_holidays(year, month)
@@ -213,7 +362,6 @@ if generate:
             st.info("Проверьте подключение к интернету.")
             st.stop()
 
-    # 4. Генерировать расписание
     with st.spinner("Генерируем расписание…"):
         try:
             schedule = generate_schedule(config, holidays)
@@ -221,12 +369,10 @@ if generate:
             st.error(f"Не удалось построить расписание: {e}")
             st.stop()
 
-    # 5. Экспорт в XLS
     with tempfile.TemporaryDirectory() as tmpdir:
         xls_path = export_xls(schedule, Path(tmpdir))
         xls_bytes = xls_path.read_bytes()
 
-    # 6. Результат
     meta = schedule.metadata
     st.success(
         f"✅ Расписание готово — {len(schedule.days)} дней, "
@@ -234,9 +380,9 @@ if generate:
     )
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Утренних смен",  meta.get("total_mornings", 0))
-    c2.metric("Вечерних смен",  meta.get("total_evenings", 0))
-    c3.metric("Ночных смен",    meta.get("total_nights",   0))
+    c1.metric("Утренних смен", meta.get("total_mornings", 0))
+    c2.metric("Вечерних смен", meta.get("total_evenings", 0))
+    c3.metric("Ночных смен",   meta.get("total_nights",   0))
 
     st.download_button(
         label="⬇️ Скачать XLS",
