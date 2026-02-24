@@ -95,7 +95,7 @@ def _can_work(
     holidays: set[date],
 ) -> bool:
     """Может ли сотрудник работать в указанный день (любая смена)."""
-    if emp.is_on_vacation(day):
+    if emp.is_blocked(day):
         return False
     if state.consecutive_working >= MAX_CONSECUTIVE_WORKING:
         return False
@@ -195,7 +195,7 @@ def _calc_vacation_days(emp: Employee, year: int, month: int) -> int:
     count = 0
     for d in range(1, days_in_month + 1):
         day = date(year, month, d)
-        if day.weekday() < 5 and emp.is_on_vacation(day):
+        if day.weekday() < 5 and emp.is_blocked(day):
             count += 1
     return count
 
@@ -226,7 +226,7 @@ def _build_day(
     night_eligible = [
         e
         for e in khabarovsk_duty
-        if not e.is_on_vacation(day)
+        if not e.is_blocked(day)
         and not (e.schedule_type == ScheduleType.FIVE_TWO and is_holiday)
         and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
     ]
@@ -249,7 +249,7 @@ def _build_day(
     moscow_available = [
         e
         for e in moscow_duty
-        if not e.is_on_vacation(day)
+        if not e.is_blocked(day)
         and not _resting_after_night(states[e.name])
         and not (e.schedule_type == ScheduleType.FIVE_TWO and is_holiday)
         and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
@@ -372,6 +372,9 @@ def _build_day(
         if emp.is_on_vacation(day):
             assigned[emp.name] = ShiftType.VACATION
             continue
+        if day in emp.unavailable_dates:
+            assigned[emp.name] = ShiftType.DAY_OFF
+            continue
         # Принудительный отдых после ночи НЕ применяется: ночь 00-08 МСК =
         # 07-15 КХСТ, после неё достаточно времени до следующего дня 09-18 КХСТ.
         if is_holiday:
@@ -392,7 +395,7 @@ def _build_day(
             for other in khabarovsk_duty:
                 if other.name == emp.name:
                     continue
-                if other.is_on_vacation(_next_day):
+                if other.is_blocked(_next_day):
                     continue
                 other_shift = assigned.get(other.name)
                 if other_shift == ShiftType.VACATION:
@@ -418,7 +421,7 @@ def _build_day(
     for emp in non_duty:
         if emp.is_on_vacation(day):
             assigned[emp.name] = ShiftType.VACATION
-        elif is_holiday:
+        elif day in emp.unavailable_dates or is_holiday:
             assigned[emp.name] = ShiftType.DAY_OFF
         else:
             assigned[emp.name] = ShiftType.WORKDAY
@@ -533,7 +536,7 @@ def _target_adjustment_pass(
                 if (
                     emp.name not in day.day_off
                     or _is_weekend_or_holiday(day.date, holidays)
-                    or emp.is_on_vacation(day.date)
+                    or emp.is_blocked(day.date)
                 ):
                     continue
                 # Нельзя ставить рабочий день после вечерней смены

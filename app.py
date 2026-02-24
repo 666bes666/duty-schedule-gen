@@ -129,6 +129,17 @@ def _df_to_yaml(df: pd.DataFrame, month: int, year: int, seed: int) -> str:
                     vacations.append({"start": s.isoformat(), "end": e.isoformat()})
                 except ValueError:
                     pass
+        unavailable_dates: list[str] = []
+        unavail_text = str(row.get("Недоступен", "")).strip()
+        for raw in unavail_text.split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                d = datetime.strptime(f"{raw}.{year}", "%d.%m.%Y").date()
+                unavailable_dates.append(d.isoformat())
+            except ValueError:
+                pass
         emp: dict = {
             "name": name,
             "city": _RU_TO_CITY.get(str(row["Город"]), "moscow"),
@@ -140,6 +151,8 @@ def _df_to_yaml(df: pd.DataFrame, month: int, year: int, seed: int) -> str:
         }
         if vacations:
             emp["vacations"] = vacations
+        if unavailable_dates:
+            emp["unavailable_dates"] = unavailable_dates
         employees.append(emp)
 
     config_dict = {
@@ -167,6 +180,12 @@ def _yaml_to_df(raw_yaml: str, year: int) -> tuple[pd.DataFrame | None, int, int
     rows = []
     for emp in data.get("employees", []):
         vac_str = _vacations_to_str(emp.get("vacations", []), year_val)
+        unavail_dates = emp.get("unavailable_dates", [])
+        unavail_str = ", ".join(
+            f"{date.fromisoformat(str(d)).day:02d}.{date.fromisoformat(str(d)).month:02d}"
+            for d in unavail_dates
+            if date.fromisoformat(str(d)).year == year_val
+        )
         rows.append({
             "Имя":          emp.get("name", ""),
             "Город":        _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
@@ -176,13 +195,32 @@ def _yaml_to_df(raw_yaml: str, year: int) -> tuple[pd.DataFrame | None, int, int
             "Только вечер": bool(emp.get("evening_only", False)),
             "Тимлид":       bool(emp.get("team_lead", False)),
             "Отпуск":       vac_str,
-            "Недоступен":   "",
+            "Недоступен":   unavail_str,
         })
 
     if not rows:
         rows = _DEFAULT_ROWS.copy()
 
     return pd.DataFrame(rows), month, year_val, seed, None
+
+
+def _parse_unavailable(
+    text: str, year: int, emp_name: str,
+) -> tuple[list[date], str | None]:
+    """Распарсить разовые недоступные дни из строки «дд.мм, дд.мм»."""
+    if not text.strip():
+        return [], None
+    result: list[date] = []
+    for raw in text.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            d = datetime.strptime(f"{raw}.{year}", "%d.%m.%Y").date()
+        except ValueError:
+            return [], f"«{emp_name}»: неверный формат недоступного дня «{raw}» (нужно дд.мм)"
+        result.append(d)
+    return result, None
 
 
 def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[str]]:
@@ -199,6 +237,10 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
         if err:
             errors.append(err)
             continue
+        unavailable, err2 = _parse_unavailable(str(row.get("Недоступен", "")), year, name)
+        if err2:
+            errors.append(err2)
+            continue
         try:
             employees.append(Employee(
                 name=name, city=city, schedule_type=stype,
@@ -207,6 +249,7 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
                 evening_only=bool(row["Только вечер"]),
                 team_lead=bool(row["Тимлид"]),
                 vacations=vacations,
+                unavailable_dates=unavailable,
             ))
         except Exception as e:
             errors.append(f"«{name}»: {e}")

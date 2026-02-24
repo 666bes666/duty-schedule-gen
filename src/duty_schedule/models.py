@@ -72,6 +72,7 @@ class Employee(BaseModel):
     evening_only: bool = False
     team_lead: bool = False
     vacations: list[VacationPeriod] = []
+    unavailable_dates: list[date] = []
 
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
@@ -85,6 +86,10 @@ class Employee(BaseModel):
 
     def is_on_vacation(self, day: date) -> bool:
         return any(v.start <= day <= v.end for v in self.vacations)
+
+    def is_blocked(self, day: date) -> bool:
+        """Сотрудник недоступен: в отпуске или заблокировал день вручную."""
+        return self.is_on_vacation(day) or day in self.unavailable_dates
 
     def can_work_morning(self) -> bool:
         """Может работать в утреннюю смену."""

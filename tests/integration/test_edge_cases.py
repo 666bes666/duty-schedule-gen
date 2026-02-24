@@ -183,6 +183,39 @@ class TestVacationOverlap:
             assert day.is_covered(), f"Нет покрытия {day.date}"
 
 
+class TestUnavailableDates:
+    """Разовые блокировки дней."""
+
+    def test_unavailable_employee_not_assigned_on_blocked_day(self):
+        """Сотрудник с unavailable_dates не должен быть в сменах в эти дни."""
+        team = _base_team()
+        # Блокируем первого московского дежурного на 5-е число
+        team[0] = _emp("Москва 1", unavailable_dates=[date(2025, 3, 5)])
+        config = Config(month=3, year=2025, seed=42, employees=team)
+        schedule = generate_schedule(config, set())
+        day_5 = next(d for d in schedule.days if d.date == date(2025, 3, 5))
+        all_assigned = day_5.morning + day_5.evening + day_5.night + day_5.workday
+        assert "Москва 1" not in all_assigned
+
+    def test_unavailable_shows_as_day_off_not_vacation(self):
+        """Разовая блокировка показывается как выходной, а не отпуск."""
+        team = _base_team()
+        team[0] = _emp("Москва 1", unavailable_dates=[date(2025, 3, 10)])
+        config = Config(month=3, year=2025, seed=42, employees=team)
+        schedule = generate_schedule(config, set())
+        day_10 = next(d for d in schedule.days if d.date == date(2025, 3, 10))
+        assert "Москва 1" not in day_10.vacation
+
+    def test_schedule_still_covered_with_unavailable(self):
+        """Все смены покрыты даже при наличии блокировок."""
+        team = _base_team()
+        team[0] = _emp("Москва 1", unavailable_dates=[date(2025, 3, 1), date(2025, 3, 5)])
+        config = Config(month=3, year=2025, seed=42, employees=team)
+        schedule = generate_schedule(config, set())
+        for day in schedule.days:
+            assert day.is_covered(), f"Смены не покрыты на {day.date}"
+
+
 class TestDifferentMonths:
     """Разные месяцы и года."""
 
