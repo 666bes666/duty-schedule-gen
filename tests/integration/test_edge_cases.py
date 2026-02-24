@@ -10,7 +10,9 @@ from duty_schedule.models import (
     City,
     Config,
     Employee,
+    PinnedAssignment,
     ScheduleType,
+    ShiftType,
     VacationPeriod,
 )
 from duty_schedule.scheduler import generate_schedule
@@ -181,6 +183,39 @@ class TestVacationOverlap:
         schedule = generate_schedule(config, set())
         for day in schedule.days:
             assert day.is_covered(), f"Нет покрытия {day.date}"
+
+
+class TestPinnedAssignments:
+    """Фиксированные назначения (пины)."""
+
+    def test_pin_respected_in_schedule(self):
+        """Пин должен оказаться в соответствующей смене на нужный день."""
+        pin = PinnedAssignment(date=date(2025, 3, 3), employee_name="Москва 1", shift=ShiftType.MORNING)
+        config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=[pin])
+        schedule = generate_schedule(config, set())
+        day_3 = next(d for d in schedule.days if d.date == date(2025, 3, 3))
+        assert "Москва 1" in day_3.morning
+
+    def test_multiple_pins_respected(self):
+        """Несколько пинов — все должны соблюдаться."""
+        pins = [
+            PinnedAssignment(date=date(2025, 3, 5), employee_name="Москва 2", shift=ShiftType.EVENING),
+            PinnedAssignment(date=date(2025, 3, 10), employee_name="Москва 3", shift=ShiftType.MORNING),
+        ]
+        config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=pins)
+        schedule = generate_schedule(config, set())
+        day_5 = next(d for d in schedule.days if d.date == date(2025, 3, 5))
+        day_10 = next(d for d in schedule.days if d.date == date(2025, 3, 10))
+        assert "Москва 2" in day_5.evening
+        assert "Москва 3" in day_10.morning
+
+    def test_all_shifts_covered_with_pins(self):
+        """При наличии пинов все смены по-прежнему покрыты."""
+        pins = [PinnedAssignment(date=date(2025, 3, 7), employee_name="Москва 1", shift=ShiftType.MORNING)]
+        config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=pins)
+        schedule = generate_schedule(config, set())
+        for day in schedule.days:
+            assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
 class TestUnavailableDates:
