@@ -607,6 +607,13 @@ st.caption(
     "Отпуска, выходные и блокировки — в секции **📅 Отпуска, выходные и блокировки** ниже."
 )
 
+# Опции для «Группа» — имена сотрудников из предыдущего рендера
+_group_options = [""] + sorted({
+    str(r["Имя"]).strip()
+    for _, r in st.session_state["_df_for_download"].iterrows()
+    if str(r["Имя"]).strip()
+})
+
 _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
     st.session_state["employees_df"],
@@ -670,8 +677,9 @@ edited_df: pd.DataFrame = st.data_editor(
                                min_value=1, step=1,
                                help="Макс. рабочих дней подряд (пусто = 5)",
                            ),
-        "Группа":          st.column_config.TextColumn(
+        "Группа":          st.column_config.SelectboxColumn(
                                "Группа",
+                               options=_group_options,
                                help="Сотрудников одной группы не ставят вместе на одну смену",
                            ),
     },
