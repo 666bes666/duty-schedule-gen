@@ -10,7 +10,6 @@ from datetime import date, timedelta
 
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
-    CarryOverState,
     City,
     Config,
     DaySchedule,
