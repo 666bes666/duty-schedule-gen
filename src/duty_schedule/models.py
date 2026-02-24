@@ -104,12 +104,26 @@ class Employee(BaseModel):
         return self.schedule_type == ScheduleType.FLEXIBLE
 
 
+class PinnedAssignment(BaseModel):
+    """Фиксированное назначение: конкретный сотрудник на конкретный день и смену."""
+    date: date
+    employee_name: str
+    shift: ShiftType
+
+    @model_validator(mode="after")
+    def validate_shift(self) -> PinnedAssignment:
+        if self.shift == ShiftType.VACATION:
+            raise ValueError("Нельзя закрепить отпуск как пин")
+        return self
+
+
 class Config(BaseModel):
     month: int
     year: int
     timezone: str = "Europe/Moscow"
     seed: int = 42
     employees: list[Employee]
+    pins: list[PinnedAssignment] = []
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:

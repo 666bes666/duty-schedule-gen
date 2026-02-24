@@ -11,7 +11,7 @@ import streamlit as st
 import yaml
 
 from duty_schedule.calendar import CalendarError, fetch_holidays
-from duty_schedule.models import City, Config, Employee, ScheduleType, VacationPeriod
+from duty_schedule.models import City, Config, Employee, PinnedAssignment, ScheduleType, ShiftType, VacationPeriod
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.export.xls import export_xls
 
@@ -50,6 +50,18 @@ _DEFAULT_ROWS = [
 
 _TABLE_KEY_PREFIX = "employees_table"
 
+_SHIFTS_RU = ["Утро", "Вечер", "Ночь", "Рабочий день", "Выходной"]
+_RU_TO_SHIFT = {
+    "Утро":        ShiftType.MORNING,
+    "Вечер":       ShiftType.EVENING,
+    "Ночь":        ShiftType.NIGHT,
+    "Рабочий день": ShiftType.WORKDAY,
+    "Выходной":    ShiftType.DAY_OFF,
+}
+_SHIFT_TO_RU = {v: k for k, v in _RU_TO_SHIFT.items()}
+
+_EMPTY_PIN_ROW = {"Дата": "", "Сотрудник": "", "Смена": "Утро"}
+
 
 # ── Session state ─────────────────────────────────────────────────────────────
 
@@ -64,6 +76,8 @@ def _init_state() -> None:
         st.session_state["cfg_year"] = date.today().year
     if "cfg_seed" not in st.session_state:
         st.session_state["cfg_seed"] = 42
+    if "pins_df" not in st.session_state:
+        st.session_state["pins_df"] = pd.DataFrame([_EMPTY_PIN_ROW])
 
 
 def _bump_table() -> None:
@@ -108,7 +122,10 @@ def _vacations_to_str(vacations: list[dict], year: int) -> str:
     return ", ".join(parts)
 
 
-def _df_to_yaml(df: pd.DataFrame, month: int, year: int, seed: int) -> str:
+def _df_to_yaml(
+    df: pd.DataFrame, month: int, year: int, seed: int,
+    pins_df: pd.DataFrame | None = None,
+) -> str:
     """Сериализовать таблицу сотрудников в YAML (совместимый с CLI)."""
     employees = []
     for _, row in df.iterrows():
@@ -155,24 +172,70 @@ def _df_to_yaml(df: pd.DataFrame, month: int, year: int, seed: int) -> str:
             emp["unavailable_dates"] = unavailable_dates
         employees.append(emp)
 
-    config_dict = {
+    config_dict: dict = {
         "month": int(month),
         "year": int(year),
         "seed": int(seed),
         "employees": employees,
     }
+    if pins_df is not None:
+        pins_list = _pins_df_to_list(pins_df, year)
+        if pins_list:
+            config_dict["pins"] = pins_list
     return yaml.dump(config_dict, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
 
-def _yaml_to_df(raw_yaml: str, year: int) -> tuple[pd.DataFrame | None, int, int, int, str | None]:
-    """Загрузить YAML конфиг → (df, month, year, seed, error)."""
+def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
+    """Сериализовать таблицу пинов в список dict для YAML."""
+    result = []
+    for _, row in pins_df.iterrows():
+        date_str = str(row.get("Дата", "")).strip()
+        emp_name = str(row.get("Сотрудник", "")).strip()
+        shift_ru = str(row.get("Смена", "")).strip()
+        if not date_str or not emp_name or not shift_ru:
+            continue
+        try:
+            d = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y").date()
+        except ValueError:
+            continue
+        shift = _RU_TO_SHIFT.get(shift_ru)
+        if shift is None:
+            continue
+        result.append({"date": d.isoformat(), "employee_name": emp_name, "shift": str(shift)})
+    return result
+
+
+def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
+    """Десериализовать список пинов из YAML в DataFrame."""
+    rows = []
+    for p in pins:
+        try:
+            d = date.fromisoformat(str(p["date"]))
+        except (ValueError, KeyError):
+            continue
+        if d.year != year:
+            continue
+        shift_str = str(p.get("shift", ""))
+        shift_ru = _SHIFT_TO_RU.get(ShiftType(shift_str), "Утро") if shift_str else "Утро"
+        rows.append({
+            "Дата":       f"{d.day:02d}.{d.month:02d}",
+            "Сотрудник":  str(p.get("employee_name", "")),
+            "Смена":      shift_ru,
+        })
+    return pd.DataFrame(rows) if rows else pd.DataFrame([_EMPTY_PIN_ROW])
+
+
+def _yaml_to_df(
+    raw_yaml: str, year: int,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, int, int, int, str | None]:
+    """Загрузить YAML конфиг → (employees_df, pins_df, month, year, seed, error)."""
     try:
         data = yaml.safe_load(raw_yaml)
     except yaml.YAMLError as e:
-        return None, 0, 0, 42, f"Ошибка разбора YAML: {e}"
+        return None, None, 0, 0, 42, f"Ошибка разбора YAML: {e}"
 
     if not isinstance(data, dict):
-        return None, 0, 0, 42, "Неверный формат файла конфигурации."
+        return None, None, 0, 0, 42, "Неверный формат файла конфигурации."
 
     month = int(data.get("month", date.today().month))
     year_val = int(data.get("year", year))
@@ -201,7 +264,8 @@ def _yaml_to_df(raw_yaml: str, year: int) -> tuple[pd.DataFrame | None, int, int
     if not rows:
         rows = _DEFAULT_ROWS.copy()
 
-    return pd.DataFrame(rows), month, year_val, seed, None
+    pins_df = _pins_list_to_df(data.get("pins", []), year_val)
+    return pd.DataFrame(rows), pins_df, month, year_val, seed, None
 
 
 def _parse_unavailable(
@@ -274,11 +338,12 @@ with st.sidebar:
     )
     if uploaded is not None:
         raw = uploaded.read().decode("utf-8")
-        df_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
+        df_loaded, pins_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
         if err:
             st.error(err)
         else:
             st.session_state["employees_df"] = df_loaded
+            st.session_state["pins_df"]      = pins_loaded
             st.session_state["cfg_month"]    = m
             st.session_state["cfg_year"]     = y
             st.session_state["cfg_seed"]     = s
@@ -297,7 +362,8 @@ with st.sidebar:
     _cfg_year   = st.session_state.get("cfg_year",  date.today().year)
     _cfg_seed   = st.session_state.get("cfg_seed",  42)
 
-    yaml_str = _df_to_yaml(_current_df, _cfg_month, _cfg_year, _cfg_seed)
+    _current_pins_df = st.session_state.get("pins_df", pd.DataFrame([_EMPTY_PIN_ROW]))
+    yaml_str = _df_to_yaml(_current_df, _cfg_month, _cfg_year, _cfg_seed, pins_df=_current_pins_df)
     st.download_button(
         label="⬇️ Скачать конфиг (.yaml)",
         data=yaml_str.encode("utf-8"),
@@ -368,6 +434,26 @@ with st.expander("ℹ️ Правила заполнения"):
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
     """)
 
+# ── Фиксированные назначения (пины) ──────────────────────────────────────────
+with st.expander("📌 Фиксированные назначения"):
+    st.caption(
+        "Зафиксировать конкретного сотрудника на определённый день и смену. "
+        "Формат даты: **дд.мм** (например `05.03`)."
+    )
+    pins_edited: pd.DataFrame = st.data_editor(
+        st.session_state["pins_df"],
+        column_config={
+            "Дата":       st.column_config.TextColumn("Дата (дд.мм)", width="small"),
+            "Сотрудник":  st.column_config.TextColumn("Сотрудник",    width="medium"),
+            "Смена":      st.column_config.SelectboxColumn(
+                "Смена", options=_SHIFTS_RU, width="small"
+            ),
+        },
+        num_rows="dynamic",
+        use_container_width=True,
+        key="pins_table",
+    )
+
 # ── Дополнительные параметры ──────────────────────────────────────────────────
 with st.expander("⚙️ Дополнительно"):
     seed: int = st.number_input(
@@ -391,8 +477,29 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         st.warning("Добавьте хотя бы одного сотрудника.")
         st.stop()
 
+    # Парсим пины
+    pins: list[PinnedAssignment] = []
+    for _, pin_row in pins_edited.iterrows():
+        date_str = str(pin_row.get("Дата", "")).strip()
+        emp_name = str(pin_row.get("Сотрудник", "")).strip()
+        shift_ru = str(pin_row.get("Смена", "")).strip()
+        if not date_str or not emp_name or not shift_ru:
+            continue
+        try:
+            pin_date = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y").date()
+        except ValueError:
+            st.warning(f"Пин: неверный формат даты «{date_str}» — пропущен.")
+            continue
+        shift = _RU_TO_SHIFT.get(shift_ru)
+        if shift is None:
+            continue
+        try:
+            pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
+        except Exception as e:
+            st.warning(f"Пин ({emp_name} / {date_str}): {e}")
+
     try:
-        config = Config(month=month, year=year, seed=seed, employees=employees)
+        config = Config(month=month, year=year, seed=seed, employees=employees, pins=pins)
     except Exception as e:
         st.error(f"Ошибка конфигурации: {e}")
         st.stop()
