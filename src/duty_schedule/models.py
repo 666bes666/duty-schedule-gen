@@ -73,6 +73,22 @@ class Employee(BaseModel):
     team_lead: bool = False
     vacations: list[VacationPeriod] = []
     unavailable_dates: list[date] = []
+    # Фича 1: лимиты типов смен в месяц (None = без ограничений)
+    max_morning_shifts: int | None = None
+    max_evening_shifts: int | None = None
+    max_night_shifts: int | None = None
+    # Фича 2: предпочтительная смена (мягкий приоритет при выборе)
+    preferred_shift: ShiftType | None = None
+    # Фича 3: норма нагрузки в % (100 = полная ставка, 50 = 0.5 ставки)
+    workload_pct: int = 100
+    # Фича 4: постоянные выходные дни недели (0=Пн … 6=Вс)
+    days_off_weekly: list[int] = []
+    # Фича 5: индивидуальный лимит рабочих дней подряд (None = глобальный дефолт 5)
+    max_consecutive_working: int | None = None
+    # Фича 6: группа — не ставить двух из одной группы на одну смену в один день
+    group: str | None = None
+    # Фича 7: роль — отображается в XLS рядом с именем (информационно)
+    role: str = ""
 
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
@@ -82,6 +98,24 @@ class Employee(BaseModel):
             raise ValueError(
                 f"Сотрудник {self.name!r}: нельзя одновременно указать morning_only и evening_only"
             )
+        if not 1 <= self.workload_pct <= 100:
+            raise ValueError(
+                f"Сотрудник {self.name!r}: workload_pct должен быть в диапазоне 1–100"
+            )
+        if self.preferred_shift in (ShiftType.VACATION, ShiftType.DAY_OFF):
+            raise ValueError(
+                f"Сотрудник {self.name!r}: preferred_shift не может быть vacation или day_off"
+            )
+        if self.max_consecutive_working is not None and self.max_consecutive_working < 1:
+            raise ValueError(
+                f"Сотрудник {self.name!r}: max_consecutive_working должен быть >= 1"
+            )
+        for d in self.days_off_weekly:
+            if not 0 <= d <= 6:
+                raise ValueError(
+                    f"Сотрудник {self.name!r}: days_off_weekly содержит "
+                    f"недопустимый день недели {d} (0=Пн … 6=Вс)"
+                )
         return self
 
     def is_on_vacation(self, day: date) -> bool:
@@ -90,6 +124,10 @@ class Employee(BaseModel):
     def is_blocked(self, day: date) -> bool:
         """Сотрудник недоступен: в отпуске или заблокировал день вручную."""
         return self.is_on_vacation(day) or day in self.unavailable_dates
+
+    def is_day_off_weekly(self, day: date) -> bool:
+        """Постоянный выходной день недели (независимо от графика)."""
+        return day.weekday() in self.days_off_weekly
 
     def can_work_morning(self) -> bool:
         """Может работать в утреннюю смену."""

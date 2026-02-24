@@ -28,6 +28,10 @@ _RU_TO_CITY   = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
 _STYPE_TO_RU  = {"flexible": "Гибкий", "5/2": "5/2"}
 _RU_TO_STYPE  = {"Гибкий": "flexible", "5/2": "5/2"}
 
+# Дни недели для фичи 4 (days_off_weekly)
+_WEEKDAY_SHORT_TO_INT = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6}
+_INT_TO_WEEKDAY_SHORT = {v: k.capitalize() for k, v in _WEEKDAY_SHORT_TO_INT.items()}
+
 _EMPTY_ROW = {
     "Имя": "",
     "Город": "Москва",
@@ -37,7 +41,17 @@ _EMPTY_ROW = {
     "Только вечер": False,
     "Тимлид": False,
     "Отпуск": "",
-    "Недоступен": "",      # фича 2 (разовые блокировки), зарезервировано
+    "Недоступен": "",
+    # Новые фичи
+    "Роль": "",
+    "Предпочт. смена": "",
+    "Загрузка%": 100,
+    "Вых. дни": "",
+    "Макс. утренних": "",
+    "Макс. вечерних": "",
+    "Макс. ночных": "",
+    "Макс. подряд": "",
+    "Группа": "",
 }
 
 _DEFAULT_ROWS = [
@@ -161,6 +175,42 @@ def _df_to_yaml(
                 unavailable_dates.append(d.isoformat())
             except ValueError:
                 pass
+        # Парсим новые поля
+        pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
+        pref_shift = _RU_TO_SHIFT.get(pref_shift_ru)
+
+        workload_raw = row.get("Загрузка%", 100)
+        try:
+            workload_pct = int(str(workload_raw).strip()) if str(workload_raw).strip() else 100
+            workload_pct = max(1, min(100, workload_pct))
+        except (ValueError, TypeError):
+            workload_pct = 100
+
+        days_off_raw = str(row.get("Вых. дни", "")).strip()
+        days_off_weekly: list[int] = []
+        for token in days_off_raw.split(","):
+            token = token.strip().lower()
+            if not token:
+                continue
+            if token in _WEEKDAY_SHORT_TO_INT:
+                days_off_weekly.append(_WEEKDAY_SHORT_TO_INT[token])
+            elif token.isdigit() and 0 <= int(token) <= 6:
+                days_off_weekly.append(int(token))
+
+        def _parse_limit(val: object) -> int | None:
+            try:
+                v = int(str(val).strip())
+                return v if v > 0 else None
+            except (ValueError, TypeError):
+                return None
+
+        max_morning = _parse_limit(row.get("Макс. утренних", ""))
+        max_evening = _parse_limit(row.get("Макс. вечерних", ""))
+        max_night = _parse_limit(row.get("Макс. ночных", ""))
+        max_cw = _parse_limit(row.get("Макс. подряд", ""))
+        group = str(row.get("Группа", "")).strip() or None
+        role = str(row.get("Роль", "")).strip()
+
         emp: dict = {
             "name": name,
             "city": _RU_TO_CITY.get(str(row["Город"]), "moscow"),
@@ -174,6 +224,24 @@ def _df_to_yaml(
             emp["vacations"] = vacations
         if unavailable_dates:
             emp["unavailable_dates"] = unavailable_dates
+        if role:
+            emp["role"] = role
+        if pref_shift is not None:
+            emp["preferred_shift"] = str(pref_shift)
+        if workload_pct != 100:
+            emp["workload_pct"] = workload_pct
+        if days_off_weekly:
+            emp["days_off_weekly"] = days_off_weekly
+        if max_morning is not None:
+            emp["max_morning_shifts"] = max_morning
+        if max_evening is not None:
+            emp["max_evening_shifts"] = max_evening
+        if max_night is not None:
+            emp["max_night_shifts"] = max_night
+        if max_cw is not None:
+            emp["max_consecutive_working"] = max_cw
+        if group is not None:
+            emp["group"] = group
         employees.append(emp)
 
     config_dict: dict = {
@@ -255,16 +323,39 @@ def _yaml_to_df(
             for d in unavail_dates
             if date.fromisoformat(str(d)).year == year_val
         )
+        # Предпочтительная смена
+        pref_shift_raw = emp.get("preferred_shift", "") or ""
+        pref_shift_ru = _SHIFT_TO_RU.get(
+            ShiftType(pref_shift_raw) if pref_shift_raw else None, ""  # type: ignore[arg-type]
+        ) if pref_shift_raw else ""
+        # Постоянные выходные дни недели
+        days_off_weekly = emp.get("days_off_weekly", []) or []
+        days_off_str = ",".join(
+            _INT_TO_WEEKDAY_SHORT.get(int(d), str(d)) for d in days_off_weekly
+        )
+
+        def _none_to_str(v: object) -> str:
+            return "" if v is None else str(v)
+
         rows.append({
-            "Имя":          emp.get("name", ""),
-            "Город":        _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
-            "График":       _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
-            "Дежурный":     bool(emp.get("on_duty", True)),
-            "Только утро":  bool(emp.get("morning_only", False)),
-            "Только вечер": bool(emp.get("evening_only", False)),
-            "Тимлид":       bool(emp.get("team_lead", False)),
-            "Отпуск":       vac_str,
-            "Недоступен":   unavail_str,
+            "Имя":              emp.get("name", ""),
+            "Город":            _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
+            "График":           _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
+            "Дежурный":         bool(emp.get("on_duty", True)),
+            "Только утро":      bool(emp.get("morning_only", False)),
+            "Только вечер":     bool(emp.get("evening_only", False)),
+            "Тимлид":           bool(emp.get("team_lead", False)),
+            "Отпуск":           vac_str,
+            "Недоступен":       unavail_str,
+            "Роль":             emp.get("role", ""),
+            "Предпочт. смена":  pref_shift_ru,
+            "Загрузка%":        int(emp.get("workload_pct", 100)),
+            "Вых. дни":         days_off_str,
+            "Макс. утренних":   _none_to_str(emp.get("max_morning_shifts")),
+            "Макс. вечерних":   _none_to_str(emp.get("max_evening_shifts")),
+            "Макс. ночных":     _none_to_str(emp.get("max_night_shifts")),
+            "Макс. подряд":     _none_to_str(emp.get("max_consecutive_working")),
+            "Группа":           emp.get("group", "") or "",
         })
 
     if not rows:
@@ -312,6 +403,44 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
         if err2:
             errors.append(err2)
             continue
+        # Предпочтительная смена
+        pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
+        preferred_shift = _RU_TO_SHIFT.get(pref_shift_ru) if pref_shift_ru else None
+
+        # Норма нагрузки %
+        workload_raw = row.get("Загрузка%", 100)
+        try:
+            workload_pct = int(str(workload_raw).strip()) if str(workload_raw).strip() else 100
+            workload_pct = max(1, min(100, workload_pct))
+        except (ValueError, TypeError):
+            workload_pct = 100
+
+        # Постоянные выходные дни недели
+        days_off_raw = str(row.get("Вых. дни", "")).strip()
+        days_off_weekly: list[int] = []
+        for token in days_off_raw.split(","):
+            token = token.strip().lower()
+            if not token:
+                continue
+            if token in _WEEKDAY_SHORT_TO_INT:
+                days_off_weekly.append(_WEEKDAY_SHORT_TO_INT[token])
+            elif token.isdigit() and 0 <= int(token) <= 6:
+                days_off_weekly.append(int(token))
+
+        def _parse_limit(val: object) -> int | None:
+            try:
+                v = int(str(val).strip())
+                return v if v > 0 else None
+            except (ValueError, TypeError):
+                return None
+
+        max_morning = _parse_limit(row.get("Макс. утренних", ""))
+        max_evening = _parse_limit(row.get("Макс. вечерних", ""))
+        max_night = _parse_limit(row.get("Макс. ночных", ""))
+        max_cw = _parse_limit(row.get("Макс. подряд", ""))
+        group = str(row.get("Группа", "")).strip() or None
+        role = str(row.get("Роль", "")).strip()
+
         try:
             employees.append(Employee(
                 name=name, city=city, schedule_type=stype,
@@ -321,6 +450,15 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
                 team_lead=bool(row["Тимлид"]),
                 vacations=vacations,
                 unavailable_dates=unavailable,
+                role=role,
+                preferred_shift=preferred_shift,
+                workload_pct=workload_pct,
+                days_off_weekly=days_off_weekly,
+                max_morning_shifts=max_morning,
+                max_evening_shifts=max_evening,
+                max_night_shifts=max_night,
+                max_consecutive_working=max_cw,
+                group=group,
             ))
         except Exception as e:
             errors.append(f"«{name}»: {e}")
@@ -468,15 +606,36 @@ _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
     st.session_state["employees_df"],
     column_config={
-        "Имя":          st.column_config.TextColumn("Имя",          width="medium"),
-        "Город":        st.column_config.SelectboxColumn("Город",   options=["Москва", "Хабаровск"], width="small"),
-        "График":       st.column_config.SelectboxColumn("График",  options=["Гибкий", "5/2"],       width="small"),
-        "Дежурный":     st.column_config.CheckboxColumn("Дежурный",     width="small"),
-        "Только утро":  st.column_config.CheckboxColumn("Только утро",  width="small"),
-        "Только вечер": st.column_config.CheckboxColumn("Только вечер", width="small"),
-        "Тимлид":       st.column_config.CheckboxColumn("Тимлид",       width="small"),
-        "Отпуск":       st.column_config.TextColumn("Отпуск (дд.мм–дд.мм)", width="large"),
-        "Недоступен":   st.column_config.TextColumn("Недоступен (дд.мм,...)", width="large"),
+        "Имя":              st.column_config.TextColumn("Имя",              width="medium"),
+        "Город":            st.column_config.SelectboxColumn(
+                                "Город", options=["Москва", "Хабаровск"], width="small"
+                            ),
+        "График":           st.column_config.SelectboxColumn(
+                                "График", options=["Гибкий", "5/2"], width="small"
+                            ),
+        "Дежурный":         st.column_config.CheckboxColumn("Дежурный",     width="small"),
+        "Только утро":      st.column_config.CheckboxColumn("Только утро",  width="small"),
+        "Только вечер":     st.column_config.CheckboxColumn("Только вечер", width="small"),
+        "Тимлид":           st.column_config.CheckboxColumn("Тимлид",       width="small"),
+        "Отпуск":           st.column_config.TextColumn("Отпуск (дд.мм–дд.мм)", width="large"),
+        "Недоступен":       st.column_config.TextColumn("Недоступен (дд.мм,...)", width="medium"),
+        "Роль":             st.column_config.TextColumn("Роль", width="small"),
+        "Предпочт. смена":  st.column_config.SelectboxColumn(
+                                "Предпочт. смена",
+                                options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
+                                width="small",
+                            ),
+        "Загрузка%":        st.column_config.NumberColumn(
+                                "Загрузка%", min_value=1, max_value=100, step=1, width="small"
+                            ),
+        "Вых. дни":         st.column_config.TextColumn(
+                                "Вых. дни (Сб,Вс...)", width="small"
+                            ),
+        "Макс. утренних":   st.column_config.TextColumn("Макс. утр.", width="small"),
+        "Макс. вечерних":   st.column_config.TextColumn("Макс. веч.", width="small"),
+        "Макс. ночных":     st.column_config.TextColumn("Макс. ноч.", width="small"),
+        "Макс. подряд":     st.column_config.TextColumn("Макс. подряд", width="small"),
+        "Группа":           st.column_config.TextColumn("Группа", width="small"),
     },
     num_rows="dynamic",
     use_container_width=True,
@@ -495,6 +654,13 @@ with st.expander("ℹ️ Правила заполнения"):
 | **5/2** | Не работает в субботу и воскресенье |
 | **Отпуск** | Период(ы) отпуска: `10.03–20.03` или `10.03–15.03, 25.03–28.03` |
 | **Недоступен** | Разовые недоступные дни (не отпуск): `10.03, 15.03` |
+| **Роль** | Информационная роль, отображается в XLS рядом с именем |
+| **Предпочт. смена** | Мягкий приоритет при выборе смены (не гарантирует назначение) |
+| **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки (влияет на число рабочих дней) |
+| **Вых. дни** | Постоянные выходные дни недели: `Сб,Вс` или `5,6` (0=Пн … 6=Вс) |
+| **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
+| **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
+| **Группа** | Имя группы: не ставить двух из одной группы на одну смену в один день |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
     """)

@@ -21,10 +21,28 @@ from duty_schedule.models import (
 
 logger = get_logger()
 
-MAX_CONSECUTIVE_WORKING = 5
+MAX_CONSECUTIVE_WORKING = 5  # глобальный дефолт; перекрывается Employee.max_consecutive_working
 MAX_CONSECUTIVE_OFF = 3
 MAX_BACKTRACK_DAYS = 3
 MAX_BACKTRACK_ATTEMPTS = 10
+
+
+def _max_cw(emp: Employee) -> int:
+    """Максимальное число рабочих дней подряд для сотрудника."""
+    if emp.max_consecutive_working is not None:
+        return emp.max_consecutive_working
+    return MAX_CONSECUTIVE_WORKING
+
+
+def _shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) -> bool:
+    """Достигнут ли месячный лимит смен данного типа для сотрудника."""
+    if shift == ShiftType.MORNING and emp.max_morning_shifts is not None:
+        return state.morning_count >= emp.max_morning_shifts
+    if shift == ShiftType.EVENING and emp.max_evening_shifts is not None:
+        return state.evening_count >= emp.max_evening_shifts
+    if shift == ShiftType.NIGHT and emp.max_night_shifts is not None:
+        return state.night_count >= emp.max_night_shifts
+    return False
 
 
 class ScheduleError(Exception):
@@ -97,7 +115,9 @@ def _can_work(
     """Может ли сотрудник работать в указанный день (любая смена)."""
     if emp.is_blocked(day):
         return False
-    if state.consecutive_working >= MAX_CONSECUTIVE_WORKING:
+    if emp.is_day_off_weekly(day):
+        return False
+    if state.consecutive_working >= _max_cw(emp):
         return False
     is_weekend = _is_weekend_or_holiday(day, holidays)
     return not (emp.schedule_type == ScheduleType.FIVE_TWO and is_weekend)
@@ -122,11 +142,16 @@ def _select_fair(
 ) -> list[Employee]:
     """
     Выбрать `count` сотрудников из кандидатов по принципу минимального числа смен.
+    Сотрудники с preferred_shift == shift получают мягкий приоритет.
     Тайбрейк — случайный (детерминировано через rng).
     """
     sorted_candidates = sorted(
         candidates,
-        key=lambda e: (states[e.name].shift_count(shift), rng.random()),
+        key=lambda e: (
+            states[e.name].shift_count(shift),
+            0 if e.preferred_shift == shift else 1,  # предпочтение разбивает тайбрейк
+            rng.random(),
+        ),
     )
     return sorted_candidates[:count]
 
@@ -217,6 +242,7 @@ def _build_day(
     moscow_duty = [e for e in employees if e.city == City.MOSCOW and e.on_duty]
     khabarovsk_duty = [e for e in employees if e.city == City.KHABAROVSK and e.on_duty]
     non_duty = [e for e in employees if not e.on_duty]
+    emp_by_name = {e.name: e for e in employees}
 
     # Пре-заполняем назначения пинами (фиксированные назначения имеют приоритет)
     assigned: dict[str, ShiftType] = dict(pins_today or {})
@@ -232,8 +258,10 @@ def _build_day(
             for e in khabarovsk_duty
             if e.name not in assigned
             and not e.is_blocked(day)
+            and not e.is_day_off_weekly(day)
             and not (e.schedule_type == ScheduleType.FIVE_TWO and is_holiday)
-            and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
+            and states[e.name].consecutive_working < _max_cw(e)
+            and not _shift_limit_reached(e, states[e.name], ShiftType.NIGHT)
         ]
 
         if not night_eligible:
@@ -253,20 +281,36 @@ def _build_day(
         for e in moscow_duty
         if e.name not in assigned
         and not e.is_blocked(day)
+        and not e.is_day_off_weekly(day)
         and not _resting_after_night(states[e.name])
         and not (e.schedule_type == ScheduleType.FIVE_TWO and is_holiday)
-        and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
+        and states[e.name].consecutive_working < _max_cw(e)
     ]
 
     _morning_pinned = any(s == ShiftType.MORNING for s in assigned.values())
     _evening_pinned = any(s == ShiftType.EVENING for s in assigned.values())
 
+    # Группы, уже занявшие утреннюю смену (пины)
+    morning_groups_taken: set[str] = {
+        emp_by_name[name].group
+        for name, s in assigned.items()
+        if s == ShiftType.MORNING and name in emp_by_name and emp_by_name[name].group
+    }
+
     morning_eligible = [
         e
         for e in moscow_available
-        if e.can_work_morning() and not _resting_after_evening(states[e.name])
+        if e.can_work_morning()
+        and not _resting_after_evening(states[e.name])
+        and not _shift_limit_reached(e, states[e.name], ShiftType.MORNING)
+        and (not e.group or e.group not in morning_groups_taken)
     ]
-    evening_eligible = [e for e in moscow_available if e.can_work_evening()]
+    evening_eligible = [
+        e
+        for e in moscow_available
+        if e.can_work_evening()
+        and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+    ]
 
     if not _morning_pinned:
         if not morning_eligible:
@@ -278,15 +322,33 @@ def _build_day(
         )
         for emp in morning_pick:
             assigned[emp.name] = ShiftType.MORNING
+            if emp.group:
+                morning_groups_taken.add(emp.group)
     else:
         morning_pick = []
 
     if not _evening_pinned:
+        # Группы, уже занявшие вечернюю смену (пины)
+        evening_groups_taken: set[str] = {
+            emp_by_name[name].group
+            for name, s in assigned.items()
+            if s == ShiftType.EVENING and name in emp_by_name and emp_by_name[name].group
+        }
         evening_pick_pool = [
-            e for e in moscow_available if e.can_work_evening() and e not in morning_pick
+            e
+            for e in moscow_available
+            if e.can_work_evening()
+            and e not in morning_pick
+            and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+            and (not e.group or e.group not in evening_groups_taken)
         ]
         if not evening_pick_pool:
-            evening_pick_pool = [e for e in evening_eligible if e not in morning_pick]
+            evening_pick_pool = [
+                e
+                for e in evening_eligible
+                if e not in morning_pick
+                and (not e.group or e.group not in evening_groups_taken)
+            ]
         if not evening_pick_pool:
             raise ScheduleError(
                 f"Невозможно покрыть вечернюю смену {day}: все доступные дежурные заняты утром"
@@ -296,7 +358,7 @@ def _build_day(
             for e in evening_pick_pool
             if _resting_after_evening(states[e.name])
             and states[e.name].needs_more_work(remaining_days)
-            and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING - 1
+            and states[e.name].consecutive_working < _max_cw(e) - 1
         ]
         if after_evening_deficit:
             evening_pick = _select_fair(after_evening_deficit, states, ShiftType.EVENING, rng, 1)
@@ -323,7 +385,7 @@ def _build_day(
                 for e in moscow_available
                 if e.name not in assigned
                 and states[e.name].needs_more_work(remaining_days)
-                and states[e.name].consecutive_working < MAX_CONSECUTIVE_WORKING
+                and states[e.name].consecutive_working < _max_cw(e)
                 and not _resting_after_evening(states[e.name])
             ]
             if not extra:
@@ -340,11 +402,11 @@ def _build_day(
                 avail_tomorrow = 0
                 for e in moscow_duty:
                     if e.name == candidate.name:
-                        if cand_cw_after < MAX_CONSECUTIVE_WORKING:
+                        if cand_cw_after < _max_cw(e):
                             avail_tomorrow += 1
                     else:
                         s = assigned.get(e.name)
-                        cw_ok = states[e.name].consecutive_working + 1 < MAX_CONSECUTIVE_WORKING
+                        cw_ok = states[e.name].consecutive_working + 1 < _max_cw(e)
                         if s is None or s not in _WORKING or cw_ok:  # day_off/vacation → cw=0
                             avail_tomorrow += 1
                 if avail_tomorrow < 2:
@@ -371,7 +433,7 @@ def _build_day(
         if emp.is_on_vacation(day):
             assigned[emp.name] = ShiftType.VACATION
             continue
-        if day in emp.unavailable_dates:
+        if day in emp.unavailable_dates or emp.is_day_off_weekly(day):
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
         # Принудительный отдых после ночи НЕ применяется: ночь 00-08 МСК =
@@ -380,7 +442,7 @@ def _build_day(
             # В выходные и праздники рабочего дня (9-18) нет — только дежурства
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
-        if states[emp.name].consecutive_working >= MAX_CONSECUTIVE_WORKING:
+        if states[emp.name].consecutive_working >= _max_cw(emp):
             assigned[emp.name] = ShiftType.DAY_OFF
             continue
         # Назначаем рабочий день по местному времени (для выработки нормы),
@@ -389,7 +451,7 @@ def _build_day(
         # что хотя бы один другой хабаровчанин будет доступен завтра для ночи.
         emp_cw_after = states[emp.name].consecutive_working + 1
         needs_work = states[emp.name].needs_more_work(remaining_days)
-        if emp_cw_after >= MAX_CONSECUTIVE_WORKING and needs_work:
+        if emp_cw_after >= _max_cw(emp) and needs_work:
             others_available = 0
             for other in khabarovsk_duty:
                 if other.name == emp.name:
@@ -402,7 +464,7 @@ def _build_day(
                 elif other_shift == ShiftType.DAY_OFF:
                     others_available += 1  # сегодня отдыхает → cw=0 завтра
                 elif other_shift in (ShiftType.NIGHT, ShiftType.WORKDAY):
-                    if states[other.name].consecutive_working + 1 < MAX_CONSECUTIVE_WORKING:
+                    if states[other.name].consecutive_working + 1 < _max_cw(other):
                         others_available += 1
                 else:
                     others_available += 1  # не назначен или иной
@@ -422,7 +484,7 @@ def _build_day(
             continue  # пин переопределяет назначение
         if emp.is_on_vacation(day):
             assigned[emp.name] = ShiftType.VACATION
-        elif day in emp.unavailable_dates or is_holiday:
+        elif day in emp.unavailable_dates or emp.is_day_off_weekly(day) or is_holiday:
             assigned[emp.name] = ShiftType.DAY_OFF
         else:
             assigned[emp.name] = ShiftType.WORKDAY
@@ -431,6 +493,7 @@ def _build_day(
     # Если дежурный отдыхает 3+ дня подряд и ещё не выработал норму,
     # назначаем рабочий день (только в будни). Дежурные смены уже заняты
     # выбранными сотрудниками — добавлять вторых нельзя.
+    # _can_work уже учитывает is_day_off_weekly и _max_cw.
     for emp in moscow_duty + khabarovsk_duty:
         state = states[emp.name]
         if (
@@ -545,8 +608,8 @@ def _target_adjustment_pass(
                 # Нельзя ставить рабочий день после вечерней смены
                 if i > 0 and emp.name in days[i - 1].evening:
                     continue
-                # Не превышаем MAX + 1 рабочих дня подряд (6 — допустимо в крайнем случае)
-                if _streak_around(emp.name, i, days, working=True) > MAX_CONSECUTIVE_WORKING + 1:
+                # Не превышаем per-employee MAX рабочих дней подряд
+                if _streak_around(emp.name, i, days, working=True) > _max_cw(emp):
                     continue
                 day.day_off.remove(emp.name)
                 day.workday.append(emp.name)
@@ -629,6 +692,20 @@ def _balance_weekend_work(
                 if max_attr == "evening" and not min_emp.can_work_evening():
                     continue
 
+                # Проверяем, что min_name не превысит лимит смен данного типа
+                if max_attr == "morning" and min_emp.max_morning_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.morning)
+                    if cur >= min_emp.max_morning_shifts:
+                        continue
+                if max_attr == "evening" and min_emp.max_evening_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.evening)
+                    if cur >= min_emp.max_evening_shifts:
+                        continue
+                if max_attr == "night" and min_emp.max_night_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.night)
+                    if cur >= min_emp.max_night_shifts:
+                        continue
+
                 # После вечерней смены нельзя ставить утро (min_name)
                 prev = day_by_date.get(day.date - timedelta(days=1))
                 if max_attr == "morning" and prev and min_name in prev.evening:
@@ -710,6 +787,20 @@ def _balance_duty_shifts(
                 if max_attr == "evening" and not min_emp.can_work_evening():
                     continue
 
+                # Проверяем, что min_name не превысит лимит смен данного типа
+                if max_attr == "morning" and min_emp.max_morning_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.morning)
+                    if cur >= min_emp.max_morning_shifts:
+                        continue
+                if max_attr == "evening" and min_emp.max_evening_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.evening)
+                    if cur >= min_emp.max_evening_shifts:
+                        continue
+                if max_attr == "night" and min_emp.max_night_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.night)
+                    if cur >= min_emp.max_night_shifts:
+                        continue
+
                 prev = day_by_date.get(day.date - timedelta(days=1))
                 # max_name получит WORKDAY — недопустимо, если вчера у него был вечер
                 if prev and max_name in prev.evening:
@@ -773,8 +864,10 @@ def generate_schedule(
     states: dict[str, EmployeeState] = {}
     for emp in employees:
         vac_days = _calc_vacation_days(emp, config.year, config.month)
+        # Фича 3: норма нагрузки пропорционально workload_pct
+        target = round(production_days * emp.workload_pct / 100)
         states[emp.name] = EmployeeState(
-            target_working_days=production_days,
+            target_working_days=target,
             vacation_days=vac_days,
         )
 
