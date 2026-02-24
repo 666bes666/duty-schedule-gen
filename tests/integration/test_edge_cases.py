@@ -191,7 +191,9 @@ class TestPinnedAssignments:
 
     def test_pin_respected_in_schedule(self):
         """Пин должен оказаться в соответствующей смене на нужный день."""
-        pin = PinnedAssignment(date=date(2025, 3, 3), employee_name="Москва 1", shift=ShiftType.MORNING)
+        pin = PinnedAssignment(
+            date=date(2025, 3, 3), employee_name="Москва 1", shift=ShiftType.MORNING
+        )
         config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=[pin])
         schedule = generate_schedule(config, set())
         day_3 = next(d for d in schedule.days if d.date == date(2025, 3, 3))
@@ -200,8 +202,12 @@ class TestPinnedAssignments:
     def test_multiple_pins_respected(self):
         """Несколько пинов — все должны соблюдаться."""
         pins = [
-            PinnedAssignment(date=date(2025, 3, 5), employee_name="Москва 2", shift=ShiftType.EVENING),
-            PinnedAssignment(date=date(2025, 3, 10), employee_name="Москва 3", shift=ShiftType.MORNING),
+            PinnedAssignment(
+                date=date(2025, 3, 5), employee_name="Москва 2", shift=ShiftType.EVENING
+            ),
+            PinnedAssignment(
+                date=date(2025, 3, 10), employee_name="Москва 3", shift=ShiftType.MORNING
+            ),
         ]
         config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=pins)
         schedule = generate_schedule(config, set())
@@ -212,7 +218,11 @@ class TestPinnedAssignments:
 
     def test_all_shifts_covered_with_pins(self):
         """При наличии пинов все смены по-прежнему покрыты."""
-        pins = [PinnedAssignment(date=date(2025, 3, 7), employee_name="Москва 1", shift=ShiftType.MORNING)]
+        pins = [
+            PinnedAssignment(
+                date=date(2025, 3, 7), employee_name="Москва 1", shift=ShiftType.MORNING
+            )
+        ]
         config = Config(month=3, year=2025, seed=42, employees=_base_team(), pins=pins)
         schedule = generate_schedule(config, set())
         for day in schedule.days:
@@ -299,7 +309,11 @@ class TestCarryOver:
         team = _base_team()
         co = [
             CarryOverState(employee_name="Москва 1", last_shift=ShiftType.EVENING),
-            CarryOverState(employee_name="Хабаровск 1", last_shift=ShiftType.NIGHT, consecutive_working=4),
+            CarryOverState(
+                employee_name="Хабаровск 1",
+                last_shift=ShiftType.NIGHT,
+                consecutive_working=4,
+            ),
         ]
         config = Config(month=3, year=2025, seed=42, employees=team, carry_over=co)
         schedule = generate_schedule(config, set())
