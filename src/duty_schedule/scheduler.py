@@ -10,6 +10,7 @@ from datetime import date, timedelta
 
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
+    CarryOverState,
     City,
     Config,
     DaySchedule,
@@ -778,6 +779,16 @@ def generate_schedule(
             vacation_days=vac_days,
         )
 
+    # Перенос состояния с предыдущего месяца
+    carry_over_by_name = {c.employee_name: c for c in config.carry_over}
+    for emp in employees:
+        if emp.name in carry_over_by_name:
+            co = carry_over_by_name[emp.name]
+            if co.last_shift is not None:
+                states[emp.name].last_shift = co.last_shift
+            states[emp.name].consecutive_working = co.consecutive_working
+            states[emp.name].consecutive_off = co.consecutive_off
+
     days: list[DaySchedule] = []
     backtrack_stack: list[tuple[date, dict[str, EmployeeState]]] = []
 
@@ -858,6 +869,18 @@ def generate_schedule(
         working_days_per_employee=working_days_report,
     )
 
+    # Финальные состояния для переноса на следующий месяц
+    final_carry_over = [
+        {
+            "employee_name":      emp.name,
+            "last_shift":         str(states[emp.name].last_shift)
+                                  if states[emp.name].last_shift else None,
+            "consecutive_working": states[emp.name].consecutive_working,
+            "consecutive_off":    states[emp.name].consecutive_off,
+        }
+        for emp in employees
+    ]
+
     return Schedule(
         config=config,
         days=days,
@@ -868,5 +891,6 @@ def generate_schedule(
             "holidays_count": len(holidays),
             "production_working_days": production_days,
             "working_days_per_employee": working_days_report,
+            "carry_over": final_carry_over,
         },
     )

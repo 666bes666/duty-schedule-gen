@@ -7,6 +7,7 @@ from datetime import date
 import pytest
 
 from duty_schedule.models import (
+    CarryOverState,
     City,
     Config,
     Employee,
@@ -268,3 +269,39 @@ class TestDifferentMonths:
         config = Config(month=month, year=year, seed=42, employees=_base_team())
         schedule = generate_schedule(config, set())
         assert len(schedule.days) == expected_days
+
+
+class TestCarryOver:
+    """Перенос состояния с предыдущего месяца."""
+
+    def test_carry_over_in_metadata(self):
+        """После генерации metadata['carry_over'] содержит состояния всех сотрудников."""
+        config = Config(month=3, year=2025, seed=42, employees=_base_team())
+        schedule = generate_schedule(config, set())
+        co = schedule.metadata.get("carry_over", [])
+        names_in_co = {c["employee_name"] for c in co}
+        names_in_team = {e.name for e in _base_team()}
+        assert names_in_team == names_in_co
+
+    def test_carry_over_affects_first_day(self):
+        """Перенос состояния «вечер» блокирует утреннюю смену 1-го числа для этого сотрудника."""
+        team = _base_team()
+        # Симулируем: «Москва 1» закончил предыдущий месяц вечерней сменой
+        co = [CarryOverState(employee_name="Москва 1", last_shift=ShiftType.EVENING)]
+        config = Config(month=3, year=2025, seed=42, employees=team, carry_over=co)
+        schedule = generate_schedule(config, set())
+        day_1 = schedule.days[0]
+        # Москва 1 не должен стоять на утренней смене 1-го числа (resting after evening)
+        assert "Москва 1" not in day_1.morning
+
+    def test_full_schedule_still_covered_with_carry_over(self):
+        """Даже с carry_over все смены покрыты в течение всего месяца."""
+        team = _base_team()
+        co = [
+            CarryOverState(employee_name="Москва 1", last_shift=ShiftType.EVENING),
+            CarryOverState(employee_name="Хабаровск 1", last_shift=ShiftType.NIGHT, consecutive_working=4),
+        ]
+        config = Config(month=3, year=2025, seed=42, employees=team, carry_over=co)
+        schedule = generate_schedule(config, set())
+        for day in schedule.days:
+            assert day.is_covered(), f"Смены не покрыты на {day.date}"
