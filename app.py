@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
@@ -11,9 +12,18 @@ import streamlit as st
 import yaml
 
 from duty_schedule.calendar import CalendarError, fetch_holidays
-from duty_schedule.models import CarryOverState, City, Config, Employee, PinnedAssignment, ScheduleType, ShiftType, VacationPeriod
-from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.export.xls import export_xls
+from duty_schedule.models import (
+    CarryOverState,
+    City,
+    Config,
+    Employee,
+    PinnedAssignment,
+    ScheduleType,
+    ShiftType,
+    VacationPeriod,
+)
+from duty_schedule.scheduler import ScheduleError, generate_schedule
 
 # ── Константы ────────────────────────────────────────────────────────────────
 
@@ -23,15 +33,16 @@ MONTHS_RU = [
 ]
 _WEEKDAY_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
-_CITY_TO_RU   = {"moscow": "Москва", "khabarovsk": "Хабаровск"}
-_RU_TO_CITY   = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
-_STYPE_TO_RU  = {"flexible": "Гибкий", "5/2": "5/2"}
-_RU_TO_STYPE  = {"Гибкий": "flexible", "5/2": "5/2"}
+_CITY_TO_RU  = {"moscow": "Москва", "khabarovsk": "Хабаровск"}
+_RU_TO_CITY  = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
+_STYPE_TO_RU = {"flexible": "Гибкий", "5/2": "5/2"}
+_RU_TO_STYPE = {"Гибкий": "flexible", "5/2": "5/2"}
 
-# Дни недели для фичи 4 (days_off_weekly)
+# Дни недели (фича 4)
 _WEEKDAY_SHORT_TO_INT = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6}
 _INT_TO_WEEKDAY_SHORT = {v: k.capitalize() for k, v in _WEEKDAY_SHORT_TO_INT.items()}
 
+# «Отпуск» и «Недоступен» вынесены в отдельный дейт-пикер (не текстовые поля)
 _EMPTY_ROW = {
     "Имя": "",
     "Город": "Москва",
@@ -40,9 +51,7 @@ _EMPTY_ROW = {
     "Только утро": False,
     "Только вечер": False,
     "Тимлид": False,
-    "Отпуск": "",
-    "Недоступен": "",
-    # Новые фичи
+    # Фичи 1–7
     "Роль": "",
     "Предпочт. смена": "",
     "Загрузка%": 100,
@@ -67,18 +76,23 @@ _TABLE_KEY_PREFIX = "employees_table"
 
 _SHIFTS_RU = ["Утро", "Вечер", "Ночь", "Рабочий день", "Выходной"]
 _RU_TO_SHIFT = {
-    "Утро":        ShiftType.MORNING,
-    "Вечер":       ShiftType.EVENING,
-    "Ночь":        ShiftType.NIGHT,
+    "Утро":         ShiftType.MORNING,
+    "Вечер":        ShiftType.EVENING,
+    "Ночь":         ShiftType.NIGHT,
     "Рабочий день": ShiftType.WORKDAY,
-    "Выходной":    ShiftType.DAY_OFF,
+    "Выходной":     ShiftType.DAY_OFF,
 }
 _SHIFT_TO_RU = {v: k for k, v in _RU_TO_SHIFT.items()}
 
 _EMPTY_PIN_ROW = {"Дата": "", "Сотрудник": "", "Смена": "Утро"}
 
+# Тип конфига дат сотрудника:
+# {"vacations": [(start, end), ...], "unavailable": [date, ...]}
+_EmployeeDates = dict  # typing alias
+
 
 # ── Session state ─────────────────────────────────────────────────────────────
+
 
 def _init_state() -> None:
     if "table_version" not in st.session_state:
@@ -95,87 +109,87 @@ def _init_state() -> None:
         st.session_state["pins_df"] = pd.DataFrame([_EMPTY_PIN_ROW])
     if "carry_over" not in st.session_state:
         st.session_state["carry_over"] = []
+    if "employee_dates" not in st.session_state:
+        # {name: {"vacations": [(date, date), ...], "unavailable": [date, ...]}}
+        st.session_state["employee_dates"] = {}
+    # Кешированные копии для sidebar (избегаем dict-from-data_editor)
+    if "_df_for_download" not in st.session_state:
+        st.session_state["_df_for_download"] = pd.DataFrame(_DEFAULT_ROWS)
+    if "_pins_for_download" not in st.session_state:
+        st.session_state["_pins_for_download"] = pd.DataFrame([_EMPTY_PIN_ROW])
 
 
 def _bump_table() -> None:
-    """Увеличить версию ключа таблицы, чтобы data_editor пересоздался с новыми данными."""
     st.session_state["table_version"] += 1
 
 
-# ── Парсинг/сериализация ──────────────────────────────────────────────────────
+# ── Вспомогательные функции для дат ──────────────────────────────────────────
 
-def _parse_vacations(
-    text: str, year: int, emp_name: str,
-) -> tuple[list[VacationPeriod], str | None]:
-    """Распарсить отпуска из строки «дд.мм–дд.мм, дд.мм–дд.мм»."""
-    if not text.strip():
-        return [], None
-    periods: list[VacationPeriod] = []
-    for raw in text.replace("–", "-").split(","):
-        raw = raw.strip()
-        if not raw:
-            continue
-        parts = raw.split("-", 1)
-        if len(parts) != 2:
-            return [], f"«{emp_name}»: неверный формат отпуска «{raw}» (нужно дд.мм–дд.мм)"
+
+def _get_emp_dates(name: str) -> _EmployeeDates:
+    """Вернуть (и создать при необходимости) конфиг дат для сотрудника."""
+    ed = st.session_state["employee_dates"]
+    if name not in ed:
+        ed[name] = {"vacations": [], "unavailable": []}
+    return ed[name]
+
+
+def _emp_dates_to_yaml_fields(name: str) -> tuple[list[dict], list[str]]:
+    """Вернуть vacations/unavailable_dates в формате YAML-словарей."""
+    cfg = st.session_state["employee_dates"].get(name, {})
+    vac_yaml = [
+        {"start": s.isoformat(), "end": e.isoformat()}
+        for s, e in cfg.get("vacations", [])
+    ]
+    unavail_yaml = [d.isoformat() for d in cfg.get("unavailable", [])]
+    return vac_yaml, unavail_yaml
+
+
+def _emp_dates_from_yaml(emp: dict) -> _EmployeeDates:
+    """Распарсить vacations/unavailable_dates из YAML-словаря сотрудника."""
+    vacations = []
+    for v in emp.get("vacations", []):
         try:
-            start = datetime.strptime(f"{parts[0].strip()}.{year}", "%d.%m.%Y").date()
-            end   = datetime.strptime(f"{parts[1].strip()}.{year}", "%d.%m.%Y").date()
-        except ValueError:
-            return [], f"«{emp_name}»: не удалось разобрать дату «{raw}»"
-        periods.append(VacationPeriod(start=start, end=end))
-    return periods, None
+            s = date.fromisoformat(str(v["start"]))
+            e = date.fromisoformat(str(v["end"]))
+            vacations.append((s, e))
+        except (ValueError, KeyError):
+            pass
+    unavailable = []
+    for d in emp.get("unavailable_dates", []):
+        with contextlib.suppress(ValueError):
+            unavailable.append(date.fromisoformat(str(d)))
+    return {"vacations": vacations, "unavailable": unavailable}
 
 
-def _vacations_to_str(vacations: list[dict], year: int) -> str:
-    """Преобразовать список {start, end} из YAML в строку «дд.мм–дд.мм»."""
-    parts = []
-    for v in vacations:
-        s = date.fromisoformat(str(v["start"]))
-        e = date.fromisoformat(str(v["end"]))
-        # показываем только если в том же году
-        if s.year == year and e.year == year:
-            parts.append(f"{s.day:02d}.{s.month:02d}–{e.day:02d}.{e.month:02d}")
-    return ", ".join(parts)
+# ── Сериализация / десериализация ─────────────────────────────────────────────
 
 
 def _df_to_yaml(
-    df: pd.DataFrame, month: int, year: int, seed: int,
+    df: pd.DataFrame,
+    month: int,
+    year: int,
+    seed: int,
+    employee_dates: dict | None = None,
     pins_df: pd.DataFrame | None = None,
     carry_over: list[dict] | None = None,
 ) -> str:
-    """Сериализовать таблицу сотрудников в YAML (совместимый с CLI)."""
+    """Сериализовать таблицу сотрудников в YAML."""
+    ed = employee_dates or {}
     employees = []
+
     for _, row in df.iterrows():
         name = str(row["Имя"]).strip()
         if not name:
             continue
-        vacations: list[dict] = []
-        vac_text = str(row.get("Отпуск", "")).strip()
-        for raw in vac_text.replace("–", "-").split(","):
-            raw = raw.strip()
-            if not raw:
-                continue
-            parts = raw.split("-", 1)
-            if len(parts) == 2:
-                try:
-                    s = datetime.strptime(f"{parts[0].strip()}.{year}", "%d.%m.%Y").date()
-                    e = datetime.strptime(f"{parts[1].strip()}.{year}", "%d.%m.%Y").date()
-                    vacations.append({"start": s.isoformat(), "end": e.isoformat()})
-                except ValueError:
-                    pass
-        unavailable_dates: list[str] = []
-        unavail_text = str(row.get("Недоступен", "")).strip()
-        for raw in unavail_text.split(","):
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                d = datetime.strptime(f"{raw}.{year}", "%d.%m.%Y").date()
-                unavailable_dates.append(d.isoformat())
-            except ValueError:
-                pass
-        # Парсим новые поля
+
+        _emp_cfg = ed.get(name, {"vacations": [], "unavailable": []})
+        vac_yaml = [
+            {"start": s.isoformat(), "end": e.isoformat()}
+            for s, e in _emp_cfg.get("vacations", [])
+        ]
+        unavail_yaml = [d.isoformat() for d in _emp_cfg.get("unavailable", [])]
+
         pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
         pref_shift = _RU_TO_SHIFT.get(pref_shift_ru)
 
@@ -206,24 +220,24 @@ def _df_to_yaml(
 
         max_morning = _parse_limit(row.get("Макс. утренних", ""))
         max_evening = _parse_limit(row.get("Макс. вечерних", ""))
-        max_night = _parse_limit(row.get("Макс. ночных", ""))
-        max_cw = _parse_limit(row.get("Макс. подряд", ""))
+        max_night   = _parse_limit(row.get("Макс. ночных", ""))
+        max_cw      = _parse_limit(row.get("Макс. подряд", ""))
         group = str(row.get("Группа", "")).strip() or None
-        role = str(row.get("Роль", "")).strip()
+        role  = str(row.get("Роль", "")).strip()
 
         emp: dict = {
-            "name": name,
-            "city": _RU_TO_CITY.get(str(row["Город"]), "moscow"),
+            "name":          name,
+            "city":          _RU_TO_CITY.get(str(row["Город"]), "moscow"),
             "schedule_type": _RU_TO_STYPE.get(str(row["График"]), "flexible"),
-            "on_duty": bool(row["Дежурный"]),
-            "morning_only": bool(row["Только утро"]),
-            "evening_only": bool(row["Только вечер"]),
-            "team_lead": bool(row["Тимлид"]),
+            "on_duty":       bool(row["Дежурный"]),
+            "morning_only":  bool(row["Только утро"]),
+            "evening_only":  bool(row["Только вечер"]),
+            "team_lead":     bool(row["Тимлид"]),
         }
-        if vacations:
-            emp["vacations"] = vacations
-        if unavailable_dates:
-            emp["unavailable_dates"] = unavailable_dates
+        if vac_yaml:
+            emp["vacations"] = vac_yaml
+        if unavail_yaml:
+            emp["unavailable_dates"] = unavail_yaml
         if role:
             emp["role"] = role
         if pref_shift is not None:
@@ -246,8 +260,8 @@ def _df_to_yaml(
 
     config_dict: dict = {
         "month": int(month),
-        "year": int(year),
-        "seed": int(seed),
+        "year":  int(year),
+        "seed":  int(seed),
         "employees": employees,
     }
     if pins_df is not None:
@@ -260,7 +274,6 @@ def _df_to_yaml(
 
 
 def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
-    """Сериализовать таблицу пинов в список dict для YAML."""
     result = []
     for _, row in pins_df.iterrows():
         date_str = str(row.get("Дата", "")).strip()
@@ -280,7 +293,6 @@ def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
 
 
 def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
-    """Десериализовать список пинов из YAML в DataFrame."""
     rows = []
     for p in pins:
         try:
@@ -292,43 +304,48 @@ def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
         shift_str = str(p.get("shift", ""))
         shift_ru = _SHIFT_TO_RU.get(ShiftType(shift_str), "Утро") if shift_str else "Утро"
         rows.append({
-            "Дата":       f"{d.day:02d}.{d.month:02d}",
-            "Сотрудник":  str(p.get("employee_name", "")),
-            "Смена":      shift_ru,
+            "Дата":      f"{d.day:02d}.{d.month:02d}",
+            "Сотрудник": str(p.get("employee_name", "")),
+            "Смена":     shift_ru,
         })
     return pd.DataFrame(rows) if rows else pd.DataFrame([_EMPTY_PIN_ROW])
 
 
 def _yaml_to_df(
     raw_yaml: str, year: int,
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None, list[dict], int, int, int, str | None]:
-    """Загрузить YAML конфиг → (employees_df, pins_df, carry_over, month, year, seed, error)."""
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, list[dict], int, int, int, dict, str | None]:
+    """Загрузить YAML конфиг.
+
+    Returns:
+        (employees_df, pins_df, carry_over, month, year, seed, employee_dates, error)
+    """
     try:
         data = yaml.safe_load(raw_yaml)
     except yaml.YAMLError as e:
-        return None, None, [], 0, 0, 42, f"Ошибка разбора YAML: {e}"
+        return None, None, [], 0, 0, 42, {}, f"Ошибка разбора YAML: {e}"
 
     if not isinstance(data, dict):
-        return None, None, [], 0, 0, 42, "Неверный формат файла конфигурации."
+        return None, None, [], 0, 0, 42, {}, "Неверный формат файла конфигурации."
 
-    month = int(data.get("month", date.today().month))
+    month   = int(data.get("month", date.today().month))
     year_val = int(data.get("year", year))
-    seed = int(data.get("seed", 42))
+    seed    = int(data.get("seed", 42))
+
     rows = []
+    employee_dates: dict = {}
     for emp in data.get("employees", []):
-        vac_str = _vacations_to_str(emp.get("vacations", []), year_val)
-        unavail_dates = emp.get("unavailable_dates", [])
-        unavail_str = ", ".join(
-            f"{date.fromisoformat(str(d)).day:02d}.{date.fromisoformat(str(d)).month:02d}"
-            for d in unavail_dates
-            if date.fromisoformat(str(d)).year == year_val
-        )
+        name = emp.get("name", "")
+
+        # Даты — в отдельный словарь
+        employee_dates[name] = _emp_dates_from_yaml(emp)
+
         # Предпочтительная смена
         pref_shift_raw = emp.get("preferred_shift", "") or ""
         pref_shift_ru = _SHIFT_TO_RU.get(
-            ShiftType(pref_shift_raw) if pref_shift_raw else None, ""  # type: ignore[arg-type]
+            ShiftType(pref_shift_raw), ""
         ) if pref_shift_raw else ""
-        # Постоянные выходные дни недели
+
+        # Постоянные выходные
         days_off_weekly = emp.get("days_off_weekly", []) or []
         days_off_str = ",".join(
             _INT_TO_WEEKDAY_SHORT.get(int(d), str(d)) for d in days_off_weekly
@@ -338,76 +355,62 @@ def _yaml_to_df(
             return "" if v is None else str(v)
 
         rows.append({
-            "Имя":              emp.get("name", ""),
-            "Город":            _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
-            "График":           _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
-            "Дежурный":         bool(emp.get("on_duty", True)),
-            "Только утро":      bool(emp.get("morning_only", False)),
-            "Только вечер":     bool(emp.get("evening_only", False)),
-            "Тимлид":           bool(emp.get("team_lead", False)),
-            "Отпуск":           vac_str,
-            "Недоступен":       unavail_str,
-            "Роль":             emp.get("role", ""),
-            "Предпочт. смена":  pref_shift_ru,
-            "Загрузка%":        int(emp.get("workload_pct", 100)),
-            "Вых. дни":         days_off_str,
-            "Макс. утренних":   _none_to_str(emp.get("max_morning_shifts")),
-            "Макс. вечерних":   _none_to_str(emp.get("max_evening_shifts")),
-            "Макс. ночных":     _none_to_str(emp.get("max_night_shifts")),
-            "Макс. подряд":     _none_to_str(emp.get("max_consecutive_working")),
-            "Группа":           emp.get("group", "") or "",
+            "Имя":             name,
+            "Город":           _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
+            "График":          _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
+            "Дежурный":        bool(emp.get("on_duty", True)),
+            "Только утро":     bool(emp.get("morning_only", False)),
+            "Только вечер":    bool(emp.get("evening_only", False)),
+            "Тимлид":          bool(emp.get("team_lead", False)),
+            "Роль":            emp.get("role", ""),
+            "Предпочт. смена": pref_shift_ru,
+            "Загрузка%":       int(emp.get("workload_pct", 100)),
+            "Вых. дни":        days_off_str,
+            "Макс. утренних":  _none_to_str(emp.get("max_morning_shifts")),
+            "Макс. вечерних":  _none_to_str(emp.get("max_evening_shifts")),
+            "Макс. ночных":    _none_to_str(emp.get("max_night_shifts")),
+            "Макс. подряд":    _none_to_str(emp.get("max_consecutive_working")),
+            "Группа":          emp.get("group", "") or "",
         })
 
     if not rows:
         rows = _DEFAULT_ROWS.copy()
 
-    pins_df = _pins_list_to_df(data.get("pins", []), year_val)
+    pins_df   = _pins_list_to_df(data.get("pins", []), year_val)
     carry_over = data.get("carry_over", [])
-    return pd.DataFrame(rows), pins_df, carry_over, month, year_val, seed, None
+    return pd.DataFrame(rows), pins_df, carry_over, month, year_val, seed, employee_dates, None
 
 
-def _parse_unavailable(
-    text: str, year: int, emp_name: str,
-) -> tuple[list[date], str | None]:
-    """Распарсить разовые недоступные дни из строки «дд.мм, дд.мм»."""
-    if not text.strip():
-        return [], None
-    result: list[date] = []
-    for raw in text.split(","):
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            d = datetime.strptime(f"{raw}.{year}", "%d.%m.%Y").date()
-        except ValueError:
-            return [], f"«{emp_name}»: неверный формат недоступного дня «{raw}» (нужно дд.мм)"
-        result.append(d)
-    return result, None
-
-
-def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[str]]:
-    """DataFrame → список Employee."""
+def _build_employees(
+    df: pd.DataFrame,
+    employee_dates: dict | None = None,
+) -> tuple[list[Employee], list[str]]:
+    """DataFrame + employee_dates → список Employee."""
     employees: list[Employee] = []
     errors: list[str] = []
+    ed = employee_dates or {}
+
     for _, row in df.iterrows():
         name = str(row["Имя"]).strip()
         if not name:
             continue
+
         city  = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
         stype = ScheduleType.FLEXIBLE if row["График"] == "Гибкий" else ScheduleType.FIVE_TWO
-        vacations, err = _parse_vacations(str(row.get("Отпуск", "")), year, name)
-        if err:
-            errors.append(err)
-            continue
-        unavailable, err2 = _parse_unavailable(str(row.get("Недоступен", "")), year, name)
-        if err2:
-            errors.append(err2)
-            continue
-        # Предпочтительная смена
+
+        # Даты из date-picker session state
+        cfg = ed.get(name, {"vacations": [], "unavailable": []})
+        vacations: list[VacationPeriod] = []
+        for s, e in cfg.get("vacations", []):
+            try:
+                vacations.append(VacationPeriod(start=s, end=e))
+            except Exception as ex:
+                errors.append(f"«{name}»: {ex}")
+        unavailable: list[date] = list(cfg.get("unavailable", []))
+
         pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
         preferred_shift = _RU_TO_SHIFT.get(pref_shift_ru) if pref_shift_ru else None
 
-        # Норма нагрузки %
         workload_raw = row.get("Загрузка%", 100)
         try:
             workload_pct = int(str(workload_raw).strip()) if str(workload_raw).strip() else 100
@@ -415,7 +418,6 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
         except (ValueError, TypeError):
             workload_pct = 100
 
-        # Постоянные выходные дни недели
         days_off_raw = str(row.get("Вых. дни", "")).strip()
         days_off_weekly: list[int] = []
         for token in days_off_raw.split(","):
@@ -436,10 +438,10 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
 
         max_morning = _parse_limit(row.get("Макс. утренних", ""))
         max_evening = _parse_limit(row.get("Макс. вечерних", ""))
-        max_night = _parse_limit(row.get("Макс. ночных", ""))
-        max_cw = _parse_limit(row.get("Макс. подряд", ""))
+        max_night   = _parse_limit(row.get("Макс. ночных", ""))
+        max_cw      = _parse_limit(row.get("Макс. подряд", ""))
         group = str(row.get("Группа", "")).strip() or None
-        role = str(row.get("Роль", "")).strip()
+        role  = str(row.get("Роль", "")).strip()
 
         try:
             employees.append(Employee(
@@ -462,15 +464,16 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
             ))
         except Exception as e:
             errors.append(f"«{name}»: {e}")
+
     return employees, errors
 
 
 # ── Конвертация расписания ↔ DataFrame ────────────────────────────────────────
 
-def _schedule_to_edit_df(schedule: "Schedule") -> pd.DataFrame:
-    """Преобразовать Schedule в редактируемый DataFrame (строки = дни)."""
+
+def _schedule_to_edit_df(schedule: object) -> pd.DataFrame:
     rows = []
-    for d in schedule.days:
+    for d in schedule.days:  # type: ignore[attr-defined]
         rows.append({
             "Дата":         f"{d.date.day:02d}.{d.date.month:02d} {_WEEKDAY_RU[d.date.weekday()]}",
             "Утро 08–17":   ", ".join(d.morning),
@@ -481,23 +484,34 @@ def _schedule_to_edit_df(schedule: "Schedule") -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _edit_df_to_schedule(df: pd.DataFrame, schedule: "Schedule") -> "Schedule":
-    """Пересобрать Schedule из отредактированного DataFrame."""
-    from duty_schedule.models import DaySchedule, Schedule as ScheduleModel
+def _edit_df_to_schedule(df: pd.DataFrame, schedule: object) -> object:
+    from duty_schedule.models import DaySchedule
+    from duty_schedule.models import Schedule as ScheduleModel
 
     new_days = []
-    for (_, row), orig_day in zip(df.iterrows(), schedule.days):
-        def _names(col: str) -> list[str]:
-            val = str(row.get(col, "")).strip()
+    for (_, row), orig_day in zip(  # type: ignore[attr-defined]
+        df.iterrows(), schedule.days, strict=False  # type: ignore[attr-defined]
+    ):
+        _row = row
+
+        def _names(col: str, _r: object = _row) -> list[str]:
+            val = str(_r.get(col, "")).strip()  # type: ignore[union-attr]
             return [n.strip() for n in val.split(",") if n.strip()] if val else []
 
-        # vacation и day_off вычисляем из оригинала минус то, что переехало в другие смены
-        all_assigned = set(_names("Утро 08–17") + _names("Вечер 15–00") + _names("Ночь 00–08") + _names("Рабочий день"))
-        orig_all = set(orig_day.morning + orig_day.evening + orig_day.night + orig_day.workday + orig_day.day_off + orig_day.vacation)
-        day_off = [n for n in orig_day.day_off if n not in all_assigned]
+        all_assigned = set(
+            _names("Утро 08–17") + _names("Вечер 15–00")
+            + _names("Ночь 00–08") + _names("Рабочий день")
+        )
+        orig_all = set(
+            orig_day.morning + orig_day.evening + orig_day.night
+            + orig_day.workday + orig_day.day_off + orig_day.vacation
+        )
+        day_off  = [n for n in orig_day.day_off  if n not in all_assigned]
         vacation = [n for n in orig_day.vacation if n not in all_assigned]
-        # Employees not in any shift → day_off
-        unassigned = [n for n in orig_all if n not in all_assigned and n not in day_off and n not in vacation]
+        unassigned = [
+            n for n in orig_all
+            if n not in all_assigned and n not in day_off and n not in vacation
+        ]
         day_off.extend(unassigned)
 
         new_days.append(DaySchedule(
@@ -511,12 +525,11 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: "Schedule") -> "Schedule":
             vacation=vacation,
         ))
 
-    # Пересчитываем метаданные
-    meta = dict(schedule.metadata)
+    meta = dict(schedule.metadata)  # type: ignore[attr-defined]
     meta["total_mornings"] = sum(len(d.morning) for d in new_days)
     meta["total_evenings"] = sum(len(d.evening) for d in new_days)
     meta["total_nights"]   = sum(len(d.night)   for d in new_days)
-    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)
+    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)  # type: ignore[attr-defined]
 
 
 # ── Страница ──────────────────────────────────────────────────────────────────
@@ -537,16 +550,22 @@ with st.sidebar:
     )
     if uploaded is not None:
         raw = uploaded.read().decode("utf-8")
-        df_loaded, pins_loaded, co_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
+        df_loaded, pins_loaded, co_loaded, m, y, s, emp_dates_loaded, err = _yaml_to_df(
+            raw, st.session_state["cfg_year"]
+        )
         if err:
             st.error(err)
         else:
-            st.session_state["employees_df"] = df_loaded
-            st.session_state["pins_df"]      = pins_loaded
-            st.session_state["carry_over"]   = co_loaded
-            st.session_state["cfg_month"]    = m
-            st.session_state["cfg_year"]     = y
-            st.session_state["cfg_seed"]     = s
+            st.session_state["employees_df"]    = df_loaded
+            st.session_state["pins_df"]         = pins_loaded
+            st.session_state["carry_over"]      = co_loaded
+            st.session_state["cfg_month"]       = m
+            st.session_state["cfg_year"]        = y
+            st.session_state["cfg_seed"]        = s
+            st.session_state["employee_dates"]  = emp_dates_loaded
+            # Обновляем кеши для download-кнопки
+            st.session_state["_df_for_download"]   = df_loaded
+            st.session_state["_pins_for_download"] = pins_loaded
             _bump_table()
             msg = f"Загружен конфиг: {len(df_loaded)} сотрудников"
             if co_loaded:
@@ -557,16 +576,20 @@ with st.sidebar:
     st.divider()
     st.caption("Сохранить текущую конфигурацию:")
 
-    # Кнопка скачивания — работает от текущего состояния таблицы.
-    # Данные берём из session_state (data_editor записывает туда изменения).
-    _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
-    _current_df = st.session_state.get(_table_key, st.session_state["employees_df"])
-    _cfg_month  = st.session_state.get("cfg_month", date.today().month)
-    _cfg_year   = st.session_state.get("cfg_year",  date.today().year)
-    _cfg_seed   = st.session_state.get("cfg_seed",  42)
+    # Используем _df_for_download — DataFrame, сохранённый после последнего
+    # рендера data_editor. Это избегает AttributeError: session_state[key]
+    # у data_editor хранит dict изменений, а не сам DataFrame.
+    _dl_df   = st.session_state["_df_for_download"]
+    _dl_pins = st.session_state["_pins_for_download"]
+    _cfg_month = st.session_state.get("cfg_month", date.today().month)
+    _cfg_year  = st.session_state.get("cfg_year",  date.today().year)
+    _cfg_seed  = st.session_state.get("cfg_seed",  42)
 
-    _current_pins_df = st.session_state.get("pins_df", pd.DataFrame([_EMPTY_PIN_ROW]))
-    yaml_str = _df_to_yaml(_current_df, _cfg_month, _cfg_year, _cfg_seed, pins_df=_current_pins_df)
+    yaml_str = _df_to_yaml(
+        _dl_df, _cfg_month, _cfg_year, _cfg_seed,
+        employee_dates=st.session_state["employee_dates"],
+        pins_df=_dl_pins,
+    )
     st.download_button(
         label="⬇️ Скачать конфиг (.yaml)",
         data=yaml_str.encode("utf-8"),
@@ -597,50 +620,117 @@ st.divider()
 # ── Таблица сотрудников ───────────────────────────────────────────────────────
 st.subheader("Сотрудники")
 st.caption(
-    "Добавляйте строки кнопкой **+** снизу таблицы. "
-    "Удалить строку — поставить галочку слева и нажать **Delete**. "
-    "**Отпуск**: дд.мм–дд.мм, несколько через запятую."
+    "Добавляйте строки кнопкой **+** снизу. Удалить строку — галочка слева + **Delete**. "
+    "Отпуска и недоступные дни задаются через секцию **📅 Отпуска и блокировки** ниже."
 )
 
 _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
     st.session_state["employees_df"],
     column_config={
-        "Имя":              st.column_config.TextColumn("Имя",              width="medium"),
-        "Город":            st.column_config.SelectboxColumn(
-                                "Город", options=["Москва", "Хабаровск"], width="small"
-                            ),
-        "График":           st.column_config.SelectboxColumn(
-                                "График", options=["Гибкий", "5/2"], width="small"
-                            ),
-        "Дежурный":         st.column_config.CheckboxColumn("Дежурный",     width="small"),
-        "Только утро":      st.column_config.CheckboxColumn("Только утро",  width="small"),
-        "Только вечер":     st.column_config.CheckboxColumn("Только вечер", width="small"),
-        "Тимлид":           st.column_config.CheckboxColumn("Тимлид",       width="small"),
-        "Отпуск":           st.column_config.TextColumn("Отпуск (дд.мм–дд.мм)", width="large"),
-        "Недоступен":       st.column_config.TextColumn("Недоступен (дд.мм,...)", width="medium"),
-        "Роль":             st.column_config.TextColumn("Роль", width="small"),
-        "Предпочт. смена":  st.column_config.SelectboxColumn(
-                                "Предпочт. смена",
-                                options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
-                                width="small",
-                            ),
-        "Загрузка%":        st.column_config.NumberColumn(
-                                "Загрузка%", min_value=1, max_value=100, step=1, width="small"
-                            ),
-        "Вых. дни":         st.column_config.TextColumn(
-                                "Вых. дни (Сб,Вс...)", width="small"
-                            ),
-        "Макс. утренних":   st.column_config.TextColumn("Макс. утр.", width="small"),
-        "Макс. вечерних":   st.column_config.TextColumn("Макс. веч.", width="small"),
-        "Макс. ночных":     st.column_config.TextColumn("Макс. ноч.", width="small"),
-        "Макс. подряд":     st.column_config.TextColumn("Макс. подряд", width="small"),
-        "Группа":           st.column_config.TextColumn("Группа", width="small"),
+        "Имя":             st.column_config.TextColumn("Имя",             width="medium"),
+        "Город":           st.column_config.SelectboxColumn(
+                               "Город", options=["Москва", "Хабаровск"], width="small"
+                           ),
+        "График":          st.column_config.SelectboxColumn(
+                               "График", options=["Гибкий", "5/2"], width="small"
+                           ),
+        "Дежурный":        st.column_config.CheckboxColumn("Дежурный",     width="small"),
+        "Только утро":     st.column_config.CheckboxColumn("Только утро",  width="small"),
+        "Только вечер":    st.column_config.CheckboxColumn("Только вечер", width="small"),
+        "Тимлид":          st.column_config.CheckboxColumn("Тимлид",       width="small"),
+        "Роль":            st.column_config.TextColumn("Роль",             width="small"),
+        "Предпочт. смена": st.column_config.SelectboxColumn(
+                               "Предпочт. смена",
+                               options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
+                               width="small",
+                           ),
+        "Загрузка%":       st.column_config.NumberColumn(
+                               "Загрузка%", min_value=1, max_value=100, step=1, width="small"
+                           ),
+        "Вых. дни":        st.column_config.TextColumn("Вых. дни (Сб,Вс…)", width="small"),
+        "Макс. утренних":  st.column_config.TextColumn("Макс. утр.", width="small"),
+        "Макс. вечерних":  st.column_config.TextColumn("Макс. веч.", width="small"),
+        "Макс. ночных":    st.column_config.TextColumn("Макс. ноч.", width="small"),
+        "Макс. подряд":    st.column_config.TextColumn("Макс. подряд", width="small"),
+        "Группа":          st.column_config.TextColumn("Группа",      width="small"),
     },
     num_rows="dynamic",
     use_container_width=True,
     key=_table_key,
 )
+# Сохраняем DataFrame (не dict-обёртку data_editor) для sidebar download
+st.session_state["_df_for_download"] = edited_df
+
+# ── 📅 Отпуска и недоступные дни (дейт-пикер) ────────────────────────────────
+with st.expander("📅 Отпуска и недоступные дни"):
+    _emp_names = [
+        str(r["Имя"]).strip()
+        for _, r in edited_df.iterrows()
+        if str(r["Имя"]).strip()
+    ]
+
+    if not _emp_names:
+        st.info("Сначала добавьте сотрудников в таблицу выше.")
+    else:
+        _sel = st.selectbox("Сотрудник", _emp_names, key="date_emp_selector")
+        _cfg = _get_emp_dates(_sel)
+
+        # ── Периоды отпуска ───────────────────────────────────────────────
+        st.markdown("**Отпуска**")
+        _vac_del: list[int] = []
+        for _i, (_vs, _ve) in enumerate(_cfg["vacations"]):
+            _c1, _c2, _c3 = st.columns([4, 4, 1])
+            with _c1:
+                _new_vs = st.date_input(
+                    "Начало", value=_vs, key=f"vs_{_sel}_{_i}",
+                    label_visibility="collapsed",
+                )
+            with _c2:
+                _new_ve = st.date_input(
+                    "Конец",
+                    value=_ve if _ve >= _new_vs else _new_vs,
+                    min_value=_new_vs,
+                    key=f"ve_{_sel}_{_i}",
+                    label_visibility="collapsed",
+                )
+            _cfg["vacations"][_i] = (_new_vs, _new_ve)
+            with _c3:
+                if st.button("✕", key=f"vdel_{_sel}_{_i}", help="Удалить период"):
+                    _vac_del.append(_i)
+
+        for _i in reversed(_vac_del):
+            _cfg["vacations"].pop(_i)
+            st.rerun()
+
+        if st.button("＋ Добавить период отпуска", key=f"vadd_{_sel}"):
+            _cfg["vacations"].append((date(year, month, 1), date(year, month, 7)))
+            st.rerun()
+
+        st.divider()
+
+        # ── Недоступные дни ──────────────────────────────────────────────
+        st.markdown("**Недоступные дни** (не отпуск — разовые блокировки)")
+        _unavail_del: list[int] = []
+        for _i, _ud in enumerate(_cfg["unavailable"]):
+            _c1, _c2 = st.columns([8, 1])
+            with _c1:
+                _new_ud = st.date_input(
+                    "Дата", value=_ud, key=f"ud_{_sel}_{_i}",
+                    label_visibility="collapsed",
+                )
+            _cfg["unavailable"][_i] = _new_ud
+            with _c2:
+                if st.button("✕", key=f"udel_{_sel}_{_i}", help="Удалить дату"):
+                    _unavail_del.append(_i)
+
+        for _i in reversed(_unavail_del):
+            _cfg["unavailable"].pop(_i)
+            st.rerun()
+
+        if st.button("＋ Добавить недоступный день", key=f"uadd_{_sel}"):
+            _cfg["unavailable"].append(date(year, month, 1))
+            st.rerun()
 
 # ── Правила: подсказка ────────────────────────────────────────────────────────
 with st.expander("ℹ️ Правила заполнения"):
@@ -652,15 +742,14 @@ with st.expander("ℹ️ Правила заполнения"):
 | **Только вечер** | Назначается только на вечерние смены (15:00–00:00 МСК) |
 | **Тимлид** | Не дежурит (on_duty=False автоматически) |
 | **5/2** | Не работает в субботу и воскресенье |
-| **Отпуск** | Период(ы) отпуска: `10.03–20.03` или `10.03–15.03, 25.03–28.03` |
-| **Недоступен** | Разовые недоступные дни (не отпуск): `10.03, 15.03` |
 | **Роль** | Информационная роль, отображается в XLS рядом с именем |
 | **Предпочт. смена** | Мягкий приоритет при выборе смены (не гарантирует назначение) |
-| **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки (влияет на число рабочих дней) |
+| **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
 | **Вых. дни** | Постоянные выходные дни недели: `Сб,Вс` или `5,6` (0=Пн … 6=Вс) |
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
-| **Группа** | Имя группы: не ставить двух из одной группы на одну смену в один день |
+| **Группа** | Не ставить двух из одной группы на одну смену в один день |
+| **📅 Отпуска и блокировки** | Интерактивные дейт-пикеры — замена текстовым полям |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
     """)
@@ -674,9 +763,9 @@ with st.expander("📌 Фиксированные назначения"):
     pins_edited: pd.DataFrame = st.data_editor(
         st.session_state["pins_df"],
         column_config={
-            "Дата":       st.column_config.TextColumn("Дата (дд.мм)", width="small"),
-            "Сотрудник":  st.column_config.TextColumn("Сотрудник",    width="medium"),
-            "Смена":      st.column_config.SelectboxColumn(
+            "Дата":      st.column_config.TextColumn("Дата (дд.мм)", width="small"),
+            "Сотрудник": st.column_config.TextColumn("Сотрудник",    width="medium"),
+            "Смена":     st.column_config.SelectboxColumn(
                 "Смена", options=_SHIFTS_RU, width="small"
             ),
         },
@@ -684,6 +773,8 @@ with st.expander("📌 Фиксированные назначения"):
         use_container_width=True,
         key="pins_table",
     )
+# Сохраняем DataFrame пинов для sidebar download
+st.session_state["_pins_for_download"] = pins_edited
 
 # ── Дополнительные параметры ──────────────────────────────────────────────────
 with st.expander("⚙️ Дополнительно"):
@@ -698,7 +789,9 @@ st.divider()
 
 # ── Кнопка генерации ──────────────────────────────────────────────────────────
 if st.button("⚡ Сгенерировать расписание", type="primary", use_container_width=True):
-    employees, errors = _build_employees(edited_df, year)
+    employees, errors = _build_employees(
+        edited_df, employee_dates=st.session_state["employee_dates"]
+    )
 
     if errors:
         for err in errors:
@@ -733,10 +826,8 @@ if st.button("⚡ Сгенерировать расписание", type="primar
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
     carry_over_objs: list[CarryOverState] = []
     for co in carry_over_raw:
-        try:
+        with contextlib.suppress(Exception):
             carry_over_objs.append(CarryOverState(**co))
-        except Exception:
-            pass
 
     try:
         config = Config(
@@ -808,14 +899,13 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         use_container_width=True,
     )
 
-    # Подготовить конфиг для следующего месяца с переносом состояний
+    # Конфиг для следующего месяца с переносом состояний
     next_month = month % 12 + 1
-    next_year = year + (1 if month == 12 else 0)
+    next_year  = year + (1 if month == 12 else 0)
     final_carry_over: list[dict] = schedule.metadata.get("carry_over", [])
-    _tbl_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
-    _cur_df = st.session_state.get(_tbl_key, st.session_state["employees_df"])
     next_yaml = _df_to_yaml(
-        _cur_df, next_month, next_year, seed,
+        edited_df, next_month, next_year, seed,
+        employee_dates=st.session_state["employee_dates"],
         pins_df=None,
         carry_over=final_carry_over,
     )
@@ -825,6 +915,5 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         file_name=f"config_{next_year}_{next_month:02d}.yaml",
         mime="text/yaml",
         use_container_width=True,
-        help="Конфиг содержит состояния сотрудников на конец этого месяца, "
-             "что обеспечивает корректный перенос серий смен в следующий месяц.",
+        help="Конфиг содержит состояния сотрудников на конец этого месяца.",
     )
