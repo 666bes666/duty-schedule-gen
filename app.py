@@ -607,13 +607,17 @@ st.caption(
     "Отпуска, выходные и блокировки — в секции **📅 Отпуска, выходные и блокировки** ниже."
 )
 
-# Опции для «Группа» — берём из employees_df (стабильного между рендерами источника),
-# чтобы смена column_config не инвалидировала состояние data_editor.
-_group_options = [""] + sorted({
-    str(r["Имя"]).strip()
-    for _, r in st.session_state["employees_df"].iterrows()
-    if str(r["Имя"]).strip()
-})
+# Опции для «Группа» — вычисляются один раз на table_version и кешируются.
+# Обновляются только при загрузке файла или явном _bump_table(), но НЕ на каждом
+# рендере — иначе изменение column_config сбрасывает дельту data_editor.
+_gopt_key = f"_gopt_{st.session_state['table_version']}"
+if _gopt_key not in st.session_state:
+    st.session_state[_gopt_key] = [""] + sorted({
+        str(r["Имя"]).strip()
+        for _, r in st.session_state["employees_df"].iterrows()
+        if str(r["Имя"]).strip()
+    })
+_group_options: list[str] = st.session_state[_gopt_key]
 
 _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
@@ -696,9 +700,6 @@ edited_df: pd.DataFrame = st.data_editor(
     hide_index=True,
     key=_table_key,
 )
-# Синхронизируем employees_df с текущими правками — это делает delta data_editor
-# нулевой на следующем рендере и предотвращает сброс введённых значений.
-st.session_state["employees_df"]    = edited_df
 st.session_state["_df_for_download"] = edited_df
 
 # ── 📅 Отпуска, выходные и блокировки (дейт-пикер) ──────────────────────────
