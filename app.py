@@ -21,6 +21,7 @@ MONTHS_RU = [
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 ]
+_WEEKDAY_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
 _CITY_TO_RU   = {"moscow": "Москва", "khabarovsk": "Хабаровск"}
 _RU_TO_CITY   = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
@@ -320,6 +321,60 @@ def _build_employees(df: pd.DataFrame, year: int) -> tuple[list[Employee], list[
     return employees, errors
 
 
+# ── Конвертация расписания ↔ DataFrame ────────────────────────────────────────
+
+def _schedule_to_edit_df(schedule: "Schedule") -> pd.DataFrame:
+    """Преобразовать Schedule в редактируемый DataFrame (строки = дни)."""
+    rows = []
+    for d in schedule.days:
+        rows.append({
+            "Дата":         f"{d.date.day:02d}.{d.date.month:02d} {_WEEKDAY_RU[d.date.weekday()]}",
+            "Утро 08–17":   ", ".join(d.morning),
+            "Вечер 15–00":  ", ".join(d.evening),
+            "Ночь 00–08":   ", ".join(d.night),
+            "Рабочий день": ", ".join(d.workday),
+        })
+    return pd.DataFrame(rows)
+
+
+def _edit_df_to_schedule(df: pd.DataFrame, schedule: "Schedule") -> "Schedule":
+    """Пересобрать Schedule из отредактированного DataFrame."""
+    from duty_schedule.models import DaySchedule, Schedule as ScheduleModel
+
+    new_days = []
+    for (_, row), orig_day in zip(df.iterrows(), schedule.days):
+        def _names(col: str) -> list[str]:
+            val = str(row.get(col, "")).strip()
+            return [n.strip() for n in val.split(",") if n.strip()] if val else []
+
+        # vacation и day_off вычисляем из оригинала минус то, что переехало в другие смены
+        all_assigned = set(_names("Утро 08–17") + _names("Вечер 15–00") + _names("Ночь 00–08") + _names("Рабочий день"))
+        orig_all = set(orig_day.morning + orig_day.evening + orig_day.night + orig_day.workday + orig_day.day_off + orig_day.vacation)
+        day_off = [n for n in orig_day.day_off if n not in all_assigned]
+        vacation = [n for n in orig_day.vacation if n not in all_assigned]
+        # Employees not in any shift → day_off
+        unassigned = [n for n in orig_all if n not in all_assigned and n not in day_off and n not in vacation]
+        day_off.extend(unassigned)
+
+        new_days.append(DaySchedule(
+            date=orig_day.date,
+            is_holiday=orig_day.is_holiday,
+            morning=_names("Утро 08–17"),
+            evening=_names("Вечер 15–00"),
+            night=_names("Ночь 00–08"),
+            workday=_names("Рабочий день"),
+            day_off=day_off,
+            vacation=vacation,
+        ))
+
+    # Пересчитываем метаданные
+    meta = dict(schedule.metadata)
+    meta["total_mornings"] = sum(len(d.morning) for d in new_days)
+    meta["total_evenings"] = sum(len(d.evening) for d in new_days)
+    meta["total_nights"]   = sum(len(d.night)   for d in new_days)
+    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)
+
+
 # ── Страница ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
@@ -519,10 +574,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
             st.error(f"Не удалось построить расписание: {e}")
             st.stop()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        xls_path = export_xls(schedule, Path(tmpdir))
-        xls_bytes = xls_path.read_bytes()
-
     meta = schedule.metadata
     st.success(
         f"✅ Расписание готово — {len(schedule.days)} дней, "
@@ -533,6 +584,32 @@ if st.button("⚡ Сгенерировать расписание", type="primar
     c1.metric("Утренних смен", meta.get("total_mornings", 0))
     c2.metric("Вечерних смен", meta.get("total_evenings", 0))
     c3.metric("Ночных смен",   meta.get("total_nights",   0))
+
+    st.subheader("Редактирование расписания")
+    st.caption(
+        "Можно вручную изменить назначения. Имена сотрудников через запятую. "
+        "Нажмите **⬇️ Скачать XLS** — в файл попадёт актуальная версия таблицы."
+    )
+    schedule_df = _schedule_to_edit_df(schedule)
+    edited_schedule_df: pd.DataFrame = st.data_editor(
+        schedule_df,
+        column_config={
+            "Дата":         st.column_config.TextColumn("Дата", disabled=True, width="small"),
+            "Утро 08–17":   st.column_config.TextColumn("Утро 08–17",   width="large"),
+            "Вечер 15–00":  st.column_config.TextColumn("Вечер 15–00",  width="large"),
+            "Ночь 00–08":   st.column_config.TextColumn("Ночь 00–08",   width="large"),
+            "Рабочий день": st.column_config.TextColumn("Рабочий день", width="large"),
+        },
+        use_container_width=True,
+        hide_index=True,
+        key="schedule_editor",
+    )
+
+    final_schedule = _edit_df_to_schedule(edited_schedule_df, schedule)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        xls_path = export_xls(final_schedule, Path(tmpdir))
+        xls_bytes = xls_path.read_bytes()
 
     st.download_button(
         label="⬇️ Скачать XLS",
