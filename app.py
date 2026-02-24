@@ -611,46 +611,80 @@ _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
 edited_df: pd.DataFrame = st.data_editor(
     st.session_state["employees_df"],
     column_config={
-        "Имя":             st.column_config.TextColumn("Имя",             width="medium"),
+        "Имя":             st.column_config.TextColumn(
+                               "Имя",
+                           ),
         "Город":           st.column_config.SelectboxColumn(
-                               "Город", options=["Москва", "Хабаровск"], width="small"
+                               "Город", options=["Москва", "Хабаровск"],
                            ),
         "График":          st.column_config.SelectboxColumn(
-                               "График", options=["Гибкий", "5/2"], width="small"
+                               "График", options=["Гибкий", "5/2"],
                            ),
-        "Дежурный":        st.column_config.CheckboxColumn("Дежурный",     width="small"),
-        "Только утро":     st.column_config.CheckboxColumn("Только утро",  width="small"),
-        "Только вечер":    st.column_config.CheckboxColumn("Только вечер", width="small"),
-        "Тимлид":          st.column_config.CheckboxColumn("Тимлид",       width="small"),
-        "Роль":            st.column_config.TextColumn("Роль",             width="small"),
+        "Дежурный":        st.column_config.CheckboxColumn(
+                               "Деж.",
+                               help="Участвует в назначении дежурных смен",
+                           ),
+        "Только утро":     st.column_config.CheckboxColumn(
+                               "Утро▲",
+                               help="Только утренние смены 08:00–17:00 МСК",
+                           ),
+        "Только вечер":    st.column_config.CheckboxColumn(
+                               "Вечер▲",
+                               help="Только вечерние смены 15:00–00:00 МСК",
+                           ),
+        "Тимлид":          st.column_config.CheckboxColumn(
+                               "Тимлид",
+                               help="Тимлид — не дежурит, только рабочие дни",
+                           ),
+        "Роль":            st.column_config.TextColumn(
+                               "Роль",
+                               help="Отображается в XLS рядом с именем",
+                           ),
         "Предпочт. смена": st.column_config.SelectboxColumn(
-                               "Предпочт. смена",
+                               "Пред. смена",
                                options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
-                               width="small",
+                               help="Предпочтительная смена (мягкий приоритет)",
                            ),
         "Загрузка%":       st.column_config.NumberColumn(
-                               "Загрузка%", min_value=1, max_value=100, step=1, width="small"
+                               "Загр.%",
+                               min_value=1, max_value=100, step=1,
+                               help="Норма нагрузки: 100 = полная ставка, 50 = полставки",
                            ),
         "Макс. утренних":  st.column_config.NumberColumn(
-                               "Макс. утр.", min_value=1, step=1, width="small",
-                               help="Лимит утренних смен в месяц (пусто = без ограничений)",
+                               "↑Утр",
+                               min_value=1, step=1,
+                               help="Макс. утренних смен в месяц (пусто = без ограничений)",
                            ),
         "Макс. вечерних":  st.column_config.NumberColumn(
-                               "Макс. веч.", min_value=1, step=1, width="small",
-                               help="Лимит вечерних смен в месяц (пусто = без ограничений)",
+                               "↑Веч",
+                               min_value=1, step=1,
+                               help="Макс. вечерних смен в месяц (пусто = без ограничений)",
                            ),
         "Макс. ночных":    st.column_config.NumberColumn(
-                               "Макс. ноч.", min_value=1, step=1, width="small",
-                               help="Лимит ночных смен в месяц (пусто = без ограничений)",
+                               "↑Ноч",
+                               min_value=1, step=1,
+                               help="Макс. ночных смен в месяц (пусто = без ограничений)",
                            ),
         "Макс. подряд":    st.column_config.NumberColumn(
-                               "Макс. подряд", min_value=1, step=1, width="small",
-                               help="Лимит рабочих дней подряд (пусто = 5)",
+                               "↑Подряд",
+                               min_value=1, step=1,
+                               help="Макс. рабочих дней подряд (пусто = 5)",
                            ),
-        "Группа":          st.column_config.TextColumn("Группа", width="small"),
+        "Группа":          st.column_config.TextColumn(
+                               "Группа",
+                               help="Сотрудников одной группы не ставят вместе на одну смену",
+                           ),
     },
+    column_order=[
+        "Имя", "Город", "График",
+        "Дежурный", "Только утро", "Только вечер", "Тимлид",
+        "Роль", "Предпочт. смена", "Загрузка%",
+        "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
+        "Группа",
+    ],
     num_rows="dynamic",
     use_container_width=True,
+    hide_index=True,
     key=_table_key,
 )
 # Сохраняем DataFrame (не dict-обёртку data_editor) для sidebar download
