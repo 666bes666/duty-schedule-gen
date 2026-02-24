@@ -38,9 +38,12 @@ _RU_TO_CITY  = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
 _STYPE_TO_RU = {"flexible": "Гибкий", "5/2": "5/2"}
 _RU_TO_STYPE = {"Гибкий": "flexible", "5/2": "5/2"}
 
-# Дни недели (фича 4)
+# Дни недели
 _WEEKDAY_SHORT_TO_INT = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6}
 _INT_TO_WEEKDAY_SHORT = {v: k.capitalize() for k, v in _WEEKDAY_SHORT_TO_INT.items()}
+_WEEKDAY_INT_TO_RU    = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
+_WEEKDAY_RU_TO_INT    = {v: k for k, v in _WEEKDAY_INT_TO_RU.items()}
+_WEEKDAY_OPTIONS      = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
 # «Отпуск» и «Недоступен» вынесены в отдельный дейт-пикер (не текстовые поля)
 _EMPTY_ROW = {
@@ -55,11 +58,10 @@ _EMPTY_ROW = {
     "Роль": "",
     "Предпочт. смена": "",
     "Загрузка%": 100,
-    "Вых. дни": "",
-    "Макс. утренних": "",
-    "Макс. вечерних": "",
-    "Макс. ночных": "",
-    "Макс. подряд": "",
+    "Макс. утренних": None,
+    "Макс. вечерних": None,
+    "Макс. ночных": None,
+    "Макс. подряд": None,
     "Группа": "",
 }
 
@@ -84,7 +86,7 @@ _RU_TO_SHIFT = {
 }
 _SHIFT_TO_RU = {v: k for k, v in _RU_TO_SHIFT.items()}
 
-_EMPTY_PIN_ROW = {"Дата": "", "Сотрудник": "", "Смена": "Утро"}
+_EMPTY_PIN_ROW = {"Дата": None, "Сотрудник": "", "Смена": "Утро"}
 
 # Тип конфига дат сотрудника:
 # {"vacations": [(start, end), ...], "unavailable": [date, ...]}
@@ -130,7 +132,9 @@ def _get_emp_dates(name: str) -> _EmployeeDates:
     """Вернуть (и создать при необходимости) конфиг дат для сотрудника."""
     ed = st.session_state["employee_dates"]
     if name not in ed:
-        ed[name] = {"vacations": [], "unavailable": []}
+        ed[name] = {"vacations": [], "unavailable": [], "days_off_weekly": []}
+    elif "days_off_weekly" not in ed[name]:
+        ed[name]["days_off_weekly"] = []
     return ed[name]
 
 
@@ -159,7 +163,11 @@ def _emp_dates_from_yaml(emp: dict) -> _EmployeeDates:
     for d in emp.get("unavailable_dates", []):
         with contextlib.suppress(ValueError):
             unavailable.append(date.fromisoformat(str(d)))
-    return {"vacations": vacations, "unavailable": unavailable}
+    days_off_weekly = []
+    for d in emp.get("days_off_weekly", []) or []:
+        with contextlib.suppress(ValueError, TypeError):
+            days_off_weekly.append(int(d))
+    return {"vacations": vacations, "unavailable": unavailable, "days_off_weekly": days_off_weekly}
 
 
 # ── Сериализация / десериализация ─────────────────────────────────────────────
@@ -200,28 +208,19 @@ def _df_to_yaml(
         except (ValueError, TypeError):
             workload_pct = 100
 
-        days_off_raw = str(row.get("Вых. дни", "")).strip()
-        days_off_weekly: list[int] = []
-        for token in days_off_raw.split(","):
-            token = token.strip().lower()
-            if not token:
-                continue
-            if token in _WEEKDAY_SHORT_TO_INT:
-                days_off_weekly.append(_WEEKDAY_SHORT_TO_INT[token])
-            elif token.isdigit() and 0 <= int(token) <= 6:
-                days_off_weekly.append(int(token))
+        days_off_weekly: list[int] = _emp_cfg.get("days_off_weekly", [])
 
         def _parse_limit(val: object) -> int | None:
             try:
-                v = int(str(val).strip())
+                v = int(val)  # type: ignore[arg-type]
                 return v if v > 0 else None
             except (ValueError, TypeError):
                 return None
 
-        max_morning = _parse_limit(row.get("Макс. утренних", ""))
-        max_evening = _parse_limit(row.get("Макс. вечерних", ""))
-        max_night   = _parse_limit(row.get("Макс. ночных", ""))
-        max_cw      = _parse_limit(row.get("Макс. подряд", ""))
+        max_morning = _parse_limit(row.get("Макс. утренних"))
+        max_evening = _parse_limit(row.get("Макс. вечерних"))
+        max_night   = _parse_limit(row.get("Макс. ночных"))
+        max_cw      = _parse_limit(row.get("Макс. подряд"))
         group = str(row.get("Группа", "")).strip() or None
         role  = str(row.get("Роль", "")).strip()
 
@@ -276,15 +275,18 @@ def _df_to_yaml(
 def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
     result = []
     for _, row in pins_df.iterrows():
-        date_str = str(row.get("Дата", "")).strip()
+        raw_date = row.get("Дата")
         emp_name = str(row.get("Сотрудник", "")).strip()
         shift_ru = str(row.get("Смена", "")).strip()
-        if not date_str or not emp_name or not shift_ru:
+        if not raw_date or not emp_name or not shift_ru:
             continue
-        try:
-            d = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y").date()
-        except ValueError:
-            continue
+        if isinstance(raw_date, date):
+            d = raw_date
+        else:
+            try:
+                d = datetime.strptime(f"{str(raw_date).strip()}.{year}", "%d.%m.%Y").date()
+            except ValueError:
+                continue
         shift = _RU_TO_SHIFT.get(shift_ru)
         if shift is None:
             continue
@@ -304,7 +306,7 @@ def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
         shift_str = str(p.get("shift", ""))
         shift_ru = _SHIFT_TO_RU.get(ShiftType(shift_str), "Утро") if shift_str else "Утро"
         rows.append({
-            "Дата":      f"{d.day:02d}.{d.month:02d}",
+            "Дата":      d,
             "Сотрудник": str(p.get("employee_name", "")),
             "Смена":     shift_ru,
         })
@@ -345,15 +347,6 @@ def _yaml_to_df(
             ShiftType(pref_shift_raw), ""
         ) if pref_shift_raw else ""
 
-        # Постоянные выходные
-        days_off_weekly = emp.get("days_off_weekly", []) or []
-        days_off_str = ",".join(
-            _INT_TO_WEEKDAY_SHORT.get(int(d), str(d)) for d in days_off_weekly
-        )
-
-        def _none_to_str(v: object) -> str:
-            return "" if v is None else str(v)
-
         rows.append({
             "Имя":             name,
             "Город":           _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
@@ -365,11 +358,10 @@ def _yaml_to_df(
             "Роль":            emp.get("role", ""),
             "Предпочт. смена": pref_shift_ru,
             "Загрузка%":       int(emp.get("workload_pct", 100)),
-            "Вых. дни":        days_off_str,
-            "Макс. утренних":  _none_to_str(emp.get("max_morning_shifts")),
-            "Макс. вечерних":  _none_to_str(emp.get("max_evening_shifts")),
-            "Макс. ночных":    _none_to_str(emp.get("max_night_shifts")),
-            "Макс. подряд":    _none_to_str(emp.get("max_consecutive_working")),
+            "Макс. утренних":  emp.get("max_morning_shifts"),
+            "Макс. вечерних":  emp.get("max_evening_shifts"),
+            "Макс. ночных":    emp.get("max_night_shifts"),
+            "Макс. подряд":    emp.get("max_consecutive_working"),
             "Группа":          emp.get("group", "") or "",
         })
 
@@ -418,28 +410,19 @@ def _build_employees(
         except (ValueError, TypeError):
             workload_pct = 100
 
-        days_off_raw = str(row.get("Вых. дни", "")).strip()
-        days_off_weekly: list[int] = []
-        for token in days_off_raw.split(","):
-            token = token.strip().lower()
-            if not token:
-                continue
-            if token in _WEEKDAY_SHORT_TO_INT:
-                days_off_weekly.append(_WEEKDAY_SHORT_TO_INT[token])
-            elif token.isdigit() and 0 <= int(token) <= 6:
-                days_off_weekly.append(int(token))
+        days_off_weekly: list[int] = cfg.get("days_off_weekly", [])
 
         def _parse_limit(val: object) -> int | None:
             try:
-                v = int(str(val).strip())
+                v = int(val)  # type: ignore[arg-type]
                 return v if v > 0 else None
             except (ValueError, TypeError):
                 return None
 
-        max_morning = _parse_limit(row.get("Макс. утренних", ""))
-        max_evening = _parse_limit(row.get("Макс. вечерних", ""))
-        max_night   = _parse_limit(row.get("Макс. ночных", ""))
-        max_cw      = _parse_limit(row.get("Макс. подряд", ""))
+        max_morning = _parse_limit(row.get("Макс. утренних"))
+        max_evening = _parse_limit(row.get("Макс. вечерних"))
+        max_night   = _parse_limit(row.get("Макс. ночных"))
+        max_cw      = _parse_limit(row.get("Макс. подряд"))
         group = str(row.get("Группа", "")).strip() or None
         role  = str(row.get("Роль", "")).strip()
 
@@ -621,7 +604,7 @@ st.divider()
 st.subheader("Сотрудники")
 st.caption(
     "Добавляйте строки кнопкой **+** снизу. Удалить строку — галочка слева + **Delete**. "
-    "Отпуска и недоступные дни задаются через секцию **📅 Отпуска и блокировки** ниже."
+    "Отпуска, выходные и блокировки — в секции **📅 Отпуска, выходные и блокировки** ниже."
 )
 
 _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
@@ -648,12 +631,23 @@ edited_df: pd.DataFrame = st.data_editor(
         "Загрузка%":       st.column_config.NumberColumn(
                                "Загрузка%", min_value=1, max_value=100, step=1, width="small"
                            ),
-        "Вых. дни":        st.column_config.TextColumn("Вых. дни (Сб,Вс…)", width="small"),
-        "Макс. утренних":  st.column_config.TextColumn("Макс. утр.", width="small"),
-        "Макс. вечерних":  st.column_config.TextColumn("Макс. веч.", width="small"),
-        "Макс. ночных":    st.column_config.TextColumn("Макс. ноч.", width="small"),
-        "Макс. подряд":    st.column_config.TextColumn("Макс. подряд", width="small"),
-        "Группа":          st.column_config.TextColumn("Группа",      width="small"),
+        "Макс. утренних":  st.column_config.NumberColumn(
+                               "Макс. утр.", min_value=1, step=1, width="small",
+                               help="Лимит утренних смен в месяц (пусто = без ограничений)",
+                           ),
+        "Макс. вечерних":  st.column_config.NumberColumn(
+                               "Макс. веч.", min_value=1, step=1, width="small",
+                               help="Лимит вечерних смен в месяц (пусто = без ограничений)",
+                           ),
+        "Макс. ночных":    st.column_config.NumberColumn(
+                               "Макс. ноч.", min_value=1, step=1, width="small",
+                               help="Лимит ночных смен в месяц (пусто = без ограничений)",
+                           ),
+        "Макс. подряд":    st.column_config.NumberColumn(
+                               "Макс. подряд", min_value=1, step=1, width="small",
+                               help="Лимит рабочих дней подряд (пусто = 5)",
+                           ),
+        "Группа":          st.column_config.TextColumn("Группа", width="small"),
     },
     num_rows="dynamic",
     use_container_width=True,
@@ -662,8 +656,8 @@ edited_df: pd.DataFrame = st.data_editor(
 # Сохраняем DataFrame (не dict-обёртку data_editor) для sidebar download
 st.session_state["_df_for_download"] = edited_df
 
-# ── 📅 Отпуска и недоступные дни (дейт-пикер) ────────────────────────────────
-with st.expander("📅 Отпуска и недоступные дни"):
+# ── 📅 Отпуска, выходные и блокировки (дейт-пикер) ──────────────────────────
+with st.expander("📅 Отпуска, выходные и блокировки"):
     _emp_names = [
         str(r["Имя"]).strip()
         for _, r in edited_df.iterrows()
@@ -732,6 +726,24 @@ with st.expander("📅 Отпуска и недоступные дни"):
             _cfg["unavailable"].append(date(year, month, 1))
             st.rerun()
 
+        st.divider()
+
+        # ── Постоянные выходные дни недели ────────────────────────────────
+        st.markdown("**Постоянные выходные дни недели**")
+        st.caption("Сотрудник не будет назначаться в эти дни недели каждую неделю.")
+        _current_days_off = _cfg.get("days_off_weekly", [])
+        _current_labels = [
+            _WEEKDAY_INT_TO_RU[d] for d in _current_days_off if d in _WEEKDAY_INT_TO_RU
+        ]
+        _new_days_labels  = st.multiselect(
+            "Выберите дни",
+            options=_WEEKDAY_OPTIONS,
+            default=_current_labels,
+            key=f"days_off_{_sel}",
+            label_visibility="collapsed",
+        )
+        _cfg["days_off_weekly"] = [_WEEKDAY_RU_TO_INT[d] for d in _new_days_labels]
+
 # ── Правила: подсказка ────────────────────────────────────────────────────────
 with st.expander("ℹ️ Правила заполнения"):
     st.markdown("""
@@ -745,29 +757,28 @@ with st.expander("ℹ️ Правила заполнения"):
 | **Роль** | Информационная роль, отображается в XLS рядом с именем |
 | **Предпочт. смена** | Мягкий приоритет при выборе смены (не гарантирует назначение) |
 | **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
-| **Вых. дни** | Постоянные выходные дни недели: `Сб,Вс` или `5,6` (0=Пн … 6=Вс) |
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
 | **Группа** | Не ставить двух из одной группы на одну смену в один день |
-| **📅 Отпуска и блокировки** | Интерактивные дейт-пикеры — замена текстовым полям |
+| **📅 Отпуска, выходные и блокировки** | Интерактивный ввод: дейт-пикеры и мультиселект |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
     """)
 
 # ── Фиксированные назначения (пины) ──────────────────────────────────────────
 with st.expander("📌 Фиксированные назначения"):
-    st.caption(
-        "Зафиксировать конкретного сотрудника на определённый день и смену. "
-        "Формат даты: **дд.мм** (например `05.03`)."
-    )
+    st.caption("Зафиксировать конкретного сотрудника на определённый день и смену.")
     pins_edited: pd.DataFrame = st.data_editor(
         st.session_state["pins_df"],
         column_config={
-            "Дата":      st.column_config.TextColumn("Дата (дд.мм)", width="small"),
-            "Сотрудник": st.column_config.TextColumn("Сотрудник",    width="medium"),
+            "Дата":      st.column_config.DateColumn(
+                             "Дата", format="DD.MM", width="small",
+                             help="Выберите дату через календарь",
+                         ),
+            "Сотрудник": st.column_config.TextColumn("Сотрудник", width="medium"),
             "Смена":     st.column_config.SelectboxColumn(
-                "Смена", options=_SHIFTS_RU, width="small"
-            ),
+                             "Смена", options=_SHIFTS_RU, width="small"
+                         ),
         },
         num_rows="dynamic",
         use_container_width=True,
@@ -804,23 +815,27 @@ if st.button("⚡ Сгенерировать расписание", type="primar
     # Парсим пины
     pins: list[PinnedAssignment] = []
     for _, pin_row in pins_edited.iterrows():
-        date_str = str(pin_row.get("Дата", "")).strip()
+        raw_date = pin_row.get("Дата")
         emp_name = str(pin_row.get("Сотрудник", "")).strip()
         shift_ru = str(pin_row.get("Смена", "")).strip()
-        if not date_str or not emp_name or not shift_ru:
+        if not raw_date or not emp_name or not shift_ru:
             continue
-        try:
-            pin_date = datetime.strptime(f"{date_str}.{year}", "%d.%m.%Y").date()
-        except ValueError:
-            st.warning(f"Пин: неверный формат даты «{date_str}» — пропущен.")
-            continue
+        # DateColumn возвращает date-объект или None
+        if isinstance(raw_date, date):
+            pin_date = raw_date
+        else:
+            try:
+                pin_date = datetime.strptime(f"{str(raw_date).strip()}.{year}", "%d.%m.%Y").date()
+            except ValueError:
+                st.warning(f"Пин: неверный формат даты «{raw_date}» — пропущен.")
+                continue
         shift = _RU_TO_SHIFT.get(shift_ru)
         if shift is None:
             continue
         try:
             pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
         except Exception as e:
-            st.warning(f"Пин ({emp_name} / {date_str}): {e}")
+            st.warning(f"Пин ({emp_name} / {raw_date}): {e}")
 
     # Перенос состояния с предыдущего месяца
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
