@@ -117,6 +117,14 @@ class PinnedAssignment(BaseModel):
         return self
 
 
+class CarryOverState(BaseModel):
+    """Перенос состояния сотрудника с конца предыдущего месяца."""
+    employee_name: str
+    last_shift: ShiftType | None = None
+    consecutive_working: int = 0
+    consecutive_off: int = 0
+
+
 class Config(BaseModel):
     month: int
     year: int
@@ -124,6 +132,7 @@ class Config(BaseModel):
     seed: int = 42
     employees: list[Employee]
     pins: list[PinnedAssignment] = []
+    carry_over: list[CarryOverState] = []
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:

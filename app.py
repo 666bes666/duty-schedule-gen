@@ -11,7 +11,7 @@ import streamlit as st
 import yaml
 
 from duty_schedule.calendar import CalendarError, fetch_holidays
-from duty_schedule.models import City, Config, Employee, PinnedAssignment, ScheduleType, ShiftType, VacationPeriod
+from duty_schedule.models import CarryOverState, City, Config, Employee, PinnedAssignment, ScheduleType, ShiftType, VacationPeriod
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.export.xls import export_xls
 
@@ -79,6 +79,8 @@ def _init_state() -> None:
         st.session_state["cfg_seed"] = 42
     if "pins_df" not in st.session_state:
         st.session_state["pins_df"] = pd.DataFrame([_EMPTY_PIN_ROW])
+    if "carry_over" not in st.session_state:
+        st.session_state["carry_over"] = []
 
 
 def _bump_table() -> None:
@@ -126,6 +128,7 @@ def _vacations_to_str(vacations: list[dict], year: int) -> str:
 def _df_to_yaml(
     df: pd.DataFrame, month: int, year: int, seed: int,
     pins_df: pd.DataFrame | None = None,
+    carry_over: list[dict] | None = None,
 ) -> str:
     """Сериализовать таблицу сотрудников в YAML (совместимый с CLI)."""
     employees = []
@@ -183,6 +186,8 @@ def _df_to_yaml(
         pins_list = _pins_df_to_list(pins_df, year)
         if pins_list:
             config_dict["pins"] = pins_list
+    if carry_over:
+        config_dict["carry_over"] = carry_over
     return yaml.dump(config_dict, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
 
@@ -228,15 +233,15 @@ def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
 
 def _yaml_to_df(
     raw_yaml: str, year: int,
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None, int, int, int, str | None]:
-    """Загрузить YAML конфиг → (employees_df, pins_df, month, year, seed, error)."""
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, list[dict], int, int, int, str | None]:
+    """Загрузить YAML конфиг → (employees_df, pins_df, carry_over, month, year, seed, error)."""
     try:
         data = yaml.safe_load(raw_yaml)
     except yaml.YAMLError as e:
-        return None, None, 0, 0, 42, f"Ошибка разбора YAML: {e}"
+        return None, None, [], 0, 0, 42, f"Ошибка разбора YAML: {e}"
 
     if not isinstance(data, dict):
-        return None, None, 0, 0, 42, "Неверный формат файла конфигурации."
+        return None, None, [], 0, 0, 42, "Неверный формат файла конфигурации."
 
     month = int(data.get("month", date.today().month))
     year_val = int(data.get("year", year))
@@ -266,7 +271,8 @@ def _yaml_to_df(
         rows = _DEFAULT_ROWS.copy()
 
     pins_df = _pins_list_to_df(data.get("pins", []), year_val)
-    return pd.DataFrame(rows), pins_df, month, year_val, seed, None
+    carry_over = data.get("carry_over", [])
+    return pd.DataFrame(rows), pins_df, carry_over, month, year_val, seed, None
 
 
 def _parse_unavailable(
@@ -393,17 +399,21 @@ with st.sidebar:
     )
     if uploaded is not None:
         raw = uploaded.read().decode("utf-8")
-        df_loaded, pins_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
+        df_loaded, pins_loaded, co_loaded, m, y, s, err = _yaml_to_df(raw, st.session_state["cfg_year"])
         if err:
             st.error(err)
         else:
             st.session_state["employees_df"] = df_loaded
             st.session_state["pins_df"]      = pins_loaded
+            st.session_state["carry_over"]   = co_loaded
             st.session_state["cfg_month"]    = m
             st.session_state["cfg_year"]     = y
             st.session_state["cfg_seed"]     = s
             _bump_table()
-            st.success(f"Загружен конфиг: {len(df_loaded)} сотрудников")
+            msg = f"Загружен конфиг: {len(df_loaded)} сотрудников"
+            if co_loaded:
+                msg += f", перенос состояния для {len(co_loaded)} сотрудников"
+            st.success(msg)
             st.rerun()
 
     st.divider()
@@ -553,8 +563,20 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         except Exception as e:
             st.warning(f"Пин ({emp_name} / {date_str}): {e}")
 
+    # Перенос состояния с предыдущего месяца
+    carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
+    carry_over_objs: list[CarryOverState] = []
+    for co in carry_over_raw:
+        try:
+            carry_over_objs.append(CarryOverState(**co))
+        except Exception:
+            pass
+
     try:
-        config = Config(month=month, year=year, seed=seed, employees=employees, pins=pins)
+        config = Config(
+            month=month, year=year, seed=seed,
+            employees=employees, pins=pins, carry_over=carry_over_objs,
+        )
     except Exception as e:
         st.error(f"Ошибка конфигурации: {e}")
         st.stop()
@@ -618,4 +640,25 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary",
         use_container_width=True,
+    )
+
+    # Подготовить конфиг для следующего месяца с переносом состояний
+    next_month = month % 12 + 1
+    next_year = year + (1 if month == 12 else 0)
+    final_carry_over: list[dict] = schedule.metadata.get("carry_over", [])
+    _tbl_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
+    _cur_df = st.session_state.get(_tbl_key, st.session_state["employees_df"])
+    next_yaml = _df_to_yaml(
+        _cur_df, next_month, next_year, seed,
+        pins_df=None,
+        carry_over=final_carry_over,
+    )
+    st.download_button(
+        label=f"📅 Скачать конфиг для {MONTHS_RU[next_month - 1]} {next_year}",
+        data=next_yaml.encode("utf-8"),
+        file_name=f"config_{next_year}_{next_month:02d}.yaml",
+        mime="text/yaml",
+        use_container_width=True,
+        help="Конфиг содержит состояния сотрудников на конец этого месяца, "
+             "что обеспечивает корректный перенос серий смен в следующий месяц.",
     )
