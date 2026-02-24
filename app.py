@@ -119,6 +119,8 @@ def _init_state() -> None:
         st.session_state["_df_for_download"] = pd.DataFrame(_DEFAULT_ROWS)
     if "_pins_for_download" not in st.session_state:
         st.session_state["_pins_for_download"] = pd.DataFrame([_EMPTY_PIN_ROW])
+    if "last_result" not in st.session_state:
+        st.session_state["last_result"] = None
 
 
 def _bump_table() -> None:
@@ -515,6 +517,199 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: object) -> object:
     return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)  # type: ignore[attr-defined]
 
 
+# ── Валидация конфигурации ─────────────────────────────────────────────────────
+
+
+def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """Проверить конфигурацию перед генерацией.
+
+    Returns:
+        (errors, warnings)
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    active = [row for _, row in df.iterrows() if str(row["Имя"]).strip()]
+    if not active:
+        errors.append("Добавьте хотя бы одного сотрудника.")
+        return errors, warnings
+
+    moscow_duty = [
+        r for r in active
+        if r["Город"] == "Москва"
+        and bool(r.get("Дежурный", True))
+        and not bool(r.get("Тимлид", False))
+    ]
+    khab_duty = [
+        r for r in active
+        if r["Город"] == "Хабаровск"
+        and bool(r.get("Дежурный", True))
+        and not bool(r.get("Тимлид", False))
+    ]
+
+    if len(moscow_duty) < 4:
+        errors.append(
+            f"Москва: {len(moscow_duty)} дежурных, нужно минимум 4."
+        )
+    if len(khab_duty) < 2:
+        errors.append(
+            f"Хабаровск: {len(khab_duty)} дежурных, нужно минимум 2."
+        )
+
+    for r in active:
+        name = str(r["Имя"]).strip()
+        if bool(r.get("Только утро")) and bool(r.get("Только вечер")):
+            errors.append(
+                f"«{name}»: нельзя одновременно «Только утро» и «Только вечер»."
+            )
+        if bool(r.get("Тимлид")) and bool(r.get("Дежурный")):
+            warnings.append(
+                f"«{name}»: тимлид + дежурный — дежурные смены будут проигнорированы."
+            )
+
+    return errors, warnings
+
+
+# ── Календарный вид расписания ─────────────────────────────────────────────────
+
+_CAL_SHIFT_COLORS = {
+    "У": "#FFF3CD",  # утро — янтарный
+    "В": "#CCE5FF",  # вечер — голубой
+    "Н": "#D6CCE5",  # ночь — сиреневый
+    "Р": "#D4EDDA",  # рабочий день — зелёный
+    "–": "#F2F3F4",  # выходной — серый
+    "О": "#F5C6CB",  # отпуск — розовый
+}
+
+
+def _schedule_to_calendar_df(schedule: object) -> pd.DataFrame:
+    """Сводная таблица: строки = сотрудники, столбцы = дни месяца."""
+    emp_days: dict[str, dict[str, str]] = {}
+    col_order: list[str] = []
+
+    for d in schedule.days:  # type: ignore[attr-defined]
+        header = f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}"
+        if header not in col_order:
+            col_order.append(header)
+        for nm in d.morning:
+            emp_days.setdefault(nm, {})[header] = "У"
+        for nm in d.evening:
+            emp_days.setdefault(nm, {})[header] = "В"
+        for nm in d.night:
+            emp_days.setdefault(nm, {})[header] = "Н"
+        for nm in d.workday:
+            emp_days.setdefault(nm, {})[header] = "Р"
+        for nm in d.day_off:
+            emp_days.setdefault(nm, {})[header] = "–"
+        for nm in d.vacation:
+            emp_days.setdefault(nm, {})[header] = "О"
+
+    rows = {
+        name: {col: emp_days[name].get(col, "") for col in col_order}
+        for name in sorted(emp_days)
+    }
+    return pd.DataFrame(rows).T[col_order]
+
+
+def _style_calendar_cell(val: str) -> str:
+    color = _CAL_SHIFT_COLORS.get(str(val), "#FFFFFF")
+    return f"background-color: {color}; text-align: center; font-size: 0.85em;"
+
+
+def _render_calendar(schedule: object) -> None:
+    """Цветовой календарь расписания."""
+    cal_df = _schedule_to_calendar_df(schedule)
+    legend = (
+        "🟡 **У** — утро  ·  🔵 **В** — вечер  ·  🟣 **Н** — ночь  ·  "
+        "🟢 **Р** — рабочий  ·  ⬜ **–** — выходной  ·  🔴 **О** — отпуск"
+    )
+    st.caption(legend)
+    height = min(600, 35 * (len(cal_df) + 2))
+    styled = cal_df.style.map(_style_calendar_cell)
+    st.dataframe(styled, use_container_width=True, height=height)
+
+
+# ── Дашборд нагрузки ──────────────────────────────────────────────────────────
+
+
+def _compute_employee_stats(schedule: object) -> pd.DataFrame:
+    """Количество смен каждого типа по каждому сотруднику."""
+    stats: dict[str, dict[str, int]] = {}
+    _zero: dict[str, int] = {
+        "Утро": 0, "Вечер": 0, "Ночь": 0,
+        "Рабочий": 0, "Выходных": 0, "Отпуск": 0,
+    }
+
+    for d in schedule.days:  # type: ignore[attr-defined]
+        for nm in d.morning:
+            stats.setdefault(nm, dict(_zero))["Утро"] += 1
+        for nm in d.evening:
+            stats.setdefault(nm, dict(_zero))["Вечер"] += 1
+        for nm in d.night:
+            stats.setdefault(nm, dict(_zero))["Ночь"] += 1
+        for nm in d.workday:
+            stats.setdefault(nm, dict(_zero))["Рабочий"] += 1
+        for nm in d.day_off:
+            stats.setdefault(nm, dict(_zero))["Выходных"] += 1
+        for nm in d.vacation:
+            stats.setdefault(nm, dict(_zero))["Отпуск"] += 1
+
+    if not stats:
+        return pd.DataFrame()
+
+    result = pd.DataFrame(stats).T.fillna(0).astype(int)
+    result["Всего смен"] = result["Утро"] + result["Вечер"] + result["Ночь"]
+    return result
+
+
+def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None:
+    """Дашборд нагрузки по сотрудникам."""
+    stats_df = _compute_employee_stats(schedule)
+    if stats_df.empty:
+        st.info("Нет данных для отображения.")
+        return
+
+    workload_map = {
+        str(r["Имя"]).strip(): int(r.get("Загрузка%") or 100)
+        for _, r in employees_df.iterrows()
+        if str(r["Имя"]).strip()
+    }
+    prod_days = int(
+        schedule.metadata.get("production_working_days", 0)  # type: ignore[attr-defined]
+    )
+
+    display_cols = [
+        c for c in ["Утро", "Вечер", "Ночь", "Рабочий", "Всего смен", "Выходных", "Отпуск"]
+        if c in stats_df.columns
+    ]
+    show_df = stats_df[display_cols].copy()
+    show_df.insert(0, "Загр.%", show_df.index.map(lambda n: workload_map.get(n, 100)))
+    show_df["Норма дн."] = (show_df["Загр.%"] * prod_days / 100).round(0).astype(int)
+    show_df["Факт дн."]  = show_df.get("Всего смен", 0) + show_df.get("Рабочий", 0)
+    show_df["Δ"]         = show_df["Факт дн."] - show_df["Норма дн."]
+
+    def _delta_style(val: object) -> str:
+        try:
+            v = int(val)  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            return ""
+        if v > 1:
+            return "color: #C0392B; font-weight: bold;"
+        if v < -1:
+            return "color: #2471A3; font-weight: bold;"
+        return ""
+
+    styled = show_df.style.map(_delta_style, subset=["Δ"])
+    with contextlib.suppress(Exception):
+        styled = styled.background_gradient(subset=["Всего смен"], cmap="Blues")
+    st.dataframe(styled, use_container_width=True)
+
+    chart_cols = [c for c in ["Утро", "Вечер", "Ночь"] if c in stats_df.columns]
+    if chart_cols:
+        st.markdown("**Структура дежурных смен**")
+        st.bar_chart(stats_df[chart_cols], use_container_width=True)
+
+
 # ── Страница ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
@@ -600,110 +795,136 @@ with col_y:
 
 st.divider()
 
-# ── Таблица сотрудников ───────────────────────────────────────────────────────
-st.subheader("Сотрудники")
-st.caption(
-    "Добавляйте строки кнопкой **+** снизу. Удалить строку — галочка слева + **Delete**. "
-    "Отпуска, выходные и блокировки — в секции **📅 Отпуска, выходные и блокировки** ниже."
+# ── Wizard: разделы настройки ─────────────────────────────────────────────────
+_setup_tab1, _setup_tab2, _setup_tab3 = st.tabs(
+    ["1️⃣ Состав", "2️⃣ Ограничения", "3️⃣ Пины"]
 )
 
-# Опции для «Группа» — вычисляются один раз на table_version и кешируются.
-# Обновляются только при загрузке файла или явном _bump_table(), но НЕ на каждом
-# рендере — иначе изменение column_config сбрасывает дельту data_editor.
-_gopt_key = f"_gopt_{st.session_state['table_version']}"
-if _gopt_key not in st.session_state:
-    st.session_state[_gopt_key] = [""] + sorted({
-        str(r["Имя"]).strip()
-        for _, r in st.session_state["employees_df"].iterrows()
-        if str(r["Имя"]).strip()
-    })
-_group_options: list[str] = st.session_state[_gopt_key]
+with _setup_tab1:
+    st.subheader("Сотрудники")
+    st.caption(
+        "Добавляйте строки кнопкой **+** снизу. "
+        "Удалить строку — галочка слева + **Delete**."
+    )
 
-_table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
-edited_df: pd.DataFrame = st.data_editor(
-    st.session_state["employees_df"],
-    column_config={
-        "Имя":             st.column_config.TextColumn(
-                               "Имя",
-                           ),
-        "Город":           st.column_config.SelectboxColumn(
-                               "Город", options=["Москва", "Хабаровск"],
-                           ),
-        "График":          st.column_config.SelectboxColumn(
-                               "График", options=["Гибкий", "5/2"],
-                           ),
-        "Дежурный":        st.column_config.CheckboxColumn(
-                               "Деж.",
-                               help="Участвует в назначении дежурных смен",
-                           ),
-        "Только утро":     st.column_config.CheckboxColumn(
-                               "Утро▲",
-                               help="Только утренние смены 08:00–17:00 МСК",
-                           ),
-        "Только вечер":    st.column_config.CheckboxColumn(
-                               "Вечер▲",
-                               help="Только вечерние смены 15:00–00:00 МСК",
-                           ),
-        "Тимлид":          st.column_config.CheckboxColumn(
-                               "Тимлид",
-                               help="Тимлид — не дежурит, только рабочие дни",
-                           ),
-        "Роль":            st.column_config.TextColumn(
-                               "Роль",
-                               help="Отображается в XLS рядом с именем",
-                           ),
-        "Предпочт. смена": st.column_config.SelectboxColumn(
-                               "Пред. смена",
-                               options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
-                               help="Предпочтительная смена (мягкий приоритет)",
-                           ),
-        "Загрузка%":       st.column_config.NumberColumn(
-                               "Загр.%",
-                               min_value=1, max_value=100, step=1,
-                               help="Норма нагрузки: 100 = полная ставка, 50 = полставки",
-                           ),
-        "Макс. утренних":  st.column_config.NumberColumn(
-                               "↑Утр",
-                               min_value=1, step=1,
-                               help="Макс. утренних смен в месяц (пусто = без ограничений)",
-                           ),
-        "Макс. вечерних":  st.column_config.NumberColumn(
-                               "↑Веч",
-                               min_value=1, step=1,
-                               help="Макс. вечерних смен в месяц (пусто = без ограничений)",
-                           ),
-        "Макс. ночных":    st.column_config.NumberColumn(
-                               "↑Ноч",
-                               min_value=1, step=1,
-                               help="Макс. ночных смен в месяц (пусто = без ограничений)",
-                           ),
-        "Макс. подряд":    st.column_config.NumberColumn(
-                               "↑Подряд",
-                               min_value=1, step=1,
-                               help="Макс. рабочих дней подряд (пусто = 5)",
-                           ),
-        "Группа":          st.column_config.SelectboxColumn(
-                               "Группа",
-                               options=_group_options,
-                               help="Сотрудников одной группы не ставят вместе на одну смену",
-                           ),
-    },
-    column_order=[
-        "Имя", "Город", "График",
-        "Дежурный", "Только утро", "Только вечер", "Тимлид",
-        "Роль", "Предпочт. смена", "Загрузка%",
-        "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
-        "Группа",
-    ],
-    num_rows="dynamic",
-    use_container_width=True,
-    hide_index=True,
-    key=_table_key,
-)
-st.session_state["_df_for_download"] = edited_df
+    # Опции для «Группа» — кешируются на table_version, чтобы не сбрасывать delta
+    _gopt_key = f"_gopt_{st.session_state['table_version']}"
+    if _gopt_key not in st.session_state:
+        st.session_state[_gopt_key] = [""] + sorted({
+            str(r["Имя"]).strip()
+            for _, r in st.session_state["employees_df"].iterrows()
+            if str(r["Имя"]).strip()
+        })
+    _group_options: list[str] = st.session_state[_gopt_key]
 
-# ── 📅 Отпуска, выходные и блокировки (дейт-пикер) ──────────────────────────
-with st.expander("📅 Отпуска, выходные и блокировки"):
+    _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
+    edited_df: pd.DataFrame = st.data_editor(
+        st.session_state["employees_df"],
+        column_config={
+            "Имя":             st.column_config.TextColumn("Имя"),
+            "Город":           st.column_config.SelectboxColumn(
+                                   "Город", options=["Москва", "Хабаровск"],
+                               ),
+            "График":          st.column_config.SelectboxColumn(
+                                   "График", options=["Гибкий", "5/2"],
+                               ),
+            "Дежурный":        st.column_config.CheckboxColumn(
+                                   "Деж.",
+                                   help="Участвует в назначении дежурных смен",
+                               ),
+            "Только утро":     st.column_config.CheckboxColumn(
+                                   "Утро▲",
+                                   help="Только утренние смены 08:00–17:00 МСК",
+                               ),
+            "Только вечер":    st.column_config.CheckboxColumn(
+                                   "Вечер▲",
+                                   help="Только вечерние смены 15:00–00:00 МСК",
+                               ),
+            "Тимлид":          st.column_config.CheckboxColumn(
+                                   "Тимлид",
+                                   help="Тимлид — не дежурит, только рабочие дни",
+                               ),
+            "Роль":            st.column_config.TextColumn(
+                                   "Роль",
+                                   help="Отображается в XLS рядом с именем",
+                               ),
+            "Предпочт. смена": st.column_config.SelectboxColumn(
+                                   "Пред. смена",
+                                   options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
+                                   help="Предпочтительная смена (мягкий приоритет)",
+                               ),
+            "Загрузка%":       st.column_config.NumberColumn(
+                                   "Загр.%",
+                                   min_value=1, max_value=100, step=1,
+                                   help="Норма нагрузки: 100 = полная ставка, 50 = полставки",
+                               ),
+            "Макс. утренних":  st.column_config.NumberColumn(
+                                   "↑Утр",
+                                   min_value=1, step=1,
+                                   help="Макс. утренних смен в месяц (пусто = без ограничений)",
+                               ),
+            "Макс. вечерних":  st.column_config.NumberColumn(
+                                   "↑Веч",
+                                   min_value=1, step=1,
+                                   help="Макс. вечерних смен в месяц (пусто = без ограничений)",
+                               ),
+            "Макс. ночных":    st.column_config.NumberColumn(
+                                   "↑Ноч",
+                                   min_value=1, step=1,
+                                   help="Макс. ночных смен в месяц (пусто = без ограничений)",
+                               ),
+            "Макс. подряд":    st.column_config.NumberColumn(
+                                   "↑Подряд",
+                                   min_value=1, step=1,
+                                   help="Макс. рабочих дней подряд (пусто = 5)",
+                               ),
+            "Группа":          st.column_config.SelectboxColumn(
+                                   "Группа",
+                                   options=_group_options,
+                                   help="Сотрудников одной группы не ставят вместе на одну смену",
+                               ),
+        },
+        column_order=[
+            "Имя", "Город", "График",
+            "Дежурный", "Только утро", "Только вечер", "Тимлид",
+            "Роль", "Предпочт. смена", "Загрузка%",
+            "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
+            "Группа",
+        ],
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        key=_table_key,
+    )
+    st.session_state["_df_for_download"] = edited_df
+
+    # ── Пресеты (Feature 4) ───────────────────────────────────────────────────
+    st.caption("Быстро добавить сотрудника с типовыми настройками:")
+    _pr1, _pr2, _pr3 = st.columns(3)
+    if _pr1.button("＋ Москва, дежурный", use_container_width=True, key="preset_msk"):
+        _preset_row = {**_EMPTY_ROW, "Город": "Москва", "Дежурный": True}
+        st.session_state["employees_df"] = pd.concat(
+            [edited_df, pd.DataFrame([_preset_row])], ignore_index=True,
+        )
+        _bump_table()
+        st.rerun()
+    if _pr2.button("＋ Хабаровск, ночной", use_container_width=True, key="preset_khb"):
+        _preset_row = {**_EMPTY_ROW, "Город": "Хабаровск", "Дежурный": True}
+        st.session_state["employees_df"] = pd.concat(
+            [edited_df, pd.DataFrame([_preset_row])], ignore_index=True,
+        )
+        _bump_table()
+        st.rerun()
+    if _pr3.button("＋ Тимлид", use_container_width=True, key="preset_tl"):
+        _preset_row = {**_EMPTY_ROW, "Тимлид": True, "Дежурный": False}
+        st.session_state["employees_df"] = pd.concat(
+            [edited_df, pd.DataFrame([_preset_row])], ignore_index=True,
+        )
+        _bump_table()
+        st.rerun()
+
+with _setup_tab2:
+    # ── 👤 Карточка сотрудника ────────────────────────────────────────────────
     _emp_names = [
         str(r["Имя"]).strip()
         for _, r in edited_df.iterrows()
@@ -711,10 +932,40 @@ with st.expander("📅 Отпуска, выходные и блокировки"
     ]
 
     if not _emp_names:
-        st.info("Сначала добавьте сотрудников в таблицу выше.")
+        st.info("Сначала добавьте сотрудников на вкладке **1️⃣ Состав**.")
     else:
         _sel = st.selectbox("Сотрудник", _emp_names, key="date_emp_selector")
         _cfg = _get_emp_dates(_sel)
+
+        # Сводка параметров
+        _emp_row = edited_df[edited_df["Имя"].astype(str).str.strip() == _sel]
+        if not _emp_row.empty:
+            _er = _emp_row.iloc[0]
+            _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+            _sc1.metric("Город", _er["Город"])
+            _sc2.metric("График", _er["График"])
+            _sc3.metric("Загрузка", f"{int(_er.get('Загрузка%') or 100)}%")
+            _sc4.metric("Группа", str(_er.get("Группа", "") or "—"))
+            _flags: list[str] = []
+            if _er.get("Дежурный"):
+                _flags.append("Дежурный")
+            if _er.get("Тимлид"):
+                _flags.append("Тимлид")
+            if _er.get("Только утро"):
+                _flags.append("Только утро")
+            if _er.get("Только вечер"):
+                _flags.append("Только вечер")
+            _flag_str = "  ·  ".join(_flags) if _flags else "—"
+            _pref = str(_er.get("Предпочт. смена", "")).strip()
+            _role = str(_er.get("Роль", "")).strip()
+            _detail_parts = [f"Флаги: {_flag_str}"]
+            if _pref:
+                _detail_parts.append(f"Предпочт. смена: {_pref}")
+            if _role:
+                _detail_parts.append(f"Роль: {_role}")
+            st.caption("  ·  ".join(_detail_parts))
+
+        st.divider()
 
         # ── Периоды отпуска ───────────────────────────────────────────────
         st.markdown("**Отпуска**")
@@ -781,7 +1032,7 @@ with st.expander("📅 Отпуска, выходные и блокировки"
         _current_labels = [
             _WEEKDAY_INT_TO_RU[d] for d in _current_days_off if d in _WEEKDAY_INT_TO_RU
         ]
-        _new_days_labels  = st.multiselect(
+        _new_days_labels = st.multiselect(
             "Выберите дни",
             options=_WEEKDAY_OPTIONS,
             default=_current_labels,
@@ -790,9 +1041,10 @@ with st.expander("📅 Отпуска, выходные и блокировки"
         )
         _cfg["days_off_weekly"] = [_WEEKDAY_RU_TO_INT[d] for d in _new_days_labels]
 
-# ── Правила: подсказка ────────────────────────────────────────────────────────
-with st.expander("ℹ️ Правила заполнения"):
-    st.markdown("""
+    st.divider()
+
+    with st.expander("ℹ️ Правила заполнения"):
+        st.markdown("""
 | Поле | Описание |
 |---|---|
 | **Дежурный** | Участвует в дежурных сменах (утро/вечер для Москвы, ночь для Хабаровска) |
@@ -806,13 +1058,12 @@ with st.expander("ℹ️ Правила заполнения"):
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
 | **Группа** | Не ставить двух из одной группы на одну смену в один день |
-| **📅 Отпуска, выходные и блокировки** | Интерактивный ввод: дейт-пикеры и мультиселект |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
-    """)
+        """)
 
-# ── Фиксированные назначения (пины) ──────────────────────────────────────────
-with st.expander("📌 Фиксированные назначения"):
+with _setup_tab3:
+    st.subheader("📌 Фиксированные назначения")
     st.caption("Зафиксировать конкретного сотрудника на определённый день и смену.")
     pins_edited: pd.DataFrame = st.data_editor(
         st.session_state["pins_df"],
@@ -830,11 +1081,10 @@ with st.expander("📌 Фиксированные назначения"):
         use_container_width=True,
         key="pins_table",
     )
-# Сохраняем DataFrame пинов для sidebar download
-st.session_state["_pins_for_download"] = pins_edited
+    st.session_state["_pins_for_download"] = pins_edited
 
-# ── Дополнительные параметры ──────────────────────────────────────────────────
-with st.expander("⚙️ Дополнительно"):
+    st.divider()
+
     seed: int = st.number_input(
         "Seed (для воспроизводимости результата)",
         min_value=0, value=st.session_state["cfg_seed"], step=1,
@@ -843,6 +1093,13 @@ with st.expander("⚙️ Дополнительно"):
     )
 
 st.divider()
+
+# ── Предварительная валидация ─────────────────────────────────────────────────
+_val_errors, _val_warnings = _validate_config(edited_df)
+for _verr in _val_errors:
+    st.error(f"⛔ {_verr}")
+for _vwarn in _val_warnings:
+    st.warning(f"⚠️ {_vwarn}")
 
 # ── Кнопка генерации ──────────────────────────────────────────────────────────
 if st.button("⚡ Сгенерировать расписание", type="primary", use_container_width=True):
@@ -858,7 +1115,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         st.warning("Добавьте хотя бы одного сотрудника.")
         st.stop()
 
-    # Парсим пины
     pins: list[PinnedAssignment] = []
     for _, pin_row in pins_edited.iterrows():
         raw_date = pin_row.get("Дата")
@@ -866,12 +1122,13 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         shift_ru = str(pin_row.get("Смена", "")).strip()
         if not raw_date or not emp_name or not shift_ru:
             continue
-        # DateColumn возвращает date-объект или None
         if isinstance(raw_date, date):
             pin_date = raw_date
         else:
             try:
-                pin_date = datetime.strptime(f"{str(raw_date).strip()}.{year}", "%d.%m.%Y").date()
+                pin_date = datetime.strptime(
+                    f"{str(raw_date).strip()}.{year}", "%d.%m.%Y"
+                ).date()
             except ValueError:
                 st.warning(f"Пин: неверный формат даты «{raw_date}» — пропущен.")
                 continue
@@ -879,11 +1136,12 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         if shift is None:
             continue
         try:
-            pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
+            pins.append(
+                PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift)
+            )
         except Exception as e:
             st.warning(f"Пин ({emp_name} / {raw_date}): {e}")
 
-    # Перенос состояния с предыдущего месяца
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
     carry_over_objs: list[CarryOverState] = []
     for co in carry_over_raw:
@@ -914,53 +1172,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
             st.error(f"Не удалось построить расписание: {e}")
             st.stop()
 
-    meta = schedule.metadata
-    st.success(
-        f"✅ Расписание готово — {len(schedule.days)} дней, "
-        f"{len(employees)} сотрудников, норма {meta.get('production_working_days', '?')} дн."
-    )
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Утренних смен", meta.get("total_mornings", 0))
-    c2.metric("Вечерних смен", meta.get("total_evenings", 0))
-    c3.metric("Ночных смен",   meta.get("total_nights",   0))
-
-    st.subheader("Редактирование расписания")
-    st.caption(
-        "Можно вручную изменить назначения. Имена сотрудников через запятую. "
-        "Нажмите **⬇️ Скачать XLS** — в файл попадёт актуальная версия таблицы."
-    )
-    schedule_df = _schedule_to_edit_df(schedule)
-    edited_schedule_df: pd.DataFrame = st.data_editor(
-        schedule_df,
-        column_config={
-            "Дата":         st.column_config.TextColumn("Дата", disabled=True, width="small"),
-            "Утро 08–17":   st.column_config.TextColumn("Утро 08–17",   width="large"),
-            "Вечер 15–00":  st.column_config.TextColumn("Вечер 15–00",  width="large"),
-            "Ночь 00–08":   st.column_config.TextColumn("Ночь 00–08",   width="large"),
-            "Рабочий день": st.column_config.TextColumn("Рабочий день", width="large"),
-        },
-        use_container_width=True,
-        hide_index=True,
-        key="schedule_editor",
-    )
-
-    final_schedule = _edit_df_to_schedule(edited_schedule_df, schedule)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        xls_path = export_xls(final_schedule, Path(tmpdir))
-        xls_bytes = xls_path.read_bytes()
-
-    st.download_button(
-        label="⬇️ Скачать XLS",
-        data=xls_bytes,
-        file_name=f"schedule_{year}_{month:02d}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary",
-        use_container_width=True,
-    )
-
-    # Конфиг для следующего месяца с переносом состояний
     next_month = month % 12 + 1
     next_year  = year + (1 if month == 12 else 0)
     final_carry_over: list[dict] = schedule.metadata.get("carry_over", [])
@@ -970,10 +1181,99 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         pins_df=None,
         carry_over=final_carry_over,
     )
+
+    # ── Сохранить результат (Feature 5: не пропадает при изменениях) ──────────
+    st.session_state["last_result"] = {
+        "schedule":    schedule,
+        "schedule_df": _schedule_to_edit_df(schedule),
+        "meta":        dict(schedule.metadata),
+        "next_month":  next_month,
+        "next_year":   next_year,
+        "next_yaml":   next_yaml,
+        "gen_at":      datetime.now().strftime("%d.%m %H:%M"),
+        "emp_count":   len(employees),
+        "gen_month":   month,
+        "gen_year":    year,
+        "emp_df_snap": edited_df.copy(),
+    }
+
+# ── Результаты: остаются при любых изменениях конфига (Feature 5) ─────────────
+if st.session_state.get("last_result"):
+    _res      = st.session_state["last_result"]
+    _schedule = _res["schedule"]
+    _meta     = _res["meta"]
+
+    st.success(
+        f"✅ {MONTHS_RU[_res['gen_month'] - 1]} {_res['gen_year']} — "
+        f"{len(_schedule.days)} дней, {_res['emp_count']} сотрудников, "
+        f"норма {_meta.get('production_working_days', '?')} дн. "
+        f"· сгенерировано в {_res['gen_at']}"
+    )
+
+    _rc1, _rc2, _rc3 = st.columns(3)
+    _rc1.metric("Утренних смен", _meta.get("total_mornings", 0))
+    _rc2.metric("Вечерних смен", _meta.get("total_evenings", 0))
+    _rc3.metric("Ночных смен",   _meta.get("total_nights",   0))
+
+    _tab_cal, _tab_dash, _tab_edit = st.tabs(
+        ["📅 Календарь", "📊 Нагрузка", "✏️ Редактирование"]
+    )
+
+    with _tab_cal:
+        _render_calendar(_schedule)
+
+    with _tab_dash:
+        _render_load_dashboard(_schedule, _res["emp_df_snap"])
+
+    # edited_schedule_df инициализируем базовым значением — переопределится editor'ом
+    edited_schedule_df: pd.DataFrame = _res["schedule_df"]
+    with _tab_edit:
+        st.caption(
+            "Можно вручную изменить назначения. Имена сотрудников через запятую. "
+            "Нажмите **⬇️ Скачать XLS** — в файл попадёт актуальная версия таблицы."
+        )
+        edited_schedule_df = st.data_editor(
+            _res["schedule_df"],
+            column_config={
+                "Дата":         st.column_config.TextColumn(
+                                    "Дата", disabled=True, width="small"
+                                ),
+                "Утро 08–17":   st.column_config.TextColumn("Утро 08–17",   width="large"),
+                "Вечер 15–00":  st.column_config.TextColumn("Вечер 15–00",  width="large"),
+                "Ночь 00–08":   st.column_config.TextColumn("Ночь 00–08",   width="large"),
+                "Рабочий день": st.column_config.TextColumn("Рабочий день", width="large"),
+            },
+            use_container_width=True,
+            hide_index=True,
+            key="schedule_editor",
+        )
+
+    final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
+
+    # Кешируем XLS — перегенерируем только при изменении таблицы редактора
+    _xls_hash = pd.util.hash_pandas_object(edited_schedule_df).sum()
+    if st.session_state.get("_xls_hash") != _xls_hash:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            xls_path = export_xls(final_schedule, Path(tmpdir))
+            st.session_state["_xls_bytes"] = xls_path.read_bytes()
+            st.session_state["_xls_hash"]  = _xls_hash
+    xls_bytes: bytes = st.session_state["_xls_bytes"]
+
     st.download_button(
-        label=f"📅 Скачать конфиг для {MONTHS_RU[next_month - 1]} {next_year}",
-        data=next_yaml.encode("utf-8"),
-        file_name=f"config_{next_year}_{next_month:02d}.yaml",
+        label="⬇️ Скачать XLS",
+        data=xls_bytes,
+        file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+        use_container_width=True,
+    )
+    st.download_button(
+        label=(
+            f"📅 Скачать конфиг для "
+            f"{MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"
+        ),
+        data=_res["next_yaml"].encode("utf-8"),
+        file_name=f"config_{_res['next_year']}_{_res['next_month']:02d}.yaml",
         mime="text/yaml",
         use_container_width=True,
         help="Конфиг содержит состояния сотрудников на конец этого месяца.",
