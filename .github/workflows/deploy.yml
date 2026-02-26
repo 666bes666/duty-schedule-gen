@@ -1,0 +1,83 @@
+name: Deploy to Yandex Cloud Serverless Container
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      YC_CLOUD_ID: ${{ secrets.YC_CLOUD_ID }}
+      YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+      YC_SA_ID: ${{ secrets.YC_SA_ID }}
+      CONTAINER_NAME: duty-schedule-streamlit
+      REGISTRY_NAME: duty-schedule-reg
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Yandex Cloud CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Configure Yandex Cloud CLI
+        run: |
+          yc config set token "$YC_OAUTH_TOKEN"
+          yc config set cloud-id "$YC_CLOUD_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+          yc config set compute-default-zone ru-central1-a
+
+      - name: Ensure container registry exists
+        id: registry
+        run: |
+          set -e
+          if ! yc container registry get "$REGISTRY_NAME" >/dev/null 2>&1; then
+            yc container registry create --name "$REGISTRY_NAME"
+          fi
+          REGISTRY_ID=$(yc container registry get "$REGISTRY_NAME" --format json | jq -r '.id')
+          echo "REGISTRY_ID=$REGISTRY_ID" >> $GITHUB_ENV
+          echo "IMAGE=cr.yandex/${REGISTRY_ID}/duty-schedule:latest" >> $GITHUB_ENV
+
+      - name: Configure Docker auth for Yandex Container Registry
+        run: yc container registry configure-docker
+
+      - name: Build Docker image (linux/amd64)
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t "$IMAGE" \
+            --load \
+            .
+
+      - name: Push Docker image
+        run: docker push "$IMAGE"
+
+      - name: Deploy serverless container revision
+        run: |
+          yc serverless container create \
+            --name "$CONTAINER_NAME" \
+            --description "Duty schedule generator (Streamlit UI)" \
+            >/dev/null 2>&1 || true
+
+          yc serverless container revision deploy \
+            --container-name "$CONTAINER_NAME" \
+            --image "$IMAGE" \
+            --cores 1 \
+            --core-fraction 5 \
+            --memory 512M \
+            --concurrency 1 \
+            --execution-timeout 300s \
+            --service-account-id "$YC_SA_ID" \
+            --environment STREAMLIT_SERVER_PORT=8080,STREAMLIT_SERVER_ADDRESS=0.0.0.0
+
+          yc serverless container allow-unauthenticated-invoke "$CONTAINER_NAME" || true
+

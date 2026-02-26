@@ -16,7 +16,7 @@ from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.logging import get_logger, setup_logging
-from duty_schedule.models import Config
+from duty_schedule.models import Config, collect_config_issues
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
 app = typer.Typer(
@@ -68,6 +68,22 @@ def generate(
         f"{len(config.employees)} сотрудников"
     )
 
+    # Дополнительная бизнес-валидация (единая с веб-интерфейсом)
+    errors, warnings = collect_config_issues(config)
+    if errors:
+        console.print("[bold red]✗ Ошибки конфигурации:[/bold red]")
+        for msg in errors:
+            console.print(f"  • {msg}")
+        if warnings:
+            console.print("[yellow]Предупреждения:[/yellow]")
+            for msg in warnings:
+                console.print(f"  • {msg}")
+        raise typer.Exit(1)
+    if warnings:
+        console.print("[yellow]Предупреждения конфигурации:[/yellow]")
+        for msg in warnings:
+            console.print(f"  • {msg}")
+
     # Загрузка производственного календаря
     with console.status("Загрузка производственного календаря..."):
         holiday_set = _load_holidays(config, holidays)
@@ -118,6 +134,18 @@ def validate(
     """Проверить конфигурацию без генерации расписания."""
     try:
         config = _load_config(config_file)
+        errors, warnings = collect_config_issues(config)
+
+        if errors:
+            console.print("[bold red]✗ Найдены ошибки конфигурации:[/bold red]")
+            for msg in errors:
+                console.print(f"  • {msg}")
+            if warnings:
+                console.print("[yellow]Предупреждения:[/yellow]")
+                for msg in warnings:
+                    console.print(f"  • {msg}")
+            raise typer.Exit(1)
+
         console.print("[bold green]✓ Конфигурация корректна[/bold green]")
         console.print(f"  Месяц/год: {config.month:02d}.{config.year}")
         console.print(f"  Сотрудников: {len(config.employees)}")
@@ -125,6 +153,10 @@ def validate(
         moscow_duty = sum(1 for e in config.employees if e.city.value == "moscow" and e.on_duty)
         khb_duty = sum(1 for e in config.employees if e.city.value == "khabarovsk" and e.on_duty)
         console.print(f"  Дежурных Москва: {moscow_duty}, Хабаровск: {khb_duty}")
+        if warnings:
+            console.print("[yellow]Есть предупреждения:[/yellow]")
+            for msg in warnings:
+                console.print(f"  • {msg}")
     except typer.BadParameter as exc:
         console.print(f"[bold red]✗ Ошибка:[/bold red] {exc}")
         raise typer.Exit(1) from exc

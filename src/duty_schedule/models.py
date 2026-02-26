@@ -217,3 +217,95 @@ class Schedule(BaseModel):
     config: Config
     days: list[DaySchedule]
     metadata: dict[str, Any] = {}
+
+
+def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
+    """Собрать бизнес-ошибки и предупреждения конфигурации.
+
+    Возвращает:
+        (errors, warnings) — списки человекочитаемых сообщений.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # Базовые проверки поверх pydantic-валидации
+    if not config.employees:
+        errors.append("Конфигурация не содержит ни одного сотрудника.")
+
+    # Уникальность имён сотрудников
+    from collections import Counter
+
+    name_counts = Counter(emp.name for emp in config.employees)
+    duplicated = sorted(name for name, cnt in name_counts.items() if cnt > 1)
+    if duplicated:
+        errors.append(
+            "Имена сотрудников должны быть уникальными: "
+            + ", ".join(f"«{name}»" for name in duplicated)
+        )
+
+    employees_by_name = {emp.name: emp for emp in config.employees}
+
+    # Валидация пинов (фиксированных назначений)
+    pinned_seen: set[tuple[date, str]] = set()
+    for pin in config.pins:
+        emp = employees_by_name.get(pin.employee_name)
+        if emp is None:
+            errors.append(
+                f"Пин {pin.date.isoformat()}: сотрудник «{pin.employee_name}» "
+                "не найден в списке employees."
+            )
+            continue
+
+        key = (pin.date, emp.name)
+        if key in pinned_seen:
+            errors.append(
+                f"Пин {pin.date.isoformat()}: для сотрудника «{emp.name}» "
+                "указано несколько смен в один день."
+            )
+        pinned_seen.add(key)
+
+        # Городские ограничения для типов смен
+        if emp.city == City.MOSCOW and pin.shift == ShiftType.NIGHT:
+            errors.append(
+                f"Пин {pin.date.isoformat()}: сотрудник «{emp.name}» из Москвы "
+                "не может быть назначен на ночную смену."
+            )
+        if emp.city == City.KHABAROVSK and pin.shift in (
+            ShiftType.MORNING,
+            ShiftType.EVENING,
+        ):
+            errors.append(
+                f"Пин {pin.date.isoformat()}: сотрудник «{emp.name}» из Хабаровска "
+                "не может быть назначен на утреннюю или вечернюю смену (MSK)."
+            )
+
+        # Информационные предупреждения о нетипичных комбинациях
+        if not emp.on_duty and pin.shift in (
+            ShiftType.MORNING,
+            ShiftType.EVENING,
+            ShiftType.NIGHT,
+        ):
+            warnings.append(
+                f"Пин {pin.date.isoformat()}: «{emp.name}» не является дежурным "
+                "(on_duty=False), но закреплён на дежурную смену."
+            )
+        if emp.team_lead and pin.shift in (
+            ShiftType.MORNING,
+            ShiftType.EVENING,
+            ShiftType.NIGHT,
+        ):
+            warnings.append(
+                f"Пин {pin.date.isoformat()}: тимлид «{emp.name}» закреплён "
+                "на дежурную смену."
+            )
+
+    # Переносимые состояния для отсутствующих сотрудников
+    for carry in config.carry_over:
+        if carry.employee_name not in employees_by_name:
+            warnings.append(
+                "carry_over: состояние для сотрудника "
+                f"«{carry.employee_name}» будет проигнорировано, "
+                "так как такого сотрудника нет в employees."
+            )
+
+    return errors, warnings

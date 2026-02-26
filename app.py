@@ -22,6 +22,7 @@ from duty_schedule.models import (
     ScheduleType,
     ShiftType,
     VacationPeriod,
+    collect_config_issues,
 )
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
@@ -1150,12 +1151,27 @@ if st.button("⚡ Сгенерировать расписание", type="primar
 
     try:
         config = Config(
-            month=month, year=year, seed=seed,
-            employees=employees, pins=pins, carry_over=carry_over_objs,
+            month=month,
+            year=year,
+            seed=seed,
+            employees=employees,
+            pins=pins,
+            carry_over=carry_over_objs,
         )
     except Exception as e:
         st.error(f"Ошибка конфигурации: {e}")
         st.stop()
+
+    # Единая бизнес-валидация конфигурации (та же, что и в CLI)
+    cfg_errors, cfg_warnings = collect_config_issues(config)
+    if cfg_errors:
+        for msg in cfg_errors:
+            st.error(msg)
+        for msg in cfg_warnings:
+            st.warning(msg)
+        st.stop()
+    for msg in cfg_warnings:
+        st.warning(msg)
 
     with st.spinner("Загружаем производственный календарь (isdayoff.ru)…"):
         try:
