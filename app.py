@@ -65,6 +65,11 @@ _DEFAULT_ROWS = [
     {**_EMPTY_ROW, "Город": "Москва"},
     {**_EMPTY_ROW, "Город": "Москва"},
     {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Москва"},
+    {**_EMPTY_ROW, "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Город": "Хабаровск"},
     {**_EMPTY_ROW, "Город": "Хабаровск"},
     {**_EMPTY_ROW, "Город": "Хабаровск"},
 ]
@@ -653,8 +658,11 @@ def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None
         return ""
 
     styled = show_df.style.map(_delta_style, subset=["Δ"])
-    with contextlib.suppress(Exception):
+    try:
+        import matplotlib  # noqa: F401
         styled = styled.background_gradient(subset=["Всего смен"], cmap="Blues")
+    except ImportError:
+        pass
     st.dataframe(styled, use_container_width=True)
 
     chart_cols = [c for c in ["Утро", "Вечер", "Ночь"] if c in stats_df.columns]
@@ -759,6 +767,25 @@ with _setup_tab1:
             if str(r["Имя"]).strip()
         })
     _group_options: list[str] = st.session_state[_gopt_key]
+
+    _sort_cols = st.columns([3, 1, 1])
+    _sort_by = _sort_cols[0].selectbox(
+        "Сортировать по столбцу",
+        options=["—", "Имя", "Город", "График", "Дежурный", "Загрузка%"],
+        key="sort_by_col",
+        label_visibility="collapsed",
+    )
+    _sort_asc = _sort_cols[1].radio(
+        "Направление", ["↑ А→Я", "↓ Я→А"], key="sort_dir", horizontal=False,
+        label_visibility="collapsed",
+    ) == "↑ А→Я"
+    if _sort_cols[2].button("Сортировать", use_container_width=True, key="sort_btn") and _sort_by != "—":
+        _cur_df = st.session_state.get("_df_for_download", st.session_state["employees_df"])
+        st.session_state["employees_df"] = _cur_df.sort_values(
+            _sort_by, ascending=_sort_asc
+        ).reset_index(drop=True)
+        _bump_table()
+        st.rerun()
 
     _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
     edited_df: pd.DataFrame = st.data_editor(

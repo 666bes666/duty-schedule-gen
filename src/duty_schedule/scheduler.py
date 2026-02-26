@@ -511,6 +511,146 @@ def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bo
     return left + 1 + right
 
 
+def _count_isolated_off(emp_name: str, days: list[DaySchedule]) -> int:
+    count = 0
+    for i, day in enumerate(days):
+        if emp_name not in day.day_off:
+            continue
+        left_ok = i == 0 or emp_name in days[i - 1].day_off or emp_name in days[i - 1].vacation
+        right_ok = (
+            i == len(days) - 1
+            or emp_name in days[i + 1].day_off
+            or emp_name in days[i + 1].vacation
+        )
+        if not left_ok and not right_ok:
+            count += 1
+    return count
+
+
+def _minimize_isolated_off(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+    pinned_on: set[tuple[date, str]] = frozenset(),
+) -> list[DaySchedule]:
+    def is_off(name: str, d: DaySchedule) -> bool:
+        return name in d.day_off or name in d.vacation
+
+    def is_working(name: str, d: DaySchedule) -> bool:
+        return name in d.morning or name in d.evening or name in d.night or name in d.workday
+
+    def consec_off_if_freed(name: str, freed_idx: int) -> int:
+        length = 1
+        for i in range(freed_idx - 1, -1, -1):
+            if is_off(name, days[i]):
+                length += 1
+            else:
+                break
+        for i in range(freed_idx + 1, len(days)):
+            if is_off(name, days[i]):
+                length += 1
+            else:
+                break
+        return length
+
+    def consec_work_if_added(name: str, add_idx: int) -> int:
+        length = 1
+        for i in range(add_idx - 1, -1, -1):
+            if is_working(name, days[i]):
+                length += 1
+            else:
+                break
+        for i in range(add_idx + 1, len(days)):
+            if is_working(name, days[i]):
+                length += 1
+            else:
+                break
+        return length
+
+    for emp in employees:
+        if not emp.on_duty:
+            continue
+
+        for _ in range(len(days)):
+            improved_any = False
+            for isolated_idx, day in enumerate(days):
+                if emp.name not in day.day_off:
+                    continue
+                left_ok = isolated_idx == 0 or is_off(emp.name, days[isolated_idx - 1])
+                right_ok = (
+                    isolated_idx == len(days) - 1
+                    or is_off(emp.name, days[isolated_idx + 1])
+                )
+                if left_ok or right_ok:
+                    continue
+
+                improved = False
+                for extend_idx in [isolated_idx - 1, isolated_idx + 1]:
+                    if extend_idx < 0 or extend_idx >= len(days):
+                        continue
+                    free_day = days[extend_idx]
+                    if emp.name not in free_day.workday:
+                        continue
+                    if (free_day.date, emp.name) in pinned_on:
+                        continue
+                    if consec_off_if_freed(emp.name, extend_idx) > MAX_CONSECUTIVE_OFF:
+                        continue
+
+                    for comp_i, comp_day in enumerate(days):
+                        if emp.name not in comp_day.day_off:
+                            continue
+                        if comp_i == isolated_idx:
+                            continue
+                        if (comp_day.date, emp.name) in pinned_on:
+                            continue
+                        if _is_weekend_or_holiday(comp_day.date, holidays):
+                            continue
+                        if emp.is_blocked(comp_day.date):
+                            continue
+                        if emp.is_day_off_weekly(comp_day.date):
+                            continue
+                        if comp_i > 0 and emp.name in days[comp_i - 1].evening:
+                            continue
+                        if consec_work_if_added(emp.name, comp_i) > _max_cw(emp):
+                            continue
+
+                        creates_isolated = False
+                        for nb in [comp_i - 1, comp_i + 1]:
+                            if nb < 0 or nb >= len(days):
+                                continue
+                            if not is_off(emp.name, days[nb]):
+                                continue
+                            nb_left = nb == 0 or is_off(emp.name, days[nb - 1])
+                            nb_right = nb == len(days) - 1 or is_off(emp.name, days[nb + 1])
+                            if nb - 1 == comp_i:
+                                nb_left = False
+                            if nb + 1 == comp_i:
+                                nb_right = False
+                            if not nb_left and not nb_right:
+                                creates_isolated = True
+                                break
+                        if creates_isolated:
+                            continue
+
+                        free_day.workday.remove(emp.name)
+                        free_day.day_off.append(emp.name)
+                        comp_day.day_off.remove(emp.name)
+                        comp_day.workday.append(emp.name)
+                        improved = True
+                        break
+
+                    if improved:
+                        break
+
+                if improved:
+                    improved_any = True
+
+            if not improved_any:
+                break
+
+    return days
+
+
 def _target_adjustment_pass(
     days: list[DaySchedule],
     employees: list[Employee],
@@ -870,6 +1010,7 @@ def generate_schedule(
 
     days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
     days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on)
+    days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on)
 
     duty_employees = [e for e in employees if e.on_duty]
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
