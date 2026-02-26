@@ -28,8 +28,8 @@ jobs:
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
           echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
-          sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get update -q
+          sudo apt-get install -y -q jq
 
       - name: Configure Yandex Cloud CLI
         run: |
@@ -56,6 +56,7 @@ jobs:
           fi
           echo "REGISTRY_ID=$REGISTRY_ID" >> $GITHUB_ENV
           echo "IMAGE=cr.yandex/${REGISTRY_ID}/duty-schedule:latest" >> $GITHUB_ENV
+          echo "Registry ID: $REGISTRY_ID"
 
           # Разрешаем runtime-сервисному аккаунту тянуть образы из этого реестра
           yc container registry add-access-binding \
@@ -77,23 +78,33 @@ jobs:
       - name: Push Docker image
         run: docker push "$IMAGE"
 
-      - name: Deploy serverless container revision
+      - name: Create serverless container (if not exists)
         run: |
           yc serverless container create \
             --name "$CONTAINER_NAME" \
             --description "Duty schedule generator (Streamlit UI)" \
             >/dev/null 2>&1 || true
 
+      - name: Deploy serverless container revision
+        run: |
           yc serverless container revision deploy \
             --container-name "$CONTAINER_NAME" \
             --image "$IMAGE" \
             --cores 1 \
-            --core-fraction 5 \
+            --core-fraction 25 \
             --memory 512M \
-            --concurrency 1 \
+            --concurrency 4 \
             --execution-timeout 300s \
             --service-account-id "$YC_SA_ID" \
-            --environment STREAMLIT_SERVER_PORT=8080,STREAMLIT_SERVER_ADDRESS=0.0.0.0
+            --environment STREAMLIT_SERVER_PORT=8080,STREAMLIT_SERVER_ADDRESS=0.0.0.0,STREAMLIT_SERVER_HEADLESS=true,STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
-          yc serverless container allow-unauthenticated-invoke "$CONTAINER_NAME" || true
+      - name: Allow unauthenticated invocations
+        run: |
+          yc serverless container allow-unauthenticated-invoke \
+            --name "$CONTAINER_NAME" || true
 
+      - name: Print deployment URL
+        run: |
+          URL=$(yc serverless container get --name "$CONTAINER_NAME" --format json | jq -r '.url')
+          echo "Deployed to: $URL"
+          echo "::notice title=Deployment URL::$URL"

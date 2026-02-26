@@ -214,8 +214,12 @@ def _calc_production_days(year: int, month: int, holidays: set[date]) -> int:
     return count
 
 
-def _calc_vacation_days(emp: Employee, year: int, month: int) -> int:
-    """Число рабочих дней отпуска сотрудника в данном месяце."""
+def _calc_blocked_working_days(emp: Employee, year: int, month: int) -> int:
+    """Число рабочих дней (Пн–Пт), когда сотрудник недоступен (отпуск + unavailable_dates).
+
+    Используется для снижения нормы: если сотрудник недоступен в рабочий день,
+    этот день не включается в целевое число рабочих дней (effective_target).
+    """
     _, days_in_month = calendar.monthrange(year, month)
     count = 0
     for d in range(1, days_in_month + 1):
@@ -863,7 +867,7 @@ def generate_schedule(
     # Инициализация состояний с нормами
     states: dict[str, EmployeeState] = {}
     for emp in employees:
-        vac_days = _calc_vacation_days(emp, config.year, config.month)
+        vac_days = _calc_blocked_working_days(emp, config.year, config.month)
         # Фича 3: норма нагрузки пропорционально workload_pct
         target = round(production_days * emp.workload_pct / 100)
         states[emp.name] = EmployeeState(

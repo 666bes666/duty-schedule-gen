@@ -16,7 +16,7 @@ from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.logging import get_logger, setup_logging
-from duty_schedule.models import Config, collect_config_issues
+from duty_schedule.models import City, Config, collect_config_issues
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
 app = typer.Typer(
@@ -150,8 +150,8 @@ def validate(
         console.print(f"  Месяц/год: {config.month:02d}.{config.year}")
         console.print(f"  Сотрудников: {len(config.employees)}")
 
-        moscow_duty = sum(1 for e in config.employees if e.city.value == "moscow" and e.on_duty)
-        khb_duty = sum(1 for e in config.employees if e.city.value == "khabarovsk" and e.on_duty)
+        moscow_duty = sum(1 for e in config.employees if e.city == City.MOSCOW and e.on_duty)
+        khb_duty = sum(1 for e in config.employees if e.city == City.KHABAROVSK and e.on_duty)
         console.print(f"  Дежурных Москва: {moscow_duty}, Хабаровск: {khb_duty}")
         if warnings:
             console.print("[yellow]Есть предупреждения:[/yellow]")
