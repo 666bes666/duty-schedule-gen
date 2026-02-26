@@ -19,7 +19,7 @@ def _random_team(rng: random.Random) -> list[Employee]:
     for i in range(moscow_count):
         employees.append(
             Employee(
-                name=f"Москва {i+1}",
+                name=f"Москва {i + 1}",
                 city=City.MOSCOW,
                 schedule_type=ScheduleType.FLEXIBLE,
             )
@@ -27,7 +27,7 @@ def _random_team(rng: random.Random) -> list[Employee]:
     for i in range(khab_count):
         employees.append(
             Employee(
-                name=f"Хабаровск {i+1}",
+                name=f"Хабаровск {i + 1}",
                 city=City.KHABAROVSK,
                 schedule_type=ScheduleType.FLEXIBLE,
             )
@@ -80,4 +80,3 @@ def test_random_configs_respect_basic_invariants():
             assert len(all_working) == len(set(all_working)), (
                 f"Дублирование назначений на {day.date}: {all_working}"
             )
-

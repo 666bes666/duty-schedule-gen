@@ -134,7 +134,6 @@ class EmployeeStats:
     max_streak_rest: int  # макс. серия выходных подряд
 
 
-
 def _compute_stats(
     schedule: Schedule,
     assignments: dict[str, dict[date, str]],
@@ -160,11 +159,7 @@ def _compute_stats(
         working_keys = {"morning", "evening", "night", "workday"}
 
         # Работал в субботу/воскресенье
-        weekend_work = sum(
-            1
-            for d, v in emp_days.items()
-            if d.weekday() >= 5 and v in working_keys
-        )
+        weekend_work = sum(1 for d, v in emp_days.items() if d.weekday() >= 5 and v in working_keys)
 
         # Работал в официальные праздники (Пн–Пт, не выходные)
         holiday_work = sum(
@@ -370,20 +365,20 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
 
     # ── Заголовки столбцов (строка 3) ────────────────────────────────────────
     headers = [
-        "Сотрудник",        # A  col 1
-        "Город",            # B  col 2
-        "Рабочих\nдней",    # C  col 3
-        "Норма",            # D  col 4
-        "Утро",             # E  col 5
-        "Вечер",            # F  col 6
-        "Ночь",             # G  col 7
-        "День",             # H  col 8
-        "Выходных",         # I  col 9
-        "Отпуск\n(дней)",   # J  col 10
-        "Работал в\nвыходные",   # K  col 11  ← Сб/Вс
+        "Сотрудник",  # A  col 1
+        "Город",  # B  col 2
+        "Рабочих\nдней",  # C  col 3
+        "Норма",  # D  col 4
+        "Утро",  # E  col 5
+        "Вечер",  # F  col 6
+        "Ночь",  # G  col 7
+        "День",  # H  col 8
+        "Выходных",  # I  col 9
+        "Отпуск\n(дней)",  # J  col 10
+        "Работал в\nвыходные",  # K  col 11  ← Сб/Вс
         "Работал в\nпраздники",  # L  col 12  ← официальные, Пн–Пт
-        "Макс. серия\nработы",   # M  col 13
-        "Макс. серия\nотдыха",   # N  col 14
+        "Макс. серия\nработы",  # M  col 13
+        "Макс. серия\nотдыха",  # N  col 14
     ]
     ws.row_dimensions[3].height = 32
     for col_idx, h in enumerate(headers, start=1):

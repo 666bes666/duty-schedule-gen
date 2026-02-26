@@ -99,17 +99,13 @@ class Employee(BaseModel):
                 f"Сотрудник {self.name!r}: нельзя одновременно указать morning_only и evening_only"
             )
         if not 1 <= self.workload_pct <= 100:
-            raise ValueError(
-                f"Сотрудник {self.name!r}: workload_pct должен быть в диапазоне 1–100"
-            )
+            raise ValueError(f"Сотрудник {self.name!r}: workload_pct должен быть в диапазоне 1–100")
         if self.preferred_shift in (ShiftType.VACATION, ShiftType.DAY_OFF):
             raise ValueError(
                 f"Сотрудник {self.name!r}: preferred_shift не может быть vacation или day_off"
             )
         if self.max_consecutive_working is not None and self.max_consecutive_working < 1:
-            raise ValueError(
-                f"Сотрудник {self.name!r}: max_consecutive_working должен быть >= 1"
-            )
+            raise ValueError(f"Сотрудник {self.name!r}: max_consecutive_working должен быть >= 1")
         for d in self.days_off_weekly:
             if not 0 <= d <= 6:
                 raise ValueError(
@@ -144,6 +140,7 @@ class Employee(BaseModel):
 
 class PinnedAssignment(BaseModel):
     """Фиксированное назначение: конкретный сотрудник на конкретный день и смену."""
+
     date: date
     employee_name: str
     shift: ShiftType
@@ -157,6 +154,7 @@ class PinnedAssignment(BaseModel):
 
 class CarryOverState(BaseModel):
     """Перенос состояния сотрудника с конца предыдущего месяца."""
+
     employee_name: str
     last_shift: ShiftType | None = None
     consecutive_working: int = 0
@@ -295,8 +293,7 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
             ShiftType.NIGHT,
         ):
             warnings.append(
-                f"Пин {pin.date.isoformat()}: тимлид «{emp.name}» закреплён "
-                "на дежурную смену."
+                f"Пин {pin.date.isoformat()}: тимлид «{emp.name}» закреплён на дежурную смену."
             )
 
     # Переносимые состояния для отсутствующих сотрудников

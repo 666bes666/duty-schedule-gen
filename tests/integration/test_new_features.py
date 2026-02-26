@@ -213,9 +213,7 @@ class TestDaysOffWeekly:
         for day in schedule.days:
             if day.date.weekday() == 0:  # Понедельник
                 all_shifts = day.morning + day.evening + day.night + day.workday
-                assert "Москва 1" not in all_shifts, (
-                    f"Москва 1 назначена в Пн {day.date}"
-                )
+                assert "Москва 1" not in all_shifts, f"Москва 1 назначена в Пн {day.date}"
 
     def test_schedule_covered_with_weekly_day_off(self):
         """Расписание полностью покрыто при наличии постоянных выходных."""

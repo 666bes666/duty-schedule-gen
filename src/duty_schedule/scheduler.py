@@ -312,8 +312,7 @@ def _build_day(
     evening_eligible = [
         e
         for e in moscow_available
-        if e.can_work_evening()
-        and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+        if e.can_work_evening() and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
     ]
 
     if not _morning_pinned:
@@ -350,8 +349,7 @@ def _build_day(
             evening_pick_pool = [
                 e
                 for e in evening_eligible
-                if e not in morning_pick
-                and (not e.group or e.group not in evening_groups_taken)
+                if e not in morning_pick and (not e.group or e.group not in evening_groups_taken)
             ]
         if not evening_pick_pool:
             raise ScheduleError(
@@ -532,9 +530,12 @@ def _is_working_on_day(emp_name: str, day: DaySchedule) -> bool:
 
 def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bool) -> int:
     """Длина серии вокруг days[idx], если он становится рабочим (working=True) или выходным."""
+
     def active(d: DaySchedule) -> bool:
-        return _is_working_on_day(emp_name, d) if working else (
-            emp_name in d.day_off or emp_name in d.vacation
+        return (
+            _is_working_on_day(emp_name, d)
+            if working
+            else (emp_name in d.day_off or emp_name in d.vacation)
         )
 
     left = 0
@@ -649,7 +650,8 @@ def _balance_weekend_work(
 
     for city in [City.MOSCOW, City.KHABAROVSK]:
         duty_emps = [
-            e for e in employees
+            e
+            for e in employees
             if e.city == city and e.on_duty and e.schedule_type == ScheduleType.FLEXIBLE
         ]
         if len(duty_emps) < 2:
@@ -660,8 +662,7 @@ def _balance_weekend_work(
         for _ in range(len(weekend_days) * len(duty_emps)):  # safety limit
             counts: dict[str, int] = {
                 e.name: sum(
-                    1 for d in weekend_days for attr in duty_attrs
-                    if e.name in getattr(d, attr)
+                    1 for d in weekend_days for attr in duty_attrs if e.name in getattr(d, attr)
                 )
                 for e in duty_emps
             }
@@ -755,9 +756,7 @@ def _balance_duty_shifts(
 
         for _ in range(len(days) * len(duty_emps)):  # safety limit
             counts: dict[str, int] = {
-                e.name: sum(
-                    1 for d in days for attr in duty_attrs if e.name in getattr(d, attr)
-                )
+                e.name: sum(1 for d in days for attr in duty_attrs if e.name in getattr(d, attr))
                 for e in duty_emps
             }
             max_name = max(counts, key=counts.__getitem__)
@@ -825,7 +824,6 @@ def _balance_duty_shifts(
                 break
 
     return days
-
 
 
 def generate_schedule(
@@ -898,7 +896,12 @@ def generate_schedule(
 
         try:
             ds = _build_day(
-                day, employees, states, holidays, rng, remaining_days,
+                day,
+                employees,
+                states,
+                holidays,
+                rng,
+                remaining_days,
                 pins_today=pins_by_date.get(day),
             )
             days.append(ds)
@@ -928,9 +931,7 @@ def generate_schedule(
     # Пересчитываем рабочие дни: _balance_weekend_work меняет duty ↔ day_off,
     # что сдвигает total_working — синхронизируем состояния перед norm-коррекцией.
     for emp in employees:
-        states[emp.name].total_working = sum(
-            1 for d in days if _is_working_on_day(emp.name, d)
-        )
+        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
     days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on)
@@ -968,11 +969,10 @@ def generate_schedule(
     # Финальные состояния для переноса на следующий месяц
     final_carry_over = [
         {
-            "employee_name":      emp.name,
-            "last_shift":         str(states[emp.name].last_shift)
-                                  if states[emp.name].last_shift else None,
+            "employee_name": emp.name,
+            "last_shift": str(states[emp.name].last_shift) if states[emp.name].last_shift else None,
             "consecutive_working": states[emp.name].consecutive_working,
-            "consecutive_off":    states[emp.name].consecutive_off,
+            "consecutive_off": states[emp.name].consecutive_off,
         }
         for emp in employees
     ]

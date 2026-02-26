@@ -125,7 +125,7 @@ class TestEmployee:
             vacations=[VacationPeriod(start=date(2025, 3, 1), end=date(2025, 3, 3))],
             unavailable_dates=[date(2025, 3, 15)],
         )
-        assert emp.is_blocked(date(2025, 3, 2)) is True   # отпуск
+        assert emp.is_blocked(date(2025, 3, 2)) is True  # отпуск
         assert emp.is_blocked(date(2025, 3, 15)) is True  # разовая блокировка
         assert emp.is_blocked(date(2025, 3, 10)) is False
 
