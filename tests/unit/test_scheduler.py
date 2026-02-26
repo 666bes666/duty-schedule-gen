@@ -52,7 +52,6 @@ class TestGenerateSchedule:
         c2 = Config(month=3, year=2025, seed=2, employees=emps)
         s1 = generate_schedule(c1, set())
         s2 = generate_schedule(c2, set())
-        # Хотя бы один день должен отличаться
         differs = any(
             d1.morning != d2.morning or d1.evening != d2.evening
             for d1, d2 in zip(s1.days, s2.days, strict=False)
@@ -71,7 +70,6 @@ class TestGenerateSchedule:
     def test_vacation_employee_not_assigned(self):
         """Сотрудник в отпуске не назначается ни на одну смену."""
         emps = _base_employees()
-        # Даём Москва 1 отпуск на первую неделю
         emps[0] = Employee(
             name="Москва 1",
             city=City.MOSCOW,
@@ -122,7 +120,6 @@ class TestGenerateSchedule:
         config = Config(month=3, year=2025, seed=42, employees=_base_employees())
         schedule = generate_schedule(config, set())
         days = {d.date: d for d in schedule.days}
-        # Считаем, сколько раз хабаровский работал на следующий день после ночи
         work_after_night = 0
         for day in schedule.days:
             next_day_date = day.date + timedelta(days=1)
@@ -135,7 +132,6 @@ class TestGenerateSchedule:
                 )
                 if name in all_working:
                     work_after_night += 1
-        # Ограничение снято — хабаровчане должны работать после ночей
         assert work_after_night > 0, (
             "Хабаровские никогда не работают после ночной смены — ограничение не снято"
         )
@@ -188,7 +184,6 @@ class TestGenerateSchedule:
             assert day.morning, f"Нет утро {day.date}"
             assert day.evening, f"Нет вечер {day.date}"
             assert day.night, f"Нет ночь {day.date}"
-        # Проверяем что хабаровские не в московских сменах
         khb = {"Вика", "Андрей", "Глеб"}
         for day in schedule.days:
             for name in day.morning + day.evening:

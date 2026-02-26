@@ -115,12 +115,11 @@ seed: 42
 
 employees:
   - name: "Иванов Иван Иванович"
-    city: moscow                   # moscow | khabarovsk
-    schedule_type: flexible        # flexible | 5/2
+    city: moscow
+    schedule_type: flexible
     on_duty: true
     morning_only: false
     evening_only: false
-    team_lead: false
     vacations:
       - start: "2025-03-10"
         end: "2025-03-15"
@@ -135,14 +134,12 @@ employees:
 | `on_duty` | Участвует в ротации смен (утро/вечер/ночь) |
 | `morning_only` | Только утренние смены |
 | `evening_only` | Только вечерние смены |
-| `team_lead` | Тимлид — не дежурный (`on_duty` = `false`) |
 | `vacations` | Список периодов отпуска |
 
 ### Ограничения
 
 - Минимум **4 дежурных** в Москве
 - Минимум **2 дежурных** в Хабаровске
-- `team_lead: true` → `on_duty` автоматически `false`
 - `morning_only` и `evening_only` нельзя указывать одновременно
 
 ## Типы смен

@@ -14,7 +14,6 @@ logger = get_logger()
 ISDAYOFF_URL = "https://isdayoff.ru/api/getdata"
 TIMEOUT = 5.0
 
-# Коды: 0=рабочий, 1=выходной/праздник, 2=сокращённый (6-часовой), 4=предпраздничный
 _HOLIDAY_CODE = "1"
 
 

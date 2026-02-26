@@ -55,9 +55,7 @@ class TestParseManualHolidays:
 
 class TestFetchHolidays:
     def test_success(self):
-        # Март 2025: 31 день, ответ API — строка из 31 символа
-        # Помечаем 8-е (0-based индекс 7) как праздник (код "1")
-        mock_data = "0000000100000000000000000000000"  # 8 марта = праздник
+        mock_data = "0000000100000000000000000000000"
         assert len(mock_data) == 31
 
         with patch("httpx.get") as mock_get:
@@ -79,7 +77,7 @@ class TestFetchHolidays:
     def test_wrong_length_raises(self):
         with patch("httpx.get") as mock_get:
             mock_resp = mock_get.return_value
-            mock_resp.text = "0101"  # неверная длина
+            mock_resp.text = "0101"
             mock_resp.raise_for_status = lambda: None
 
             with pytest.raises(CalendarError, match="Неожиданный ответ"):

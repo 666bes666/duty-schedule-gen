@@ -26,7 +26,6 @@ from duty_schedule.models import (
 )
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
-# ── Константы ────────────────────────────────────────────────────────────────
 
 MONTHS_RU = [
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -39,14 +38,12 @@ _RU_TO_CITY  = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
 _STYPE_TO_RU = {"flexible": "Гибкий", "5/2": "5/2"}
 _RU_TO_STYPE = {"Гибкий": "flexible", "5/2": "5/2"}
 
-# Дни недели
 _WEEKDAY_SHORT_TO_INT = {"пн": 0, "вт": 1, "ср": 2, "чт": 3, "пт": 4, "сб": 5, "вс": 6}
 _INT_TO_WEEKDAY_SHORT = {v: k.capitalize() for k, v in _WEEKDAY_SHORT_TO_INT.items()}
 _WEEKDAY_INT_TO_RU    = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
 _WEEKDAY_RU_TO_INT    = {v: k for k, v in _WEEKDAY_INT_TO_RU.items()}
 _WEEKDAY_OPTIONS      = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
-# «Отпуск» и «Недоступен» вынесены в отдельный дейт-пикер (не текстовые поля)
 _EMPTY_ROW = {
     "Имя": "",
     "Город": "Москва",
@@ -86,12 +83,7 @@ _SHIFT_TO_RU = {v: k for k, v in _RU_TO_SHIFT.items()}
 
 _EMPTY_PIN_ROW = {"Дата": None, "Сотрудник": "", "Смена": "Утро"}
 
-# Тип конфига дат сотрудника:
-# {"vacations": [(start, end), ...], "unavailable": [date, ...]}
-_EmployeeDates = dict  # typing alias
-
-
-# ── Session state ─────────────────────────────────────────────────────────────
+_EmployeeDates = dict
 
 
 def _init_state() -> None:
@@ -110,9 +102,7 @@ def _init_state() -> None:
     if "carry_over" not in st.session_state:
         st.session_state["carry_over"] = []
     if "employee_dates" not in st.session_state:
-        # {name: {"vacations": [(date, date), ...], "unavailable": [date, ...]}}
         st.session_state["employee_dates"] = {}
-    # Кешированные копии для sidebar (избегаем dict-from-data_editor)
     if "_df_for_download" not in st.session_state:
         st.session_state["_df_for_download"] = pd.DataFrame(_DEFAULT_ROWS)
     if "_pins_for_download" not in st.session_state:
@@ -123,9 +113,6 @@ def _init_state() -> None:
 
 def _bump_table() -> None:
     st.session_state["table_version"] += 1
-
-
-# ── Вспомогательные функции для дат ──────────────────────────────────────────
 
 
 def _get_emp_dates(name: str) -> _EmployeeDates:
@@ -170,9 +157,6 @@ def _emp_dates_from_yaml(emp: dict) -> _EmployeeDates:
     return {"vacations": vacations, "unavailable": unavailable, "days_off_weekly": days_off_weekly}
 
 
-# ── Сериализация / десериализация ─────────────────────────────────────────────
-
-
 def _df_to_yaml(
     df: pd.DataFrame,
     month: int,
@@ -212,7 +196,7 @@ def _df_to_yaml(
 
         def _parse_limit(val: object) -> int | None:
             try:
-                v = int(val)  # type: ignore[arg-type]
+                v = int(val)
                 return v if v > 0 else None
             except (ValueError, TypeError):
                 return None
@@ -334,10 +318,8 @@ def _yaml_to_df(
     for emp in data.get("employees", []):
         name = emp.get("name", "")
 
-        # Даты — в отдельный словарь
         employee_dates[name] = _emp_dates_from_yaml(emp)
 
-        # Предпочтительная смена
         pref_shift_raw = emp.get("preferred_shift", "") or ""
         pref_shift_ru = _SHIFT_TO_RU.get(
             ShiftType(pref_shift_raw), ""
@@ -384,7 +366,6 @@ def _build_employees(
         city  = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
         stype = ScheduleType.FLEXIBLE if row["График"] == "Гибкий" else ScheduleType.FIVE_TWO
 
-        # Даты из date-picker session state
         cfg = ed.get(name, {"vacations": [], "unavailable": []})
         vacations: list[VacationPeriod] = []
         for s, e in cfg.get("vacations", []):
@@ -408,7 +389,7 @@ def _build_employees(
 
         def _parse_limit(val: object) -> int | None:
             try:
-                v = int(val)  # type: ignore[arg-type]
+                v = int(val)
                 return v if v > 0 else None
             except (ValueError, TypeError):
                 return None
@@ -442,12 +423,9 @@ def _build_employees(
     return employees, errors
 
 
-# ── Конвертация расписания ↔ DataFrame ────────────────────────────────────────
-
-
 def _schedule_to_edit_df(schedule: object) -> pd.DataFrame:
     rows = []
-    for d in schedule.days:  # type: ignore[attr-defined]
+    for d in schedule.days:
         rows.append({
             "Дата":         f"{d.date.day:02d}.{d.date.month:02d} {_WEEKDAY_RU[d.date.weekday()]}",
             "Утро 08–17":   ", ".join(d.morning),
@@ -463,13 +441,13 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: object) -> object:
     from duty_schedule.models import Schedule as ScheduleModel
 
     new_days = []
-    for (_, row), orig_day in zip(  # type: ignore[attr-defined]
-        df.iterrows(), schedule.days, strict=False  # type: ignore[attr-defined]
+    for (_, row), orig_day in zip(
+        df.iterrows(), schedule.days, strict=False
     ):
         _row = row
 
         def _names(col: str, _r: object = _row) -> list[str]:
-            val = str(_r.get(col, "")).strip()  # type: ignore[union-attr]
+            val = str(_r.get(col, "")).strip()
             return [n.strip() for n in val.split(",") if n.strip()] if val else []
 
         all_assigned = set(
@@ -499,14 +477,11 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: object) -> object:
             vacation=vacation,
         ))
 
-    meta = dict(schedule.metadata)  # type: ignore[attr-defined]
+    meta = dict(schedule.metadata)
     meta["total_mornings"] = sum(len(d.morning) for d in new_days)
     meta["total_evenings"] = sum(len(d.evening) for d in new_days)
     meta["total_nights"]   = sum(len(d.night)   for d in new_days)
-    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)  # type: ignore[attr-defined]
-
-
-# ── Валидация конфигурации ─────────────────────────────────────────────────────
+    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)
 
 
 def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
@@ -553,15 +528,13 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
-# ── Календарный вид расписания ─────────────────────────────────────────────────
-
 _CAL_SHIFT_COLORS = {
-    "У": "#FFF3CD",  # утро — янтарный
-    "В": "#CCE5FF",  # вечер — голубой
-    "Н": "#D6CCE5",  # ночь — сиреневый
-    "Р": "#D4EDDA",  # рабочий день — зелёный
-    "–": "#F2F3F4",  # выходной — серый
-    "О": "#F5C6CB",  # отпуск — розовый
+    "У": "#FFF3CD",
+    "В": "#CCE5FF",
+    "Н": "#D6CCE5",
+    "Р": "#D4EDDA",
+    "–": "#F2F3F4",
+    "О": "#F5C6CB",
 }
 
 
@@ -570,7 +543,7 @@ def _schedule_to_calendar_df(schedule: object) -> pd.DataFrame:
     emp_days: dict[str, dict[str, str]] = {}
     col_order: list[str] = []
 
-    for d in schedule.days:  # type: ignore[attr-defined]
+    for d in schedule.days:
         header = f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}"
         if header not in col_order:
             col_order.append(header)
@@ -612,9 +585,6 @@ def _render_calendar(schedule: object) -> None:
     st.dataframe(styled, use_container_width=True, height=height)
 
 
-# ── Дашборд нагрузки ──────────────────────────────────────────────────────────
-
-
 def _compute_employee_stats(schedule: object) -> pd.DataFrame:
     """Количество смен каждого типа по каждому сотруднику."""
     stats: dict[str, dict[str, int]] = {}
@@ -623,7 +593,7 @@ def _compute_employee_stats(schedule: object) -> pd.DataFrame:
         "Рабочий": 0, "Выходных": 0, "Отпуск": 0,
     }
 
-    for d in schedule.days:  # type: ignore[attr-defined]
+    for d in schedule.days:
         for nm in d.morning:
             stats.setdefault(nm, dict(_zero))["Утро"] += 1
         for nm in d.evening:
@@ -658,7 +628,7 @@ def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None
         if str(r["Имя"]).strip()
     }
     prod_days = int(
-        schedule.metadata.get("production_working_days", 0)  # type: ignore[attr-defined]
+        schedule.metadata.get("production_working_days", 0)
     )
 
     display_cols = [
@@ -673,7 +643,7 @@ def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None
 
     def _delta_style(val: object) -> str:
         try:
-            v = int(val)  # type: ignore[arg-type]
+            v = int(val)
         except (ValueError, TypeError):
             return ""
         if v > 1:
@@ -693,14 +663,11 @@ def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None
         st.bar_chart(stats_df[chart_cols], use_container_width=True)
 
 
-# ── Страница ──────────────────────────────────────────────────────────────────
-
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
 _init_state()
 
 st.title("📅 График дежурств")
 
-# ── Панель: загрузка конфига (sidebar) ───────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Конфигурация")
 
@@ -724,7 +691,6 @@ with st.sidebar:
             st.session_state["cfg_year"]        = y
             st.session_state["cfg_seed"]        = s
             st.session_state["employee_dates"]  = emp_dates_loaded
-            # Обновляем кеши для download-кнопки
             st.session_state["_df_for_download"]   = df_loaded
             st.session_state["_pins_for_download"] = pins_loaded
             _bump_table()
@@ -737,9 +703,6 @@ with st.sidebar:
     st.divider()
     st.caption("Сохранить текущую конфигурацию:")
 
-    # Используем _df_for_download — DataFrame, сохранённый после последнего
-    # рендера data_editor. Это избегает AttributeError: session_state[key]
-    # у data_editor хранит dict изменений, а не сам DataFrame.
     _dl_df   = st.session_state["_df_for_download"]
     _dl_pins = st.session_state["_pins_for_download"]
     _cfg_month = st.session_state.get("cfg_month", date.today().month)
@@ -759,7 +722,6 @@ with st.sidebar:
         use_container_width=True,
     )
 
-# ── Выбор периода ─────────────────────────────────────────────────────────────
 col_m, col_y, _ = st.columns([2, 1, 6])
 with col_m:
     month: int = st.selectbox(
@@ -778,7 +740,6 @@ with col_y:
 
 st.divider()
 
-# ── Wizard: разделы настройки ─────────────────────────────────────────────────
 _setup_tab1, _setup_tab2, _setup_tab3 = st.tabs(
     ["1️⃣ Состав", "2️⃣ Ограничения", "3️⃣ Пины"]
 )
@@ -790,7 +751,6 @@ with _setup_tab1:
         "Удалить строку — галочка слева + **Delete**."
     )
 
-    # Опции для «Группа» — кешируются на table_version, чтобы не сбрасывать delta
     _gopt_key = f"_gopt_{st.session_state['table_version']}"
     if _gopt_key not in st.session_state:
         st.session_state[_gopt_key] = [""] + sorted({
@@ -873,7 +833,6 @@ with _setup_tab1:
     )
     st.session_state["_df_for_download"] = edited_df
 
-    # ── Пресеты (Feature 4) ───────────────────────────────────────────────────
     st.caption("Быстро добавить сотрудника с типовыми настройками:")
     _pr1, _pr2, _pr3 = st.columns(3)
     if _pr1.button("＋ Москва, дежурный", use_container_width=True, key="preset_msk"):
@@ -899,7 +858,6 @@ with _setup_tab1:
         st.rerun()
 
 with _setup_tab2:
-    # ── 👤 Карточка сотрудника ────────────────────────────────────────────────
     _emp_names = [
         str(r["Имя"]).strip()
         for _, r in edited_df.iterrows()
@@ -912,7 +870,6 @@ with _setup_tab2:
         _sel = st.selectbox("Сотрудник", _emp_names, key="date_emp_selector")
         _cfg = _get_emp_dates(_sel)
 
-        # Сводка параметров
         _emp_row = edited_df[edited_df["Имя"].astype(str).str.strip() == _sel]
         if not _emp_row.empty:
             _er = _emp_row.iloc[0]
@@ -937,7 +894,6 @@ with _setup_tab2:
 
         st.divider()
 
-        # ── Периоды отпуска ───────────────────────────────────────────────
         st.markdown("**Отпуска**")
         _vac_del: list[int] = []
         for _i, (_vs, _ve) in enumerate(_cfg["vacations"]):
@@ -970,7 +926,6 @@ with _setup_tab2:
 
         st.divider()
 
-        # ── Недоступные дни ──────────────────────────────────────────────
         st.markdown("**Недоступные дни** (не отпуск — разовые блокировки)")
         _unavail_del: list[int] = []
         for _i, _ud in enumerate(_cfg["unavailable"]):
@@ -995,7 +950,6 @@ with _setup_tab2:
 
         st.divider()
 
-        # ── Постоянные выходные дни недели ────────────────────────────────
         st.markdown("**Постоянные выходные дни недели**")
         st.caption("Сотрудник не будет назначаться в эти дни недели каждую неделю.")
         _current_days_off = _cfg.get("days_off_weekly", [])
@@ -1062,14 +1016,12 @@ with _setup_tab3:
 
 st.divider()
 
-# ── Предварительная валидация ─────────────────────────────────────────────────
 _val_errors, _val_warnings = _validate_config(edited_df)
 for _verr in _val_errors:
     st.error(f"⛔ {_verr}")
 for _vwarn in _val_warnings:
     st.warning(f"⚠️ {_vwarn}")
 
-# ── Кнопка генерации ──────────────────────────────────────────────────────────
 if st.button("⚡ Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(
         edited_df, employee_dates=st.session_state["employee_dates"]
@@ -1129,7 +1081,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         st.error(f"Ошибка конфигурации: {e}")
         st.stop()
 
-    # Единая бизнес-валидация конфигурации (та же, что и в CLI)
     cfg_errors, cfg_warnings = collect_config_issues(config)
     if cfg_errors:
         for msg in cfg_errors:
@@ -1165,7 +1116,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         carry_over=final_carry_over,
     )
 
-    # ── Сохранить результат (Feature 5: не пропадает при изменениях) ──────────
     st.session_state["last_result"] = {
         "schedule":    schedule,
         "schedule_df": _schedule_to_edit_df(schedule),
@@ -1180,7 +1130,6 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         "emp_df_snap": edited_df.copy(),
     }
 
-# ── Результаты: остаются при любых изменениях конфига (Feature 5) ─────────────
 if st.session_state.get("last_result"):
     _res      = st.session_state["last_result"]
     _schedule = _res["schedule"]
@@ -1208,7 +1157,6 @@ if st.session_state.get("last_result"):
     with _tab_dash:
         _render_load_dashboard(_schedule, _res["emp_df_snap"])
 
-    # edited_schedule_df инициализируем базовым значением — переопределится editor'ом
     edited_schedule_df: pd.DataFrame = _res["schedule_df"]
     with _tab_edit:
         st.caption(
@@ -1233,7 +1181,6 @@ if st.session_state.get("last_result"):
 
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 
-    # Кешируем XLS — перегенерируем только при изменении таблицы редактора
     _xls_hash = pd.util.hash_pandas_object(edited_schedule_df).sum()
     if st.session_state.get("_xls_hash") != _xls_hash:
         with tempfile.TemporaryDirectory() as tmpdir:

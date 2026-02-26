@@ -59,7 +59,6 @@ def generate(
 
     console.print(f"[bold cyan]Duty Schedule Generator v{__version__}[/bold cyan]")
 
-    # Загрузка конфигурации
     with console.status("Загрузка конфигурации..."):
         config = _load_config(config_file)
 
@@ -68,7 +67,6 @@ def generate(
         f"{len(config.employees)} сотрудников"
     )
 
-    # Дополнительная бизнес-валидация (единая с веб-интерфейсом)
     errors, warnings = collect_config_issues(config)
     if errors:
         console.print("[bold red]✗ Ошибки конфигурации:[/bold red]")
@@ -84,13 +82,11 @@ def generate(
         for msg in warnings:
             console.print(f"  • {msg}")
 
-    # Загрузка производственного календаря
     with console.status("Загрузка производственного календаря..."):
         holiday_set = _load_holidays(config, holidays)
 
     console.print(f"✓ Праздников в месяце: [bold]{len(holiday_set)}[/bold]")
 
-    # Генерация расписания
     with console.status("Генерация расписания..."):
         try:
             schedule = generate_schedule(config, holiday_set)
@@ -100,7 +96,6 @@ def generate(
 
     console.print(f"✓ Расписание сгенерировано: [bold]{len(schedule.days)} дней[/bold]")
 
-    # Экспорт
     exported: list[str] = []
     fmt_lower = fmt.lower()
 
@@ -123,7 +118,6 @@ def generate(
             "Используйте: xls, ics, all[/yellow]"
         )
 
-    # Итоговая статистика
     _print_summary(schedule)
 
 
@@ -188,7 +182,6 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> set:
                 console.print(f"[bold red]✗ Ошибка разбора праздников:[/bold red] {parse_exc}")
                 raise typer.Exit(1) from parse_exc
 
-        # Добавляем выходные по умолчанию (суббота/воскресенье)
         import calendar as _calendar
 
         _, days = _calendar.monthrange(config.year, config.month)
@@ -204,7 +197,7 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> set:
         return weekends
 
 
-def _print_summary(schedule) -> None:  # noqa: ANN001
+def _print_summary(schedule) -> None:
     """Вывести итоговую статистику."""
     table = Table(title="Итог генерации", show_header=True, header_style="bold cyan")
     table.add_column("Показатель", style="dim")

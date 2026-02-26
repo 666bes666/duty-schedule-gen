@@ -35,7 +35,6 @@ class TestMinimalKhabarovsk:
     def test_exactly_two_khabarovsk(self):
         config = Config(month=3, year=2025, seed=42, employees=_base_team())
         schedule = generate_schedule(config, set())
-        # Ночные смены должны быть у обоих хабаровчан
         khb_names = {"Хабаровск 1", "Хабаровск 2"}
         night_workers = set()
         for day in schedule.days:
@@ -235,7 +234,6 @@ class TestUnavailableDates:
     def test_unavailable_employee_not_assigned_on_blocked_day(self):
         """Сотрудник с unavailable_dates не должен быть в сменах в эти дни."""
         team = _base_team()
-        # Блокируем первого московского дежурного на 5-е число
         team[0] = _emp("Москва 1", unavailable_dates=[date(2025, 3, 5)])
         config = Config(month=3, year=2025, seed=42, employees=team)
         schedule = generate_schedule(config, set())
@@ -296,12 +294,10 @@ class TestCarryOver:
     def test_carry_over_affects_first_day(self):
         """Перенос состояния «вечер» блокирует утреннюю смену 1-го числа для этого сотрудника."""
         team = _base_team()
-        # Симулируем: «Москва 1» закончил предыдущий месяц вечерней сменой
         co = [CarryOverState(employee_name="Москва 1", last_shift=ShiftType.EVENING)]
         config = Config(month=3, year=2025, seed=42, employees=team, carry_over=co)
         schedule = generate_schedule(config, set())
         day_1 = schedule.days[0]
-        # Москва 1 не должен стоять на утренней смене 1-го числа (resting after evening)
         assert "Москва 1" not in day_1.morning
 
     def test_full_schedule_still_covered_with_carry_over(self):

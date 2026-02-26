@@ -64,17 +64,13 @@ def minimal_employees(moscow_employees, khabarovsk_employees) -> list[Employee]:
 def full_employees() -> list[Employee]:
     """Полная команда с разными атрибутами."""
     return [
-        # Москва — дежурные
         _emp("Иванов Иван", City.MOSCOW),
         _emp("Петров Пётр", City.MOSCOW),
         _emp("Сидоров Сидор", City.MOSCOW),
         _emp("Козлов Коля", City.MOSCOW, morning_only=True),
         _emp("Морозов Михаил", City.MOSCOW, evening_only=True),
-        # Москва — не дежурный (5/2)
         _emp("Новиков Николай", City.MOSCOW, schedule_type=ScheduleType.FIVE_TWO, on_duty=False),
-        # Москва — 5/2 (не дежурный)
         _emp("Волков Владимир", City.MOSCOW, schedule_type=ScheduleType.FIVE_TWO, on_duty=False),
-        # Хабаровск — дежурные
         _emp("Дальнев Дмитрий", City.KHABAROVSK),
         _emp("Востоков Виктор", City.KHABAROVSK),
     ]
@@ -104,8 +100,8 @@ def full_config(full_employees) -> Config:
 def sample_holidays() -> set[date]:
     """Праздники для марта 2025."""
     return {
-        date(2025, 3, 8),  # 8 Марта
-        date(2025, 3, 10),  # выходной
+        date(2025, 3, 8),
+        date(2025, 3, 10),
     }
 
 

@@ -102,9 +102,8 @@ class TestXlsExport:
         path = export_xls(schedule, tmp_path)
         wb = load_workbook(path)
         ws = wb.active
-        # Новый формат: строки = сотрудники, столбцы = даты
-        assert ws.max_column >= 32  # заголовок + 31 день
-        assert ws.max_row >= 7  # заголовок + минимум 6 сотрудников
+        assert ws.max_column >= 32
+        assert ws.max_row >= 7
 
 
 class TestIcsExport:
@@ -128,7 +127,6 @@ class TestIcsExport:
         paths = export_ics(schedule, tmp_path)
         for path in paths:
             cal = Calendar.from_ical(path.read_bytes())
-            # Должен содержать хотя бы один компонент
             assert cal is not None
 
     def test_morning_ics_has_events(self, tmp_path):

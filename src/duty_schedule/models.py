@@ -28,7 +28,6 @@ class City(StrEnum):
     KHABAROVSK = "khabarovsk"
 
 
-# Shift time bounds (MSK)
 SHIFT_START = {
     ShiftType.MORNING: (8, 0),
     ShiftType.EVENING: (15, 0),
@@ -37,7 +36,7 @@ SHIFT_START = {
 }
 SHIFT_END = {
     ShiftType.MORNING: (17, 0),
-    ShiftType.EVENING: (0, 0),  # next day
+    ShiftType.EVENING: (0, 0),
     ShiftType.NIGHT: (8, 0),
     ShiftType.WORKDAY: (18, 0),
 }
@@ -72,19 +71,13 @@ class Employee(BaseModel):
     evening_only: bool = False
     vacations: list[VacationPeriod] = []
     unavailable_dates: list[date] = []
-    # Фича 1: лимиты типов смен в месяц (None = без ограничений)
     max_morning_shifts: int | None = None
     max_evening_shifts: int | None = None
     max_night_shifts: int | None = None
-    # Фича 2: предпочтительная смена (мягкий приоритет при выборе)
     preferred_shift: ShiftType | None = None
-    # Фича 3: норма нагрузки в % (100 = полная ставка, 50 = 0.5 ставки)
     workload_pct: int = 100
-    # Фича 4: постоянные выходные дни недели (0=Пн … 6=Вс)
     days_off_weekly: list[int] = []
-    # Фича 5: индивидуальный лимит рабочих дней подряд (None = глобальный дефолт 5)
     max_consecutive_working: int | None = None
-    # Фича 6: группа — не ставить двух из одной группы на одну смену в один день
     group: str | None = None
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
@@ -220,11 +213,9 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
 
-    # Базовые проверки поверх pydantic-валидации
     if not config.employees:
         errors.append("Конфигурация не содержит ни одного сотрудника.")
 
-    # Уникальность имён сотрудников
     from collections import Counter
 
     name_counts = Counter(emp.name for emp in config.employees)
@@ -237,7 +228,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
 
     employees_by_name = {emp.name: emp for emp in config.employees}
 
-    # Валидация пинов (фиксированных назначений)
     pinned_seen: set[tuple[date, str]] = set()
     for pin in config.pins:
         emp = employees_by_name.get(pin.employee_name)
@@ -256,7 +246,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
             )
         pinned_seen.add(key)
 
-        # Городские ограничения для типов смен
         if emp.city == City.MOSCOW and pin.shift == ShiftType.NIGHT:
             errors.append(
                 f"Пин {pin.date.isoformat()}: сотрудник «{emp.name}» из Москвы "
@@ -271,7 +260,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
                 "не может быть назначен на утреннюю или вечернюю смену (MSK)."
             )
 
-        # Информационные предупреждения о нетипичных комбинациях
         if not emp.on_duty and pin.shift in (
             ShiftType.MORNING,
             ShiftType.EVENING,
@@ -282,7 +270,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
                 "(on_duty=False), но закреплён на дежурную смену."
             )
 
-    # Переносимые состояния для отсутствующих сотрудников
     for carry in config.carry_over:
         if carry.employee_name not in employees_by_name:
             warnings.append(

@@ -24,13 +24,13 @@ def _emp(name: str, city: City = City.MOSCOW, on_duty: bool = True) -> Employee:
 
 class TestIsWeekendOrHoliday:
     def test_saturday(self):
-        assert _is_weekend_or_holiday(date(2025, 3, 1), set()) is True  # суббота
+        assert _is_weekend_or_holiday(date(2025, 3, 1), set()) is True
 
     def test_sunday(self):
-        assert _is_weekend_or_holiday(date(2025, 3, 2), set()) is True  # воскресенье
+        assert _is_weekend_or_holiday(date(2025, 3, 2), set()) is True
 
     def test_weekday(self):
-        assert _is_weekend_or_holiday(date(2025, 3, 3), set()) is False  # понедельник
+        assert _is_weekend_or_holiday(date(2025, 3, 3), set()) is False
 
     def test_holiday_weekday(self):
         holiday = date(2025, 3, 8)
@@ -78,7 +78,7 @@ class TestCanWork:
             schedule_type=ScheduleType.FIVE_TWO,
         )
         state = EmployeeState()
-        saturday = date(2025, 3, 1)  # суббота
+        saturday = date(2025, 3, 1)
         assert _can_work(emp, state, saturday, set()) is False
 
     def test_flexible_weekend_can_work(self):
@@ -138,7 +138,7 @@ class TestBuildDay:
 
         employees, states = self._make_team()
         rng = _random.Random(42)
-        day = date(2025, 3, 3)  # понедельник
+        day = date(2025, 3, 3)
         ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
         assert ds.morning, "Утренняя смена не покрыта"
         assert ds.evening, "Вечерняя смена не покрыта"
@@ -191,7 +191,6 @@ class TestBuildDay:
         day = date(2025, 3, 3)
         ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
         khb_names = {"Хабаровск 1", "Хабаровск 2"}
-        # Один на ночи, второй — либо workday либо day_off
         night_set = set(ds.night)
         workday_set = set(ds.workday)
         day_off_set = set(ds.day_off)

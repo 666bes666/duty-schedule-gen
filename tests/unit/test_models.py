@@ -105,7 +105,7 @@ class TestEmployee:
         assert emp.is_blocked(date(2025, 3, 5)) is True
         assert emp.is_blocked(date(2025, 3, 10)) is True
         assert emp.is_blocked(date(2025, 3, 6)) is False
-        assert emp.is_on_vacation(date(2025, 3, 5)) is False  # не отпуск — только блокировка
+        assert emp.is_on_vacation(date(2025, 3, 5)) is False
 
     def test_is_blocked_includes_vacation(self):
         emp = Employee(
@@ -115,8 +115,8 @@ class TestEmployee:
             vacations=[VacationPeriod(start=date(2025, 3, 1), end=date(2025, 3, 3))],
             unavailable_dates=[date(2025, 3, 15)],
         )
-        assert emp.is_blocked(date(2025, 3, 2)) is True  # отпуск
-        assert emp.is_blocked(date(2025, 3, 15)) is True  # разовая блокировка
+        assert emp.is_blocked(date(2025, 3, 2)) is True
+        assert emp.is_blocked(date(2025, 3, 15)) is True
         assert emp.is_blocked(date(2025, 3, 10)) is False
 
 
@@ -162,7 +162,6 @@ class TestConfig:
             Config(month=3, year=2023, employees=self._make_employees(4, 2))
 
     def test_non_duty_not_counted_as_duty(self):
-        # Не-дежурный не влияет на минимальный состав дежурных
         emps = self._make_employees(4, 2)
         emps.append(
             Employee(

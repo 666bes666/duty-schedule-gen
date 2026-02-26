@@ -24,9 +24,6 @@ def _base_team() -> list[Employee]:
     ]
 
 
-# ── Фича 1: Лимиты смен ───────────────────────────────────────────────────────
-
-
 class TestShiftLimits:
     """Лимиты смен по типу не превышаются."""
 
@@ -103,9 +100,6 @@ class TestShiftLimits:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
-# ── Фича 2: Предпочтительная смена ───────────────────────────────────────────
-
-
 class TestPreferredShift:
     """preferred_shift задаёт мягкий приоритет при выборе смены."""
 
@@ -121,7 +115,6 @@ class TestPreferredShift:
         ]
         config = Config(month=3, year=2025, seed=42, employees=emps_pref)
         schedule = generate_schedule(config, set())
-        # Просто проверяем, что расписание строится и preferred_shift принимается
         assert len(schedule.days) == 31
 
     def test_preferred_morning_model_valid(self):
@@ -138,9 +131,6 @@ class TestPreferredShift:
         """preferred_shift=DAY_OFF вызывает ValidationError."""
         with pytest.raises(Exception, match="preferred_shift"):
             _emp("Тест", preferred_shift=ShiftType.DAY_OFF)
-
-
-# ── Фича 3: Норма нагрузки ────────────────────────────────────────────────────
 
 
 class TestWorkloadPct:
@@ -161,7 +151,6 @@ class TestWorkloadPct:
         report = schedule.metadata.get("working_days_per_employee", {})
         wd_m1 = report.get("Москва 1", 0)
         wd_m2 = report.get("Москва 2", 0)
-        # 50% загрузка → значительно меньше рабочих дней
         assert wd_m1 < wd_m2, f"Москва 1 ({wd_m1}) должна работать меньше Москвы 2 ({wd_m2})"
 
     def test_workload_100pct_default(self):
@@ -192,9 +181,6 @@ class TestWorkloadPct:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
-# ── Фича 4: Постоянные выходные дни недели ────────────────────────────────────
-
-
 class TestDaysOffWeekly:
     """Сотрудник не работает в указанные дни недели."""
 
@@ -211,14 +197,14 @@ class TestDaysOffWeekly:
         config = Config(month=3, year=2025, seed=42, employees=emps)
         schedule = generate_schedule(config, set())
         for day in schedule.days:
-            if day.date.weekday() == 0:  # Понедельник
+            if day.date.weekday() == 0:
                 all_shifts = day.morning + day.evening + day.night + day.workday
                 assert "Москва 1" not in all_shifts, f"Москва 1 назначена в Пн {day.date}"
 
     def test_schedule_covered_with_weekly_day_off(self):
         """Расписание полностью покрыто при наличии постоянных выходных."""
         emps = [
-            _emp("Москва 1", days_off_weekly=[5, 6]),  # нет в выходные
+            _emp("Москва 1", days_off_weekly=[5, 6]),
             _emp("Москва 2"),
             _emp("Москва 3"),
             _emp("Москва 4"),
@@ -234,9 +220,6 @@ class TestDaysOffWeekly:
         """days_off_weekly с числом вне 0–6 вызывает ValidationError."""
         with pytest.raises(Exception, match="days_off_weekly"):
             _emp("Тест", days_off_weekly=[7])
-
-
-# ── Фича 5: Индивидуальный лимит серии ───────────────────────────────────────
 
 
 class TestMaxConsecutiveWorking:
@@ -289,9 +272,6 @@ class TestMaxConsecutiveWorking:
         schedule = generate_schedule(config, set())
         for day in schedule.days:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
-
-
-# ── Фича 6: Группы ────────────────────────────────────────────────────────────
 
 
 class TestGroupConstraint:

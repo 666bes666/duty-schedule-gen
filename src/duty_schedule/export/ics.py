@@ -18,16 +18,13 @@ from duty_schedule.models import (
     ShiftType,
 )
 
-# Смены для экспорта в ICS (не включаем DAY_OFF / VACATION)
 ICS_SHIFTS = [ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT, ShiftType.WORKDAY]
 
-# Часовые пояса по городу
 CITY_TZ = {
     City.MOSCOW: "Europe/Moscow",
-    City.KHABAROVSK: "Asia/Vladivostok",  # Хабаровск UTC+10
+    City.KHABAROVSK: "Asia/Vladivostok",
 }
 
-# Рабочий день Хабаровска по местному времени
 KHABAROVSK_WORKDAY_START = (9, 0)
 KHABAROVSK_WORKDAY_END = (18, 0)
 
@@ -42,7 +39,6 @@ def _shift_times(shift: ShiftType, day: date, tz: ZoneInfo) -> tuple[datetime, d
     dt_start = _make_datetime(day, sh, sm, tz)
 
     if shift == ShiftType.EVENING:
-        # Вечер заканчивается в 00:00 следующего дня
         dt_end = _make_datetime(day + timedelta(days=1), eh, em, tz)
     else:
         dt_end = _make_datetime(day, eh, em, tz)
@@ -85,7 +81,6 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
     year = schedule.config.year
     month = schedule.config.month
 
-    # Индекс: имя → город
     employee_city = {emp.name: emp.city for emp in schedule.config.employees}
 
     calendars: dict[ShiftType, Calendar] = {s: _make_calendar(s) for s in ICS_SHIFTS}
@@ -97,7 +92,6 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
                 continue
 
             for name in names:
-                # Хабаровские сотрудники в workday — местное время
                 if shift == ShiftType.WORKDAY and employee_city.get(name) == City.KHABAROVSK:
                     sh, sm = KHABAROVSK_WORKDAY_START
                     eh, em = KHABAROVSK_WORKDAY_END

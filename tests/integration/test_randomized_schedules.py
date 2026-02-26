@@ -10,9 +10,7 @@ from duty_schedule.scheduler import generate_schedule
 
 def _random_team(rng: random.Random) -> list[Employee]:
     """Сгенерировать случайную команду с соблюдением минимальных требований."""
-    # Москва: 4–7 дежурных
     moscow_count = rng.randint(4, 7)
-    # Хабаровск: 2–4 дежурных
     khab_count = rng.randint(2, 4)
 
     employees: list[Employee] = []
@@ -62,20 +60,16 @@ def test_random_configs_respect_basic_invariants():
         khab_names = {e.name for e in employees if e.city == City.KHABAROVSK}
 
         for day in schedule.days:
-            # Полное покрытие смен
             assert day.morning, f"Нет утренней смены {day.date}"
             assert day.evening, f"Нет вечерней смены {day.date}"
             assert day.night, f"Нет ночной смены {day.date}"
 
-            # Ночная смена — только хабаровск
             for name in day.night:
                 assert name in khab_names, f"Ночная смена у {name} на {day.date}"
 
-            # Утро/вечер — только москва
             for name in day.morning + day.evening:
                 assert name in moscow_names, f"Хабаровский {name} в MSK смене на {day.date}"
 
-            # Не более одной смены (утро/вечер/ночь/рабочий день) на человека в день
             all_working = day.morning + day.evening + day.night + day.workday
             assert len(all_working) == len(set(all_working)), (
                 f"Дублирование назначений на {day.date}: {all_working}"
