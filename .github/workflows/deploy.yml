@@ -45,7 +45,7 @@ jobs:
           if ! yc container registry get "$REGISTRY_NAME" >/dev/null 2>&1; then
             yc container registry create --name "$REGISTRY_NAME"
           fi
-          REGISTRY_ID=$(yc container registry get "$REGISTRY_NAME" --format json | jq -r '.id')
+          REGISTRY_ID=$(yc container registry get "$REGISTRY_NAME" | awk '/^id: / {print $2}')
           echo "REGISTRY_ID=$REGISTRY_ID" >> $GITHUB_ENV
           echo "IMAGE=cr.yandex/${REGISTRY_ID}/duty-schedule:latest" >> $GITHUB_ENV
 
