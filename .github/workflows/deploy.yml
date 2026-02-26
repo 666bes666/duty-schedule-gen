@@ -24,10 +24,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Install Yandex Cloud CLI
+      - name: Install Yandex Cloud CLI and jq
         run: |
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
           echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+          sudo apt-get update
+          sudo apt-get install -y jq
 
       - name: Configure Yandex Cloud CLI
         run: |
