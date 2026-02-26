@@ -67,6 +67,7 @@ class Employee(BaseModel):
     city: City
     schedule_type: ScheduleType
     on_duty: bool = True
+    always_on_duty: bool = False
     morning_only: bool = False
     evening_only: bool = False
     vacations: list[VacationPeriod] = []
@@ -85,6 +86,17 @@ class Employee(BaseModel):
         if self.morning_only and self.evening_only:
             raise ValueError(
                 f"Сотрудник {self.name!r}: нельзя одновременно указать morning_only и evening_only"
+            )
+        if self.always_on_duty and not self.on_duty:
+            raise ValueError(f"Сотрудник {self.name!r}: always_on_duty требует on_duty=True")
+        if self.always_on_duty and self.city != City.MOSCOW:
+            raise ValueError(
+                f"Сотрудник {self.name!r}: always_on_duty поддерживается только для Москвы"
+            )
+        if self.always_on_duty and not self.morning_only and not self.evening_only:
+            raise ValueError(
+                f"Сотрудник {self.name!r}: always_on_duty требует"
+                " указания morning_only или evening_only"
             )
         if not 1 <= self.workload_pct <= 100:
             raise ValueError(f"Сотрудник {self.name!r}: workload_pct должен быть в диапазоне 1–100")

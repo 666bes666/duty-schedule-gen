@@ -49,6 +49,7 @@ _EMPTY_ROW = {
     "Город": "Москва",
     "График": "Гибкий",
     "Дежурный": True,
+    "Всегда на деж.": False,
     "Только утро": False,
     "Только вечер": False,
     "Предпочт. смена": "",
@@ -61,17 +62,17 @@ _EMPTY_ROW = {
 }
 
 _DEFAULT_ROWS = [
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Москва"},
-    {**_EMPTY_ROW, "Город": "Хабаровск"},
-    {**_EMPTY_ROW, "Город": "Хабаровск"},
-    {**_EMPTY_ROW, "Город": "Хабаровск"},
-    {**_EMPTY_ROW, "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Имя": "Левченко",    "График": "5/2",                          "Дежурный": False},
+    {**_EMPTY_ROW, "Имя": "Хадзугов",    "График": "5/2",                          "Дежурный": False},
+    {**_EMPTY_ROW, "Имя": "Абашина",                       "Предпочт. смена": "Утро"},
+    {**_EMPTY_ROW, "Имя": "Екат",         "График": "5/2", "Только утро": True},
+    {**_EMPTY_ROW, "Имя": "Ищенко"},
+    {**_EMPTY_ROW, "Имя": "Пантелеймон"},
+    {**_EMPTY_ROW, "Имя": "Ужахов"},
+    {**_EMPTY_ROW, "Имя": "Кочкин",      "Город": "Хабаровск", "График": "5/2",   "Дежурный": False},
+    {**_EMPTY_ROW, "Имя": "Вика",         "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Имя": "Голубев",     "Город": "Хабаровск"},
+    {**_EMPTY_ROW, "Имя": "Карпенко",    "Город": "Хабаровск"},
 ]
 
 _TABLE_KEY_PREFIX = "employees_table"
@@ -217,6 +218,7 @@ def _df_to_yaml(
             "city":          _RU_TO_CITY.get(str(row["Город"]), "moscow"),
             "schedule_type": _RU_TO_STYPE.get(str(row["График"]), "flexible"),
             "on_duty":       bool(row["Дежурный"]),
+            "always_on_duty": bool(row.get("Всегда на деж.", False)),
             "morning_only":  bool(row["Только утро"]),
             "evening_only":  bool(row["Только вечер"]),
         }
@@ -335,6 +337,7 @@ def _yaml_to_df(
             "Город":           _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
             "График":          _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
             "Дежурный":        bool(emp.get("on_duty", True)),
+            "Всегда на деж.":  bool(emp.get("always_on_duty", False)),
             "Только утро":     bool(emp.get("morning_only", False)),
             "Только вечер":    bool(emp.get("evening_only", False)),
             "Предпочт. смена": pref_shift_ru,
@@ -409,6 +412,7 @@ def _build_employees(
             employees.append(Employee(
                 name=name, city=city, schedule_type=stype,
                 on_duty=bool(row["Дежурный"]),
+                always_on_duty=bool(row.get("Всегда на деж.", False)),
                 morning_only=bool(row["Только утро"]),
                 evening_only=bool(row["Только вечер"]),
                 vacations=vacations,
@@ -529,6 +533,15 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
             errors.append(
                 f"«{name}»: нельзя одновременно «Только утро» и «Только вечер»."
             )
+        if bool(r.get("Всегда на деж.", False)):
+            if not bool(r.get("Дежурный", True)):
+                errors.append(f"«{name}»: «Всегда на деж.» требует включённого «Деж.».")
+            if str(r.get("Город", "")) != "Москва":
+                errors.append(f"«{name}»: «Всегда на деж.» поддерживается только для Москвы.")
+            if not bool(r.get("Только утро")) and not bool(r.get("Только вечер")):
+                errors.append(
+                    f"«{name}»: «Всегда на деж.» требует указания «Утро▲» или «Вечер▲»."
+                )
 
     return errors, warnings
 
@@ -788,9 +801,13 @@ with _setup_tab1:
         st.rerun()
 
     _table_key = f"{_TABLE_KEY_PREFIX}_{st.session_state['table_version']}"
-    edited_df: pd.DataFrame = st.data_editor(
-        st.session_state["employees_df"],
+    _base_df = st.session_state["employees_df"]
+    _display_df = _base_df.copy()
+    _display_df.insert(0, "№", range(1, len(_display_df) + 1))
+    _edited_raw: pd.DataFrame = st.data_editor(
+        _display_df,
         column_config={
+            "№":               st.column_config.NumberColumn("№"),
             "Имя":             st.column_config.TextColumn("Имя"),
             "Город":           st.column_config.SelectboxColumn(
                                    "Город", options=["Москва", "Хабаровск"],
@@ -801,6 +818,11 @@ with _setup_tab1:
             "Дежурный":        st.column_config.CheckboxColumn(
                                    "Деж.",
                                    help="Участвует в назначении дежурных смен",
+                               ),
+            "Всегда на деж.":  st.column_config.CheckboxColumn(
+                                   "Всегда",
+                                   help="Назначается на дежурство каждый доступный рабочий день. "
+                                        "Требует: Деж.=✓, Город=Москва, указан тип смены (Утро▲ или Вечер▲).",
                                ),
             "Только утро":     st.column_config.CheckboxColumn(
                                    "Утро▲",
@@ -847,17 +869,19 @@ with _setup_tab1:
                                ),
         },
         column_order=[
-            "Имя", "Город", "График",
-            "Дежурный", "Только утро", "Только вечер",
+            "№", "Имя", "Город", "График",
+            "Дежурный", "Всегда на деж.", "Только утро", "Только вечер",
             "Предпочт. смена", "Загрузка%",
             "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
             "Группа",
         ],
+        disabled=["№"],
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
         key=_table_key,
     )
+    edited_df = _edited_raw.drop(columns=["№"], errors="ignore").reset_index(drop=True)
     st.session_state["_df_for_download"] = edited_df
 
     st.caption("Быстро добавить сотрудника с типовыми настройками:")
@@ -908,6 +932,8 @@ with _setup_tab2:
             _flags: list[str] = []
             if _er.get("Дежурный"):
                 _flags.append("Дежурный")
+            if _er.get("Всегда на деж.", False):
+                _flags.append("Всегда на деж.")
             if _er.get("Только утро"):
                 _flags.append("Только утро")
             if _er.get("Только вечер"):
