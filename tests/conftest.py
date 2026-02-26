@@ -21,7 +21,6 @@ def _emp(
     on_duty: bool = True,
     morning_only: bool = False,
     evening_only: bool = False,
-    team_lead: bool = False,
     vacations: list | None = None,
 ) -> Employee:
     return Employee(
@@ -31,7 +30,6 @@ def _emp(
         on_duty=on_duty,
         morning_only=morning_only,
         evening_only=evening_only,
-        team_lead=team_lead,
         vacations=vacations or [],
     )
 
@@ -72,8 +70,8 @@ def full_employees() -> list[Employee]:
         _emp("Сидоров Сидор", City.MOSCOW),
         _emp("Козлов Коля", City.MOSCOW, morning_only=True),
         _emp("Морозов Михаил", City.MOSCOW, evening_only=True),
-        # Москва — тимлид (не дежурный)
-        _emp("Новиков Николай", City.MOSCOW, team_lead=True, on_duty=False),
+        # Москва — не дежурный (5/2)
+        _emp("Новиков Николай", City.MOSCOW, schedule_type=ScheduleType.FIVE_TWO, on_duty=False),
         # Москва — 5/2 (не дежурный)
         _emp("Волков Владимир", City.MOSCOW, schedule_type=ScheduleType.FIVE_TWO, on_duty=False),
         # Хабаровск — дежурные

@@ -170,7 +170,6 @@ class TestGenerateSchedule:
                 city=City.MOSCOW,
                 schedule_type=ScheduleType.FIVE_TWO,
                 on_duty=False,
-                team_lead=True,
             ),
             Employee(name="Вика", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE),
             Employee(name="Андрей", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE),
@@ -180,7 +179,6 @@ class TestGenerateSchedule:
                 city=City.KHABAROVSK,
                 schedule_type=ScheduleType.FLEXIBLE,
                 on_duty=False,
-                team_lead=True,
             ),
         ]
         config = Config(month=3, year=2025, seed=42, employees=employees)

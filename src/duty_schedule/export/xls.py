@@ -290,7 +290,7 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:  # noqa: AN
     # ── Строки сотрудников (с 3-й) ───────────────────────────────────────────
     for row_idx, emp in enumerate(employees, start=3):
         ws.row_dimensions[row_idx].height = 20
-        display_name = f"{emp.name} ({emp.role})" if getattr(emp, "role", "") else emp.name
+        display_name = emp.name
         nc = ws.cell(row=row_idx, column=1, value=display_name)
         nc.fill = _fill(COLORS["name"])
         nc.font = _font(bold=True, size=10)

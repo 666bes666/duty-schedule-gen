@@ -54,9 +54,6 @@ _EMPTY_ROW = {
     "Дежурный": True,
     "Только утро": False,
     "Только вечер": False,
-    "Тимлид": False,
-    # Фичи 1–7
-    "Роль": "",
     "Предпочт. смена": "",
     "Загрузка%": 100,
     "Макс. утренних": None,
@@ -225,7 +222,6 @@ def _df_to_yaml(
         max_night   = _parse_limit(row.get("Макс. ночных"))
         max_cw      = _parse_limit(row.get("Макс. подряд"))
         group = str(row.get("Группа", "")).strip() or None
-        role  = str(row.get("Роль", "")).strip()
 
         emp: dict = {
             "name":          name,
@@ -234,14 +230,11 @@ def _df_to_yaml(
             "on_duty":       bool(row["Дежурный"]),
             "morning_only":  bool(row["Только утро"]),
             "evening_only":  bool(row["Только вечер"]),
-            "team_lead":     bool(row["Тимлид"]),
         }
         if vac_yaml:
             emp["vacations"] = vac_yaml
         if unavail_yaml:
             emp["unavailable_dates"] = unavail_yaml
-        if role:
-            emp["role"] = role
         if pref_shift is not None:
             emp["preferred_shift"] = str(pref_shift)
         if workload_pct != 100:
@@ -357,8 +350,6 @@ def _yaml_to_df(
             "Дежурный":        bool(emp.get("on_duty", True)),
             "Только утро":     bool(emp.get("morning_only", False)),
             "Только вечер":    bool(emp.get("evening_only", False)),
-            "Тимлид":          bool(emp.get("team_lead", False)),
-            "Роль":            emp.get("role", ""),
             "Предпочт. смена": pref_shift_ru,
             "Загрузка%":       int(emp.get("workload_pct", 100)),
             "Макс. утренних":  emp.get("max_morning_shifts"),
@@ -427,7 +418,6 @@ def _build_employees(
         max_night   = _parse_limit(row.get("Макс. ночных"))
         max_cw      = _parse_limit(row.get("Макс. подряд"))
         group = str(row.get("Группа", "")).strip() or None
-        role  = str(row.get("Роль", "")).strip()
 
         try:
             employees.append(Employee(
@@ -435,10 +425,8 @@ def _build_employees(
                 on_duty=bool(row["Дежурный"]),
                 morning_only=bool(row["Только утро"]),
                 evening_only=bool(row["Только вечер"]),
-                team_lead=bool(row["Тимлид"]),
                 vacations=vacations,
                 unavailable_dates=unavailable,
-                role=role,
                 preferred_shift=preferred_shift,
                 workload_pct=workload_pct,
                 days_off_weekly=days_off_weekly,
@@ -539,13 +527,11 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
         r for r in active
         if r["Город"] == "Москва"
         and bool(r.get("Дежурный", True))
-        and not bool(r.get("Тимлид", False))
     ]
     khab_duty = [
         r for r in active
         if r["Город"] == "Хабаровск"
         and bool(r.get("Дежурный", True))
-        and not bool(r.get("Тимлид", False))
     ]
 
     if len(moscow_duty) < 4:
@@ -562,10 +548,6 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
         if bool(r.get("Только утро")) and bool(r.get("Только вечер")):
             errors.append(
                 f"«{name}»: нельзя одновременно «Только утро» и «Только вечер»."
-            )
-        if bool(r.get("Тимлид")) and bool(r.get("Дежурный")):
-            warnings.append(
-                f"«{name}»: тимлид + дежурный — дежурные смены будут проигнорированы."
             )
 
     return errors, warnings
@@ -841,14 +823,6 @@ with _setup_tab1:
                                    "Вечер▲",
                                    help="Только вечерние смены 15:00–00:00 МСК",
                                ),
-            "Тимлид":          st.column_config.CheckboxColumn(
-                                   "Тимлид",
-                                   help="Тимлид — не дежурит, только рабочие дни",
-                               ),
-            "Роль":            st.column_config.TextColumn(
-                                   "Роль",
-                                   help="Отображается в XLS рядом с именем",
-                               ),
             "Предпочт. смена": st.column_config.SelectboxColumn(
                                    "Пред. смена",
                                    options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
@@ -887,8 +861,8 @@ with _setup_tab1:
         },
         column_order=[
             "Имя", "Город", "График",
-            "Дежурный", "Только утро", "Только вечер", "Тимлид",
-            "Роль", "Предпочт. смена", "Загрузка%",
+            "Дежурный", "Только утро", "Только вечер",
+            "Предпочт. смена", "Загрузка%",
             "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
             "Группа",
         ],
@@ -916,8 +890,8 @@ with _setup_tab1:
         )
         _bump_table()
         st.rerun()
-    if _pr3.button("＋ Тимлид", use_container_width=True, key="preset_tl"):
-        _preset_row = {**_EMPTY_ROW, "Тимлид": True, "Дежурный": False}
+    if _pr3.button("＋ Не дежурит (5/2)", use_container_width=True, key="preset_nodty"):
+        _preset_row = {**_EMPTY_ROW, "Дежурный": False, "График": "5/2"}
         st.session_state["employees_df"] = pd.concat(
             [edited_df, pd.DataFrame([_preset_row])], ignore_index=True,
         )
@@ -950,20 +924,15 @@ with _setup_tab2:
             _flags: list[str] = []
             if _er.get("Дежурный"):
                 _flags.append("Дежурный")
-            if _er.get("Тимлид"):
-                _flags.append("Тимлид")
             if _er.get("Только утро"):
                 _flags.append("Только утро")
             if _er.get("Только вечер"):
                 _flags.append("Только вечер")
             _flag_str = "  ·  ".join(_flags) if _flags else "—"
             _pref = str(_er.get("Предпочт. смена", "")).strip()
-            _role = str(_er.get("Роль", "")).strip()
             _detail_parts = [f"Флаги: {_flag_str}"]
             if _pref:
                 _detail_parts.append(f"Предпочт. смена: {_pref}")
-            if _role:
-                _detail_parts.append(f"Роль: {_role}")
             st.caption("  ·  ".join(_detail_parts))
 
         st.divider()
@@ -1051,9 +1020,7 @@ with _setup_tab2:
 | **Дежурный** | Участвует в дежурных сменах (утро/вечер для Москвы, ночь для Хабаровска) |
 | **Только утро** | Назначается только на утренние смены (08:00–17:00 МСК) |
 | **Только вечер** | Назначается только на вечерние смены (15:00–00:00 МСК) |
-| **Тимлид** | Не дежурит (on_duty=False автоматически) |
 | **5/2** | Не работает в субботу и воскресенье |
-| **Роль** | Информационная роль, отображается в XLS рядом с именем |
 | **Предпочт. смена** | Мягкий приоритет при выборе смены (не гарантирует назначение) |
 | **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |

@@ -338,33 +338,3 @@ class TestGroupConstraint:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
-# ── Фича 7: Роль ──────────────────────────────────────────────────────────────
-
-
-class TestRole:
-    """Роль — информационное поле, не влияет на расписание."""
-
-    def test_role_stored_in_employee(self):
-        """Поле role сохраняется в объекте Employee."""
-        emp = _emp("Тест", role="Backend Lead")
-        assert emp.role == "Backend Lead"
-
-    def test_role_default_empty(self):
-        """По умолчанию role = ''."""
-        emp = _emp("Тест")
-        assert emp.role == ""
-
-    def test_schedule_generated_with_roles(self):
-        """Расписание строится при наличии ролей у сотрудников."""
-        emps = [
-            _emp("Москва 1", role="Lead"),
-            _emp("Москва 2", role="Backend"),
-            _emp("Москва 3", role="Frontend"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK, role="Ops"),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            assert day.is_covered(), f"Смены не покрыты на {day.date}"

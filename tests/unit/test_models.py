@@ -36,16 +36,6 @@ class TestEmployee:
         assert emp.on_duty is True
         assert emp.morning_only is False
 
-    def test_team_lead_implies_not_on_duty(self):
-        with pytest.raises(ValidationError, match="тимлид"):
-            Employee(
-                name="Тимлид",
-                city=City.MOSCOW,
-                schedule_type=ScheduleType.FLEXIBLE,
-                team_lead=True,
-                on_duty=True,
-            )
-
     def test_morning_and_evening_only_raises(self):
         with pytest.raises(ValidationError, match="нельзя одновременно"):
             Employee(
@@ -171,15 +161,14 @@ class TestConfig:
         with pytest.raises(ValidationError, match="Год"):
             Config(month=3, year=2023, employees=self._make_employees(4, 2))
 
-    def test_team_lead_not_counted_as_duty(self):
-        # Тимлид не считается дежурным → нужны 4 отдельных дежурных
+    def test_non_duty_not_counted_as_duty(self):
+        # Не-дежурный не влияет на минимальный состав дежурных
         emps = self._make_employees(4, 2)
         emps.append(
             Employee(
-                name="Тимлид",
+                name="Не дежурный",
                 city=City.MOSCOW,
-                schedule_type=ScheduleType.FLEXIBLE,
-                team_lead=True,
+                schedule_type=ScheduleType.FIVE_TWO,
                 on_duty=False,
             )
         )

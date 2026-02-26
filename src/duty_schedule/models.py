@@ -70,7 +70,6 @@ class Employee(BaseModel):
     on_duty: bool = True
     morning_only: bool = False
     evening_only: bool = False
-    team_lead: bool = False
     vacations: list[VacationPeriod] = []
     unavailable_dates: list[date] = []
     # Фича 1: лимиты типов смен в месяц (None = без ограничений)
@@ -87,13 +86,8 @@ class Employee(BaseModel):
     max_consecutive_working: int | None = None
     # Фича 6: группа — не ставить двух из одной группы на одну смену в один день
     group: str | None = None
-    # Фича 7: роль — отображается в XLS рядом с именем (информационно)
-    role: str = ""
-
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
-        if self.team_lead and self.on_duty:
-            raise ValueError(f"Сотрудник {self.name!r}: тимлид не может быть дежурным")
         if self.morning_only and self.evening_only:
             raise ValueError(
                 f"Сотрудник {self.name!r}: нельзя одновременно указать morning_only и evening_only"
@@ -286,14 +280,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
             warnings.append(
                 f"Пин {pin.date.isoformat()}: «{emp.name}» не является дежурным "
                 "(on_duty=False), но закреплён на дежурную смену."
-            )
-        if emp.team_lead and pin.shift in (
-            ShiftType.MORNING,
-            ShiftType.EVENING,
-            ShiftType.NIGHT,
-        ):
-            warnings.append(
-                f"Пин {pin.date.isoformat()}: тимлид «{emp.name}» закреплён на дежурную смену."
             )
 
     # Переносимые состояния для отсутствующих сотрудников
