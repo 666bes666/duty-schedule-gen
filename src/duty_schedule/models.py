@@ -79,6 +79,7 @@ class Employee(BaseModel):
     days_off_weekly: list[int] = []
     max_consecutive_working: int | None = None
     group: str | None = None
+
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
         if self.morning_only and self.evening_only:

@@ -316,5 +316,3 @@ class TestGroupConstraint:
         schedule = generate_schedule(config, set())
         for day in schedule.days:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
-
-

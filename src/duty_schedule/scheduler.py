@@ -577,10 +577,7 @@ def _minimize_isolated_off(
                 if emp.name not in day.day_off:
                     continue
                 left_ok = isolated_idx == 0 or is_off(emp.name, days[isolated_idx - 1])
-                right_ok = (
-                    isolated_idx == len(days) - 1
-                    or is_off(emp.name, days[isolated_idx + 1])
-                )
+                right_ok = isolated_idx == len(days) - 1 or is_off(emp.name, days[isolated_idx + 1])
                 if left_ok or right_ok:
                     continue
 
