@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-from datetime import date
 
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.scheduler import generate_schedule
