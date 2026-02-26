@@ -57,6 +57,12 @@ jobs:
           echo "REGISTRY_ID=$REGISTRY_ID" >> $GITHUB_ENV
           echo "IMAGE=cr.yandex/${REGISTRY_ID}/duty-schedule:latest" >> $GITHUB_ENV
 
+          # Разрешаем runtime-сервисному аккаунту тянуть образы из этого реестра
+          yc container registry add-access-binding \
+            --id "$REGISTRY_ID" \
+            --service-account-id "$YC_SA_ID" \
+            --role container-registry.images.puller || true
+
       - name: Configure Docker auth for Yandex Container Registry
         run: yc container registry configure-docker
 
