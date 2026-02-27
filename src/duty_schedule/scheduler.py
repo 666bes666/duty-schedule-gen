@@ -174,6 +174,10 @@ def _select_fair(
     sorted_candidates = sorted(
         candidates,
         key=lambda e: (
+            1 if (
+                e.schedule_type == ScheduleType.FLEXIBLE
+                and states[e.name].consecutive_off == 1
+            ) else 0,
             states[e.name].shift_count(shift),
             0 if e.preferred_shift == shift else 1,
             rng.random(),
@@ -713,6 +717,7 @@ def _minimize_isolated_off(
                     continue
 
                 improved = False
+                count_before = _count_isolated_off(emp.name, days)
                 for extend_idx in [isolated_idx - 1, isolated_idx + 1]:
                     if extend_idx < 0 or extend_idx >= len(days):
                         continue
@@ -742,30 +747,17 @@ def _minimize_isolated_off(
                         if _consec_work_if_added(emp.name, comp_i, days, carry_over_cw) > _max_cw_postprocess(emp):
                             continue
 
-                        creates_isolated = False
-                        for nb in [comp_i - 1, comp_i + 1]:
-                            if nb < 0 or nb >= len(days):
-                                continue
-                            if not is_off(emp.name, days[nb]):
-                                continue
-                            nb_left = nb == 0 or is_off(emp.name, days[nb - 1])
-                            nb_right = nb == len(days) - 1 or is_off(emp.name, days[nb + 1])
-                            if nb - 1 == comp_i:
-                                nb_left = False
-                            if nb + 1 == comp_i:
-                                nb_right = False
-                            if not nb_left and not nb_right:
-                                creates_isolated = True
-                                break
-                        if creates_isolated:
-                            continue
-
                         free_day.workday.remove(emp.name)
                         free_day.day_off.append(emp.name)
                         comp_day.day_off.remove(emp.name)
                         comp_day.workday.append(emp.name)
-                        improved = True
-                        break
+                        if _count_isolated_off(emp.name, days) < count_before:
+                            improved = True
+                            break
+                        free_day.day_off.remove(emp.name)
+                        free_day.workday.append(emp.name)
+                        comp_day.workday.remove(emp.name)
+                        comp_day.day_off.append(emp.name)
 
                     if improved:
                         break
@@ -813,6 +805,34 @@ def _minimize_isolated_off(
                         if improved:
                             break
 
+                    if not improved:
+                        for comp_i in range(len(days)):
+                            comp_day = days[comp_i]
+                            if emp.name not in comp_day.workday:
+                                continue
+                            if comp_i == isolated_idx:
+                                continue
+                            if (comp_day.date, emp.name) in pinned_on:
+                                continue
+                            if emp.is_blocked(comp_day.date):
+                                continue
+                            if comp_i > 0 and emp.name in days[comp_i - 1].evening:
+                                continue
+                            if _streak_around(emp.name, comp_i, days, working=False) > _max_co(emp):
+                                continue
+                            days[isolated_idx].day_off.remove(emp.name)
+                            days[isolated_idx].workday.append(emp.name)
+                            comp_day.workday.remove(emp.name)
+                            comp_day.day_off.append(emp.name)
+                            if _count_isolated_off(emp.name, days) < count_before:
+                                improved = True
+                                improved_any = True
+                                break
+                            days[isolated_idx].workday.remove(emp.name)
+                            days[isolated_idx].day_off.append(emp.name)
+                            comp_day.day_off.remove(emp.name)
+                            comp_day.workday.append(emp.name)
+
             if not improved_any:
                 break
 
@@ -841,7 +861,7 @@ def _trim_long_off_blocks(
             continue
         if emp.schedule_type != ScheduleType.FLEXIBLE:
             continue
-        max_cw = _max_cw(emp)
+        max_cw = _max_cw_postprocess(emp)
 
         for _ in range(len(days)):
             changed = False
@@ -974,6 +994,11 @@ def _target_adjustment_pass(
                             else:
                                 break
                         if 0 < _right_len < MIN_WORK_BETWEEN_OFFS:
+                            continue
+                    if emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty:
+                        _lw = i > 0 and _is_working_on_day(emp.name, days[i - 1])
+                        _rw = i < len(days) - 1 and _is_working_on_day(emp.name, days[i + 1])
+                        if _lw and _rw:
                             continue
                     day.workday.remove(emp.name)
                     day.day_off.append(emp.name)
