@@ -7,12 +7,13 @@ from datetime import date
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
+    CarryOverState,
     City,
     Config,
     Employee,
     ScheduleType,
 )
-from duty_schedule.scheduler import generate_schedule
+from duty_schedule.scheduler import MAX_CONSECUTIVE_WORKING, generate_schedule
 
 
 def _make_config(month: int = 3, year: int = 2025, seed: int = 42) -> Config:
@@ -76,6 +77,58 @@ class TestFullScheduleGeneration:
         config = _make_config()
         schedule = generate_schedule(config, holidays)
         assert len(schedule.days) == 31
+
+
+def _max_streak_with_carryover(emp_name: str, schedule_days: list, carry_over: int = 0) -> int:
+    streak = carry_over
+    max_streak = carry_over
+    for day in schedule_days:
+        working = (
+            emp_name in day.morning
+            or emp_name in day.evening
+            or emp_name in day.night
+            or emp_name in day.workday
+        )
+        if working:
+            streak += 1
+            max_streak = max(max_streak, streak)
+        else:
+            streak = 0
+    return max_streak
+
+
+class TestCarryOverConsecutiveConstraint:
+    def test_no_violation_with_carryover_4(self):
+        """carry_over=4 + первый день февраля = 5 (max). Больше 5 подряд быть не должно."""
+        employees = [
+            Employee(name=f"Москва {i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE)
+            for i in range(1, 5)
+        ] + [
+            Employee(name=f"Хабаровск {i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
+            for i in range(1, 3)
+        ]
+        carry_over = [
+            CarryOverState(employee_name="Москва 1", consecutive_working=4),
+            CarryOverState(employee_name="Хабаровск 1", consecutive_working=4),
+        ]
+        config = Config(month=2, year=2025, seed=42, employees=employees, carry_over=carry_over)
+        schedule = generate_schedule(config, set())
+
+        for emp_name, co_cw in [("Москва 1", 4), ("Хабаровск 1", 4)]:
+            ms = _max_streak_with_carryover(emp_name, schedule.days, carry_over=co_cw)
+            assert ms <= MAX_CONSECUTIVE_WORKING, (
+                f"{emp_name}: серия {ms} > {MAX_CONSECUTIVE_WORKING} (с учётом переноса {co_cw} дней)"
+            )
+
+    def test_no_violation_without_carryover(self):
+        """Без carry_over ограничение тоже соблюдается."""
+        config = _make_config(month=2, year=2025)
+        schedule = generate_schedule(config, set())
+        for emp in config.employees:
+            ms = _max_streak_with_carryover(emp.name, schedule.days)
+            assert ms <= MAX_CONSECUTIVE_WORKING, (
+                f"{emp.name}: серия {ms} > {MAX_CONSECUTIVE_WORKING}"
+            )
 
 
 class TestXlsExport:

@@ -97,10 +97,14 @@ def _init_state() -> None:
         st.session_state["table_version"] = 0
     if "employees_df" not in st.session_state:
         st.session_state["employees_df"] = pd.DataFrame(_DEFAULT_ROWS)
-    if "cfg_month" not in st.session_state:
-        st.session_state["cfg_month"] = date.today().month
-    if "cfg_year" not in st.session_state:
-        st.session_state["cfg_year"] = date.today().year
+    if "cfg_month" not in st.session_state or "cfg_year" not in st.session_state:
+        _today = date.today()
+        _next_month = _today.month % 12 + 1
+        _next_year = _today.year + (1 if _today.month == 12 else 0)
+        if "cfg_month" not in st.session_state:
+            st.session_state["cfg_month"] = _next_month
+        if "cfg_year" not in st.session_state:
+            st.session_state["cfg_year"] = _next_year
     if "cfg_seed" not in st.session_state:
         st.session_state["cfg_seed"] = 42
     if "pins_df" not in st.session_state:

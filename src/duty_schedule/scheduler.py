@@ -543,8 +543,18 @@ def _is_working_on_day(emp_name: str, day: DaySchedule) -> bool:
     )
 
 
-def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bool) -> int:
-    """Длина серии вокруг days[idx], если он становится рабочим (working=True) или выходным."""
+def _streak_around(
+    emp_name: str,
+    idx: int,
+    days: list[DaySchedule],
+    working: bool,
+    carry_over_cw: dict[str, int] | None = None,
+) -> int:
+    """Длина серии вокруг days[idx], если он становится рабочим (working=True) или выходным.
+
+    carry_over_cw: число рабочих дней подряд, перенесённых с конца предыдущего месяца.
+    Добавляется к левой части серии, если левый скан достигает начала массива.
+    """
 
     def active(d: DaySchedule) -> bool:
         return (
@@ -554,11 +564,15 @@ def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bo
         )
 
     left = 0
+    reached_left_boundary = True
     for i in range(idx - 1, -1, -1):
         if active(days[i]):
             left += 1
         else:
+            reached_left_boundary = False
             break
+    if reached_left_boundary and working and carry_over_cw is not None:
+        left += carry_over_cw.get(emp_name, 0)
     right = 0
     for i in range(idx + 1, len(days)):
         if active(days[i]):
@@ -566,6 +580,34 @@ def _streak_around(emp_name: str, idx: int, days: list[DaySchedule], working: bo
         else:
             break
     return left + 1 + right
+
+
+def _consec_work_if_added(
+    emp_name: str,
+    add_idx: int,
+    days: list[DaySchedule],
+    carry_over_cw: dict[str, int] | None = None,
+) -> int:
+    """Длина рабочей серии, если days[add_idx] становится рабочим днём.
+
+    carry_over_cw: число рабочих дней подряд с конца предыдущего месяца.
+    """
+    length = 1
+    reached_left_boundary = True
+    for i in range(add_idx - 1, -1, -1):
+        if _is_working_on_day(emp_name, days[i]):
+            length += 1
+        else:
+            reached_left_boundary = False
+            break
+    if reached_left_boundary and carry_over_cw is not None:
+        length += carry_over_cw.get(emp_name, 0)
+    for i in range(add_idx + 1, len(days)):
+        if _is_working_on_day(emp_name, days[i]):
+            length += 1
+        else:
+            break
+    return length
 
 
 def _count_isolated_off(emp_name: str, days: list[DaySchedule]) -> int:
@@ -589,6 +631,7 @@ def _minimize_isolated_off(
     employees: list[Employee],
     holidays: set[date],
     pinned_on: set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     def is_off(name: str, d: DaySchedule) -> bool:
         return name in d.day_off or name in d.vacation
@@ -605,20 +648,6 @@ def _minimize_isolated_off(
                 break
         for i in range(freed_idx + 1, len(days)):
             if is_off(name, days[i]):
-                length += 1
-            else:
-                break
-        return length
-
-    def consec_work_if_added(name: str, add_idx: int) -> int:
-        length = 1
-        for i in range(add_idx - 1, -1, -1):
-            if is_working(name, days[i]):
-                length += 1
-            else:
-                break
-        for i in range(add_idx + 1, len(days)):
-            if is_working(name, days[i]):
                 length += 1
             else:
                 break
@@ -665,7 +694,7 @@ def _minimize_isolated_off(
                             continue
                         if comp_i > 0 and emp.name in days[comp_i - 1].evening:
                             continue
-                        if consec_work_if_added(emp.name, comp_i) > _max_cw(emp):
+                        if _consec_work_if_added(emp.name, comp_i, days, carry_over_cw) > _max_cw(emp):
                             continue
 
                         creates_isolated = False
@@ -711,6 +740,7 @@ def _target_adjustment_pass(
     states: dict[str, EmployeeState],
     holidays: set[date],
     pinned_on: set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     """
     Пост-обработка: скорректировать WORKDAY/DAY_OFF, чтобы каждый сотрудник
@@ -764,7 +794,7 @@ def _target_adjustment_pass(
                     continue
                 if i > 0 and emp.name in days[i - 1].evening:
                     continue
-                if _streak_around(emp.name, i, days, working=True) > _max_cw(emp):
+                if _streak_around(emp.name, i, days, working=True, carry_over_cw=carry_over_cw) > _max_cw(emp):
                     continue
                 day.day_off.remove(emp.name)
                 day.workday.append(emp.name)
@@ -784,6 +814,7 @@ def _balance_weekend_work(
     days: list[DaySchedule],
     employees: list[Employee],
     pinned_on: set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     """
     Пост-обработка: выровнять число рабочих суббот/воскресений между дежурными
@@ -794,6 +825,7 @@ def _balance_weekend_work(
     Балансировка меняет total_working — caller обязан пересчитать состояния.
     """
     day_by_date = {d.date: d for d in days}
+    day_idx_map = {d.date: i for i, d in enumerate(days)}
     weekend_days = [d for d in days if d.date.weekday() >= 5]
     if not weekend_days:
         return days
@@ -859,6 +891,9 @@ def _balance_weekend_work(
 
                 prev = day_by_date.get(day.date - timedelta(days=1))
                 if max_attr == "morning" and prev and min_name in prev.evening:
+                    continue
+
+                if _consec_work_if_added(min_name, day_idx_map[day.date], days, carry_over_cw) > _max_cw(min_emp):
                     continue
 
                 getattr(day, max_attr).remove(max_name)
@@ -1014,6 +1049,8 @@ def generate_schedule(
             states[emp.name].consecutive_working = co.consecutive_working
             states[emp.name].consecutive_off = co.consecutive_off
 
+    initial_cw: dict[str, int] = {emp.name: states[emp.name].consecutive_working for emp in employees}
+
     days: list[DaySchedule] = []
     backtrack_stack: list[tuple[date, dict[str, EmployeeState]]] = []
 
@@ -1058,13 +1095,13 @@ def generate_schedule(
 
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
-    days = _balance_weekend_work(days, employees, pinned_on=pinned_on)
+    days = _balance_weekend_work(days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw)
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
-    days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on)
-    days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on)
+    days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
 
     duty_employees = [e for e in employees if e.on_duty]
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
