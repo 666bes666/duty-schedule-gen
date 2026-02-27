@@ -33,6 +33,8 @@ MONTHS_RU = [
 ]
 _WEEKDAY_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
+_XLS_VERSION = "2"
+
 _CITY_TO_RU  = {"moscow": "Москва", "khabarovsk": "Хабаровск"}
 _RU_TO_CITY  = {"Москва": "moscow", "Хабаровск": "khabarovsk"}
 _STYPE_TO_RU = {"flexible": "Гибкий", "5/2": "5/2"}
@@ -550,13 +552,22 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+_SHIFT_PALETTE = {
+    "У": "#FFC107",
+    "В": "#3F51B5",
+    "Н": "#673AB7",
+    "Р": "#009688",
+    "–": "#90A4AE",
+    "О": "#FF5722",
+}
+
 _CAL_SHIFT_COLORS = {
-    "У": "#FFF3CD",
-    "В": "#CCE5FF",
-    "Н": "#D6CCE5",
-    "Р": "#D4EDDA",
-    "–": "#F2F3F4",
-    "О": "#F5C6CB",
+    "У": "#FFE082",
+    "В": "#C5CAE9",
+    "Н": "#EDE7F6",
+    "Р": "#B2DFDB",
+    "–": "#ECEFF1",
+    "О": "#FFCCBC",
 }
 
 
@@ -597,11 +608,25 @@ def _style_calendar_cell(val: str) -> str:
 def _render_calendar(schedule: object) -> None:
     """Цветовой календарь расписания."""
     cal_df = _schedule_to_calendar_df(schedule)
-    legend = (
-        "🟡 **У** — утро  ·  🔵 **В** — вечер  ·  🟣 **Н** — ночь  ·  "
-        "🟢 **Р** — рабочий  ·  ⬜ **–** — выходной  ·  🔴 **О** — отпуск"
-    )
-    st.caption(legend)
+
+    def _badge(code: str, label: str) -> str:
+        bg = _CAL_SHIFT_COLORS[code]
+        border = _SHIFT_PALETTE[code]
+        return (
+            f'<span style="background:{bg};border:2px solid {border};color:#333;'
+            f'padding:1px 8px;border-radius:4px;font-size:0.8em;font-weight:600">'
+            f'{code}</span> {label}'
+        )
+
+    items = [
+        _badge("У", "утро"),
+        _badge("В", "вечер"),
+        _badge("Н", "ночь"),
+        _badge("Р", "рабочий"),
+        _badge("–", "выходной"),
+        _badge("О", "отпуск"),
+    ]
+    st.markdown(" &nbsp;·&nbsp; ".join(items), unsafe_allow_html=True)
     height = min(600, 35 * (len(cal_df) + 2))
     styled = cal_df.style.map(_style_calendar_cell)
     st.dataframe(styled, use_container_width=True, height=height)
@@ -685,7 +710,28 @@ def _render_load_dashboard(schedule: object, employees_df: pd.DataFrame) -> None
     chart_cols = [c for c in ["Утро", "Вечер", "Ночь"] if c in stats_df.columns]
     if chart_cols:
         st.markdown("**Структура дежурных смен**")
-        st.bar_chart(stats_df[chart_cols], use_container_width=True)
+        _col_palette = {
+            "Утро": _SHIFT_PALETTE["У"],
+            "Вечер": _SHIFT_PALETTE["В"],
+            "Ночь": _SHIFT_PALETTE["Н"],
+        }
+        st.bar_chart(
+            stats_df[chart_cols],
+            color=[_col_palette[c] for c in chart_cols],
+            use_container_width=True,
+        )
+
+    cov_rows = [
+        {
+            "День": f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}",
+            "Работают": len(d.morning) + len(d.evening) + len(d.night) + len(d.workday),
+        }
+        for d in schedule.days
+    ]
+    if cov_rows:
+        cov_df = pd.DataFrame(cov_rows).set_index("День")
+        st.markdown("**Покрытие по дням**")
+        st.area_chart(cov_df, use_container_width=True, color=_SHIFT_PALETTE["В"])
 
 
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
@@ -1199,10 +1245,19 @@ if st.session_state.get("last_result"):
         f"· сгенерировано в {_res['gen_at']}"
     )
 
+    _total_workdays  = sum(len(d.workday)  for d in _schedule.days)
+    _total_dayoffs   = sum(len(d.day_off)  for d in _schedule.days)
+    _total_vacations = sum(len(d.vacation) for d in _schedule.days)
+
     _rc1, _rc2, _rc3 = st.columns(3)
     _rc1.metric("Утренних смен", _meta.get("total_mornings", 0))
     _rc2.metric("Вечерних смен", _meta.get("total_evenings", 0))
     _rc3.metric("Ночных смен",   _meta.get("total_nights",   0))
+
+    _rc4, _rc5, _rc6 = st.columns(3)
+    _rc4.metric("Рабочих дней",  _total_workdays)
+    _rc5.metric("Выходных",      _total_dayoffs)
+    _rc6.metric("Отпусков",      _total_vacations)
 
     _tab_cal, _tab_dash, _tab_edit = st.tabs(
         ["📅 Календарь", "📊 Нагрузка", "✏️ Редактирование"]
@@ -1238,7 +1293,7 @@ if st.session_state.get("last_result"):
 
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 
-    _xls_hash = pd.util.hash_pandas_object(edited_schedule_df).sum()
+    _xls_hash = _XLS_VERSION + str(pd.util.hash_pandas_object(edited_schedule_df).sum())
     if st.session_state.get("_xls_hash") != _xls_hash:
         with tempfile.TemporaryDirectory() as tmpdir:
             xls_path = export_xls(final_schedule, Path(tmpdir))

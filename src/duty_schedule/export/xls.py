@@ -13,12 +13,12 @@ from openpyxl.utils import get_column_letter
 from duty_schedule.models import City, Schedule
 
 COLORS = {
-    "morning": "00B050",
-    "evening": "003366",
-    "night": "00B0F0",
-    "workday": "0070C0",
-    "day_off": "FF6600",
-    "vacation": "CC99FF",
+    "morning": "FFC107",
+    "evening": "3F51B5",
+    "night": "673AB7",
+    "workday": "009688",
+    "day_off": "90A4AE",
+    "vacation": "FF5722",
     "header": "404040",
     "name": "D9D9D9",
     "weekend": "F2F2F2",
@@ -31,7 +31,7 @@ COLORS = {
     "total_row": "595959",
 }
 
-WHITE_FONT_KEYS = {"evening", "header", "workday", "night"}
+WHITE_FONT_KEYS = {"evening", "header", "workday", "night", "vacation"}
 
 SHIFT_LABELS = {
     "morning": "Утро",
@@ -410,11 +410,11 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
 
         _stat_cell(ws, row_idx, 5, st.morning or "—", COLORS["morning"], white=False)
         _stat_cell(ws, row_idx, 6, st.evening or "—", COLORS["evening"], white=True)
-        _stat_cell(ws, row_idx, 7, st.night or "—", COLORS["night"])
+        _stat_cell(ws, row_idx, 7, st.night or "—", COLORS["night"], white=True)
         _stat_cell(ws, row_idx, 8, st.workday or "—", COLORS["workday"], white=True)
 
         _stat_cell(ws, row_idx, 9, st.day_off, COLORS["day_off"])
-        _stat_cell(ws, row_idx, 10, st.vacation or "—", COLORS["vacation"])
+        _stat_cell(ws, row_idx, 10, st.vacation or "—", COLORS["vacation"], white=True)
 
         ww_color = COLORS["warn"] if st.weekend_work > 0 else COLORS["ok"]
         _stat_cell(ws, row_idx, 11, st.weekend_work or "—", ww_color)
@@ -445,10 +445,10 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     _stat_cell(ws, total_row, 4, "", COLORS["total_row"])
     _stat_cell(ws, total_row, 5, totals["morning"], COLORS["morning"], bold=True)
     _stat_cell(ws, total_row, 6, totals["evening"], COLORS["evening"], white=True, bold=True)
-    _stat_cell(ws, total_row, 7, totals["night"], COLORS["night"], bold=True)
+    _stat_cell(ws, total_row, 7, totals["night"], COLORS["night"], white=True, bold=True)
     _stat_cell(ws, total_row, 8, totals["workday"], COLORS["workday"], white=True, bold=True)
     _stat_cell(ws, total_row, 9, totals["day_off"], COLORS["day_off"], bold=True)
-    _stat_cell(ws, total_row, 10, totals["vacation"], COLORS["vacation"], bold=True)
+    _stat_cell(ws, total_row, 10, totals["vacation"], COLORS["vacation"], white=True, bold=True)
     _stat_cell(ws, total_row, 11, totals["weekend_work"], COLORS["total_row"], white=True)
     _stat_cell(ws, total_row, 12, totals["holiday_work"], COLORS["total_row"], white=True)
     _stat_cell(ws, total_row, 13, "", COLORS["total_row"])

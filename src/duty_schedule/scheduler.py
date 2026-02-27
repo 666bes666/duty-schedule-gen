@@ -22,16 +22,38 @@ from duty_schedule.models import (
 logger = get_logger()
 
 MAX_CONSECUTIVE_WORKING = 5
+MAX_CONSECUTIVE_WORKING_FLEX = 6
 MAX_CONSECUTIVE_OFF = 3
 MAX_BACKTRACK_DAYS = 3
 MAX_BACKTRACK_ATTEMPTS = 10
+MIN_WORK_BETWEEN_OFFS = 3
 
 
 def _max_cw(emp: Employee) -> int:
-    """Максимальное число рабочих дней подряд для сотрудника."""
+    """Максимальное число рабочих дней подряд для сотрудника (жадная генерация)."""
     if emp.max_consecutive_working is not None:
         return emp.max_consecutive_working
     return MAX_CONSECUTIVE_WORKING
+
+
+def _max_cw_postprocess(emp: Employee) -> int:
+    """Лимит рабочих дней подряд для постобработки (устранение изолированных выходных).
+
+    Для гибких дежурных допускается до 6, чтобы _minimize_isolated_off
+    могла устранять изолированные выходные за счёт удлинения соседней серии.
+    """
+    if emp.max_consecutive_working is not None:
+        return emp.max_consecutive_working
+    if emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty and not (
+        emp.morning_only or emp.evening_only or emp.always_on_duty
+    ):
+        return MAX_CONSECUTIVE_WORKING_FLEX
+    return MAX_CONSECUTIVE_WORKING
+
+
+def _max_co(emp: Employee) -> int:
+    """Максимальное число выходных подряд: 3 для гибких дежурных, 3 для остальных."""
+    return MAX_CONSECUTIVE_OFF
 
 
 def _duty_only(emp: Employee) -> bool:
@@ -403,8 +425,15 @@ def _build_day(
         if after_evening_deficit:
             evening_pick = _select_fair(after_evening_deficit, states, ShiftType.EVENING, rng, 1)
         else:
+            _evening_well_into_run = [
+                e for e in evening_pick_pool
+                if e.schedule_type == ScheduleType.FLEXIBLE
+                and states[e.name].consecutive_working >= MIN_WORK_BETWEEN_OFFS - 1
+                and states[e.name].needs_more_work(remaining_days)
+            ]
+            _evening_select_pool = _evening_well_into_run if _evening_well_into_run else evening_pick_pool
             evening_pick = _select_for_mandatory(
-                evening_pick_pool, states, ShiftType.EVENING, remaining_days, rng, 1
+                _evening_select_pool, states, ShiftType.EVENING, remaining_days, rng, 1
             )
         for emp in evening_pick:
             assigned[emp.name] = ShiftType.EVENING
@@ -422,6 +451,7 @@ def _build_day(
                 and states[e.name].needs_more_work(remaining_days)
                 and states[e.name].consecutive_working < _max_cw(e)
                 and not _resting_after_evening(states[e.name])
+                and not (e.schedule_type == ScheduleType.FLEXIBLE and states[e.name].consecutive_off == 1)
             ]
             if not extra:
                 break
@@ -497,7 +527,10 @@ def _build_day(
             if others_available < 1:
                 assigned[emp.name] = ShiftType.DAY_OFF
                 continue
-        if states[emp.name].needs_more_work(remaining_days):
+        if (
+            states[emp.name].needs_more_work(remaining_days)
+            and not (emp.schedule_type == ScheduleType.FLEXIBLE and states[emp.name].consecutive_off == 1)
+        ):
             assigned[emp.name] = ShiftType.WORKDAY
         else:
             assigned[emp.name] = ShiftType.DAY_OFF
@@ -517,11 +550,23 @@ def _build_day(
         if (
             assigned.get(emp.name) == ShiftType.DAY_OFF
             and not _duty_only(emp)
-            and state.consecutive_off >= MAX_CONSECUTIVE_OFF
+            and state.consecutive_off >= _max_co(emp)
             and _can_work(emp, state, day, holidays)
             and not _resting_after_evening(state)
-            and state.needs_more_work(remaining_days)
+            and (state.needs_more_work(remaining_days) or emp.schedule_type == ScheduleType.FLEXIBLE)
             and not is_holiday
+        ):
+            assigned[emp.name] = ShiftType.WORKDAY
+
+    for emp in moscow_duty + khabarovsk_duty:
+        state = states[emp.name]
+        if (
+            assigned.get(emp.name) == ShiftType.DAY_OFF
+            and not _duty_only(emp)
+            and emp.schedule_type == ScheduleType.FLEXIBLE
+            and 0 < state.consecutive_working < MIN_WORK_BETWEEN_OFFS
+            and _can_work(emp, state, day, holidays)
+            and not _resting_after_evening(state)
         ):
             assigned[emp.name] = ShiftType.WORKDAY
 
@@ -676,7 +721,7 @@ def _minimize_isolated_off(
                         continue
                     if (free_day.date, emp.name) in pinned_on:
                         continue
-                    if consec_off_if_freed(emp.name, extend_idx) > MAX_CONSECUTIVE_OFF:
+                    if consec_off_if_freed(emp.name, extend_idx) > _max_co(emp):
                         continue
 
                     for comp_i, comp_day in enumerate(days):
@@ -686,7 +731,7 @@ def _minimize_isolated_off(
                             continue
                         if (comp_day.date, emp.name) in pinned_on:
                             continue
-                        if _is_weekend_or_holiday(comp_day.date, holidays):
+                        if _is_weekend_or_holiday(comp_day.date, holidays) and emp.schedule_type != ScheduleType.FLEXIBLE:
                             continue
                         if emp.is_blocked(comp_day.date):
                             continue
@@ -694,7 +739,7 @@ def _minimize_isolated_off(
                             continue
                         if comp_i > 0 and emp.name in days[comp_i - 1].evening:
                             continue
-                        if _consec_work_if_added(emp.name, comp_i, days, carry_over_cw) > _max_cw(emp):
+                        if _consec_work_if_added(emp.name, comp_i, days, carry_over_cw) > _max_cw_postprocess(emp):
                             continue
 
                         creates_isolated = False
@@ -728,7 +773,151 @@ def _minimize_isolated_off(
                 if improved:
                     improved_any = True
 
+                if not improved and emp.schedule_type == ScheduleType.FLEXIBLE:
+                    if (days[isolated_idx].date, emp.name) in pinned_on:
+                        continue
+                    if emp.is_blocked(days[isolated_idx].date):
+                        continue
+                    if emp.is_day_off_weekly(days[isolated_idx].date):
+                        continue
+                    if isolated_idx > 0 and emp.name in days[isolated_idx - 1].evening:
+                        continue
+                    if _consec_work_if_added(emp.name, isolated_idx, days, carry_over_cw) > _max_cw_postprocess(emp):
+                        continue
+                    for target_i, target_day in enumerate(days):
+                        if emp.name not in target_day.day_off:
+                            continue
+                        if target_i == isolated_idx:
+                            continue
+                        t_left = target_i == 0 or is_off(emp.name, days[target_i - 1])
+                        t_right = target_i == len(days) - 1 or is_off(emp.name, days[target_i + 1])
+                        if t_left or t_right:
+                            continue
+                        for nb_i in [target_i - 1, target_i + 1]:
+                            if nb_i < 0 or nb_i >= len(days):
+                                continue
+                            if emp.name not in days[nb_i].workday:
+                                continue
+                            if (days[nb_i].date, emp.name) in pinned_on:
+                                continue
+                            outer = nb_i - 1 if nb_i < target_i else nb_i + 1
+                            if 0 <= outer < len(days) and is_off(emp.name, days[outer]):
+                                continue
+                            days[isolated_idx].day_off.remove(emp.name)
+                            days[isolated_idx].workday.append(emp.name)
+                            days[nb_i].workday.remove(emp.name)
+                            days[nb_i].day_off.append(emp.name)
+                            improved = True
+                            improved_any = True
+                            break
+                        if improved:
+                            break
+
             if not improved_any:
+                break
+
+    return days
+
+
+def _trim_long_off_blocks(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+    pinned_on: set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
+) -> list[DaySchedule]:
+    """
+    Для гибких дежурных: обрезать блоки выходных длиной ≥ 3 до ≤ 2,
+    одновременно расширяя изолированный выходной до пары (своп без изменения нормы).
+    Если изолированный кандидат не найден, просто конвертируем день блока в WORKDAY
+    (небольшой избыток скорректирует _target_adjustment_pass при повторном вызове).
+    """
+
+    def is_off_day(name: str, d: DaySchedule) -> bool:
+        return name in d.day_off or name in d.vacation
+
+    for emp in employees:
+        if not emp.on_duty or _duty_only(emp):
+            continue
+        if emp.schedule_type != ScheduleType.FLEXIBLE:
+            continue
+        max_cw = _max_cw(emp)
+
+        for _ in range(len(days)):
+            changed = False
+
+            i = 0
+            while i < len(days):
+                if not is_off_day(emp.name, days[i]):
+                    i += 1
+                    continue
+                j = i
+                while j < len(days) and is_off_day(emp.name, days[j]):
+                    j += 1
+                block_len = j - i
+                if block_len <= _max_co(emp):
+                    i = j
+                    continue
+
+                trim_idx = None
+                for k in range(i, j):
+                    if emp.name not in days[k].day_off:
+                        continue
+                    if (days[k].date, emp.name) in pinned_on:
+                        continue
+                    if emp.is_blocked(days[k].date):
+                        continue
+                    if emp.is_day_off_weekly(days[k].date):
+                        continue
+                    if k > 0 and emp.name in days[k - 1].evening:
+                        continue
+                    if _consec_work_if_added(emp.name, k, days, carry_over_cw) > max_cw:
+                        continue
+                    trim_idx = k
+                    break
+
+                if trim_idx is None:
+                    i = j
+                    continue
+
+                paired = False
+                for iso_i, iso_day in enumerate(days):
+                    if emp.name not in iso_day.day_off:
+                        continue
+                    if iso_i >= i and iso_i < j:
+                        continue
+                    t_left = iso_i == 0 or is_off_day(emp.name, days[iso_i - 1])
+                    t_right = iso_i == len(days) - 1 or is_off_day(emp.name, days[iso_i + 1])
+                    if t_left or t_right:
+                        continue
+                    for nb_i in [iso_i - 1, iso_i + 1]:
+                        if nb_i < 0 or nb_i >= len(days):
+                            continue
+                        if emp.name not in days[nb_i].workday:
+                            continue
+                        if (days[nb_i].date, emp.name) in pinned_on:
+                            continue
+                        outer = nb_i - 1 if nb_i < iso_i else nb_i + 1
+                        if 0 <= outer < len(days) and is_off_day(emp.name, days[outer]):
+                            continue
+                        days[trim_idx].day_off.remove(emp.name)
+                        days[trim_idx].workday.append(emp.name)
+                        days[nb_i].workday.remove(emp.name)
+                        days[nb_i].day_off.append(emp.name)
+                        paired = True
+                        changed = True
+                        break
+                    if paired:
+                        break
+
+                if not paired:
+                    days[trim_idx].day_off.remove(emp.name)
+                    days[trim_idx].workday.append(emp.name)
+                    changed = True
+
+                i = j
+
+            if not changed:
                 break
 
     return days
@@ -767,8 +956,25 @@ def _target_adjustment_pass(
                     emp.name in day.workday
                     and not _is_weekend_or_holiday(day.date, holidays)
                     and (day.date, emp.name) not in pinned_on
-                    and _streak_around(emp.name, i, days, working=False) <= MAX_CONSECUTIVE_OFF
+                    and _streak_around(emp.name, i, days, working=False) <= _max_co(emp)
                 ):
+                    if emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty and not _duty_only(emp) and emp.workload_pct == 100:
+                        _left_len = 0
+                        for _li in range(i - 1, -1, -1):
+                            if _is_working_on_day(emp.name, days[_li]):
+                                _left_len += 1
+                            else:
+                                break
+                        if 0 < _left_len < MIN_WORK_BETWEEN_OFFS:
+                            continue
+                        _right_len = 0
+                        for _ri in range(i + 1, len(days)):
+                            if _is_working_on_day(emp.name, days[_ri]):
+                                _right_len += 1
+                            else:
+                                break
+                        if 0 < _right_len < MIN_WORK_BETWEEN_OFFS:
+                            continue
                     day.workday.remove(emp.name)
                     day.day_off.append(emp.name)
                     state.total_working -= 1
@@ -782,7 +988,18 @@ def _target_adjustment_pass(
 
         elif actual < target and not _duty_only(emp):
             deficit = target - actual
-            for i in range(len(days)):
+
+            def _in_off_block(idx: int) -> bool:
+                left = idx > 0 and (emp.name in days[idx - 1].day_off or emp.name in days[idx - 1].vacation)
+                right = idx < len(days) - 1 and (emp.name in days[idx + 1].day_off or emp.name in days[idx + 1].vacation)
+                return left or right
+
+            prefer_isolated = emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty
+            day_indices: list[int] = list(range(len(days)))
+            if prefer_isolated:
+                day_indices.sort(key=lambda idx: (_in_off_block(idx), idx))
+
+            for i in day_indices:
                 if deficit == 0:
                     break
                 day = days[i]
@@ -895,6 +1112,23 @@ def _balance_weekend_work(
 
                 if _consec_work_if_added(min_name, day_idx_map[day.date], days, carry_over_cw) > _max_cw(min_emp):
                     continue
+
+                max_emp = next(e for e in duty_emps if e.name == max_name)
+                if max_emp.schedule_type == ScheduleType.FLEXIBLE:
+                    max_idx = day_idx_map[day.date]
+                    _off_streak = 1
+                    for _li in range(max_idx - 1, -1, -1):
+                        if max_name in days[_li].day_off or max_name in days[_li].vacation:
+                            _off_streak += 1
+                        else:
+                            break
+                    for _ri in range(max_idx + 1, len(days)):
+                        if max_name in days[_ri].day_off or max_name in days[_ri].vacation:
+                            _off_streak += 1
+                        else:
+                            break
+                    if _off_streak > _max_co(max_emp):
+                        continue
 
                 getattr(day, max_attr).remove(max_name)
                 day.day_off.append(max_name)
@@ -1100,6 +1334,10 @@ def generate_schedule(
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
+    days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    days = _trim_long_off_blocks(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    for emp in employees:
+        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
     days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
     days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
 
