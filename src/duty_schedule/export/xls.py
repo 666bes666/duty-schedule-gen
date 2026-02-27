@@ -128,13 +128,15 @@ def _compute_stats(
     schedule: Schedule,
     assignments: dict[str, dict[date, str]],
     production_days: int,
+    employees: list | None = None,
 ) -> list[EmployeeStats]:
     """Вычислить статистику для каждого сотрудника."""
     holiday_dates = {day.date for day in schedule.days if day.is_holiday}
     sorted_dates = sorted(day.date for day in schedule.days)
+    _employees = employees if employees is not None else schedule.config.employees
 
     result = []
-    for emp in schedule.config.employees:
+    for emp in _employees:
         emp_days = assignments.get(emp.name, {})
         city = "Москва" if emp.city == City.MOSCOW else "Хабаровск"
 
@@ -217,10 +219,13 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     ws.title = "График дежурств"
 
     days = schedule.days
-    employees = schedule.config.employees
+    employees = sorted(
+        schedule.config.employees,
+        key=lambda e: (0 if e.city == City.MOSCOW else 1, 0 if not e.on_duty else 1, e.name),
+    )
     assignments = _build_assignments(schedule)
     production_days = schedule.metadata.get("production_working_days", 21)
-    stats = _compute_stats(schedule, assignments, production_days)
+    stats = _compute_stats(schedule, assignments, production_days, employees)
 
     _build_schedule_sheet(ws, days, employees, assignments)
 
@@ -235,7 +240,7 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
 
 def _build_schedule_sheet(ws, days, employees, assignments) -> None:
     """Заполнить лист «График дежурств»."""
-    total_col = len(days) + 2
+    total_col = len(days) + 3
 
     first_day = days[0].date
     month_label = f"График дежурств — {MONTHS_RU[first_day.month]} {first_day.year}"
@@ -253,7 +258,12 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
     h.font = _font(bold=True, white=True, size=11)
     h.alignment = _align()
 
-    for col_idx, day in enumerate(days, start=2):
+    hc = ws.cell(row=2, column=2, value="Город")
+    hc.fill = _fill(COLORS["header"])
+    hc.font = _font(bold=True, white=True, size=9)
+    hc.alignment = _align()
+
+    for col_idx, day in enumerate(days, start=3):
         d = day.date
         label = f"{d.day}\n{DAYS_RU[d.weekday()]}"
         cell = ws.cell(row=2, column=col_idx, value=label)
@@ -268,15 +278,21 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
 
     for row_idx, emp in enumerate(employees, start=3):
         ws.row_dimensions[row_idx].height = 20
-        display_name = emp.name
-        nc = ws.cell(row=row_idx, column=1, value=display_name)
+        nc = ws.cell(row=row_idx, column=1, value=emp.name)
         nc.fill = _fill(COLORS["name"])
         nc.font = _font(bold=True, size=10)
         nc.alignment = _align(horizontal="left")
 
+        city_label = "Москва" if emp.city == City.MOSCOW else "Хабаровск"
+        city_color = "E8F5E9" if emp.city == City.MOSCOW else "D6E4F0"
+        cc = ws.cell(row=row_idx, column=2, value=city_label)
+        cc.fill = _fill(city_color)
+        cc.font = _font(size=9)
+        cc.alignment = _align()
+
         emp_days = assignments.get(emp.name, {})
         working_total = 0
-        for col_idx, day in enumerate(days, start=2):
+        for col_idx, day in enumerate(days, start=3):
             shift_key = emp_days.get(day.date, "day_off")
             if shift_key in ("morning", "evening", "night", "workday"):
                 working_total += 1
@@ -293,10 +309,11 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
         itogo.alignment = _align()
 
     ws.column_dimensions["A"].width = 18
-    for col_idx in range(2, len(days) + 2):
+    ws.column_dimensions["B"].width = 12
+    for col_idx in range(3, len(days) + 3):
         ws.column_dimensions[get_column_letter(col_idx)].width = 5.5
     ws.column_dimensions[get_column_letter(total_col)].width = 8
-    ws.freeze_panes = "B3"
+    ws.freeze_panes = "C3"
 
 
 def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> None:
