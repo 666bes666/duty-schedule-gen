@@ -56,6 +56,16 @@ def _max_co(emp: Employee) -> int:
     return MAX_CONSECUTIVE_OFF
 
 
+def _max_co_postprocess(emp: Employee) -> int:
+    """Лимит выходных подряд для постобработки: допускается до 4, чтобы
+    _minimize_isolated_off могла освобождать соседний день изолированного выходного."""
+    if emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty and not (
+        emp.morning_only or emp.evening_only or emp.always_on_duty
+    ):
+        return MAX_CONSECUTIVE_OFF + 1
+    return MAX_CONSECUTIVE_OFF
+
+
 def _duty_only(emp: Employee) -> bool:
     """Сотрудник работает исключительно на дежурных сменах — никогда на WORKDAY."""
     return emp.on_duty and (emp.morning_only or emp.evening_only or emp.always_on_duty)
@@ -180,6 +190,7 @@ def _select_fair(
             ) else 0,
             states[e.name].shift_count(shift),
             0 if e.preferred_shift == shift else 1,
+            states[e.name].consecutive_working if shift == ShiftType.NIGHT else 0,
             rng.random(),
         ),
     )
@@ -726,7 +737,7 @@ def _minimize_isolated_off(
                         continue
                     if (free_day.date, emp.name) in pinned_on:
                         continue
-                    if consec_off_if_freed(emp.name, extend_idx) > _max_co(emp):
+                    if consec_off_if_freed(emp.name, extend_idx) > _max_co_postprocess(emp):
                         continue
 
                     for comp_i, comp_day in enumerate(days):
