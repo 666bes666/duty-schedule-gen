@@ -258,13 +258,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
+    { name = "streamlit" },
     { name = "structlog" },
     { name = "typer" },
-]
-
-[package.optional-dependencies]
-web = [
-    { name = "streamlit" },
 ]
 
 [package.dev-dependencies]
@@ -283,11 +279,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.7" },
-    { name = "streamlit", marker = "extra == 'web'", specifier = ">=1.32.0" },
+    { name = "streamlit", specifier = ">=1.32.0" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "typer", specifier = ">=0.12" },
 ]
-provides-extras = ["web"]
 
 [package.metadata.requires-dev]
 dev = [
