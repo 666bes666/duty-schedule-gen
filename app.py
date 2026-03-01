@@ -514,7 +514,7 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: object) -> object:
     meta["total_mornings"] = sum(len(d.morning) for d in new_days)
     meta["total_evenings"] = sum(len(d.evening) for d in new_days)
     meta["total_nights"]   = sum(len(d.night)   for d in new_days)
-    return ScheduleModel(config=schedule.config, days=new_days, metadata=meta)
+    return ScheduleModel.model_construct(config=schedule.config, days=new_days, metadata=meta)
 
 
 def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
