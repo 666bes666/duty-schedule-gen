@@ -834,7 +834,7 @@ with _setup_tab1:
     _sort_cols = st.columns([3, 1, 1])
     _sort_by = _sort_cols[0].selectbox(
         "Сортировать по столбцу",
-        options=["—", "Имя", "Город", "График", "Дежурный", "Загрузка%"],
+        options=["—", "По умолчанию", "Имя", "Город", "График", "Дежурный", "Загрузка%"],
         key="sort_by_col",
         label_visibility="collapsed",
     )
@@ -844,9 +844,20 @@ with _setup_tab1:
     ) == "↑ А→Я"
     if _sort_cols[2].button("Сортировать", use_container_width=True, key="sort_btn") and _sort_by != "—":
         _cur_df = st.session_state.get("_df_for_download", st.session_state["employees_df"])
-        st.session_state["employees_df"] = _cur_df.sort_values(
-            _sort_by, ascending=_sort_asc
-        ).reset_index(drop=True)
+        if _sort_by == "По умолчанию":
+            _city_order = {"Москва": 0, "Хабаровск": 1}
+            _stype_order = {"5/2": 0, "Гибкий": 1}
+            _cur_df = _cur_df.copy()
+            _cur_df["_s1"] = _cur_df["Город"].map(_city_order).fillna(2)
+            _cur_df["_s2"] = _cur_df["Дежурный"].astype(int)
+            _cur_df["_s3"] = _cur_df["График"].map(_stype_order).fillna(2)
+            st.session_state["employees_df"] = _cur_df.sort_values(
+                ["_s1", "_s2", "_s3", "Имя"]
+            ).drop(columns=["_s1", "_s2", "_s3"]).reset_index(drop=True)
+        else:
+            st.session_state["employees_df"] = _cur_df.sort_values(
+                _sort_by, ascending=_sort_asc
+            ).reset_index(drop=True)
         _bump_table()
         st.rerun()
 
