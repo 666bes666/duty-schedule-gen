@@ -1259,6 +1259,58 @@ if st.session_state.get("last_result"):
     _rc5.metric("Выходных",      _total_dayoffs)
     _rc6.metric("Отпусков",      _total_vacations)
 
+    _flex_duty = [
+        e for e in _schedule.config.employees
+        if e.on_duty and e.schedule_type == ScheduleType.FLEXIBLE
+    ]
+
+    def _isolated_off_count(name: str) -> int:
+        count = 0
+        _days = _schedule.days
+        for i, day in enumerate(_days):
+            if name not in day.day_off:
+                continue
+            left_ok = i == 0 or name in _days[i - 1].day_off or name in _days[i - 1].vacation
+            right_ok = (
+                i == len(_days) - 1
+                or name in _days[i + 1].day_off
+                or name in _days[i + 1].vacation
+            )
+            if not left_ok and not right_ok:
+                count += 1
+        return count
+
+    _total_isolated = sum(_isolated_off_count(e.name) for e in _flex_duty)
+
+    _working_keys = {"morning", "evening", "night", "workday"}
+
+    def _emp_working_on(name: str, day) -> bool:
+        return (
+            name in day.morning or name in day.evening
+            or name in day.night or name in day.workday
+        )
+
+    _max_streak = 0
+    for _emp in _schedule.config.employees:
+        streak = 0
+        for day in _schedule.days:
+            if _emp_working_on(_emp.name, day):
+                streak += 1
+                _max_streak = max(_max_streak, streak)
+            else:
+                streak = 0
+
+    _weekend_work_total = sum(
+        1
+        for day in _schedule.days if day.date.weekday() >= 5
+        for e in _flex_duty if _emp_working_on(e.name, day)
+    )
+
+    _rc7, _rc8, _rc9 = st.columns(3)
+    _rc7.metric("Изолированных выходных", _total_isolated)
+    _rc8.metric("Макс. серия работы", _max_streak)
+    _rc9.metric("Работа в выходные", _weekend_work_total)
+
     _tab_cal, _tab_dash, _tab_edit = st.tabs(
         ["📅 Календарь", "📊 Нагрузка", "✏️ Редактирование"]
     )

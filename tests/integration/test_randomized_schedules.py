@@ -38,6 +38,18 @@ def _is_working_day(shift_names: list[str]) -> bool:
     return bool(shift_names)
 
 
+def _count_isolated_off_for_emp(name: str, days: list) -> int:
+    count = 0
+    for i, day in enumerate(days):
+        if name not in day.day_off:
+            continue
+        left_ok = i == 0 or name in days[i - 1].day_off or name in days[i - 1].vacation
+        right_ok = i == len(days) - 1 or name in days[i + 1].day_off or name in days[i + 1].vacation
+        if not left_ok and not right_ok:
+            count += 1
+    return count
+
+
 def test_random_configs_respect_basic_invariants():
     """Случайные команды всегда дают корректное покрытие и базовые ограничения.
 
@@ -74,3 +86,10 @@ def test_random_configs_respect_basic_invariants():
             assert len(all_working) == len(set(all_working)), (
                 f"Дублирование назначений на {day.date}: {all_working}"
             )
+
+        for emp in employees:
+            if emp.on_duty and emp.schedule_type == ScheduleType.FLEXIBLE:
+                iso = _count_isolated_off_for_emp(emp.name, schedule.days)
+                assert iso <= 2, (
+                    f"{emp.name}: {iso} изолированных выходных (допустимо ≤2)"
+                )

@@ -31,6 +31,15 @@ COLORS = {
     "total_row": "595959",
 }
 
+CELL_COLORS = {
+    "morning": "FFE082",
+    "evening": "C5CAE9",
+    "night": "EDE7F6",
+    "workday": "B2DFDB",
+    "day_off": "ECEFF1",
+    "vacation": "FFCCBC",
+}
+
 WHITE_FONT_KEYS = {"evening", "header", "workday", "night", "vacation"}
 
 SHIFT_LABELS = {
@@ -122,6 +131,24 @@ class EmployeeStats:
     holiday_work: int
     max_streak_work: int
     max_streak_rest: int
+    isolated_off: int
+
+
+def _count_isolated_off(emp_name: str, schedule: Schedule) -> int:
+    count = 0
+    days = schedule.days
+    for i, day in enumerate(days):
+        if emp_name not in day.day_off:
+            continue
+        left_ok = i == 0 or emp_name in days[i - 1].day_off or emp_name in days[i - 1].vacation
+        right_ok = (
+            i == len(days) - 1
+            or emp_name in days[i + 1].day_off
+            or emp_name in days[i + 1].vacation
+        )
+        if not left_ok and not right_ok:
+            count += 1
+    return count
 
 
 def _compute_stats(
@@ -160,6 +187,7 @@ def _compute_stats(
 
         max_streak_work = _max_streak(sorted_dates, emp_days, working=True)
         max_streak_rest = _max_streak(sorted_dates, emp_days, working=False)
+        isolated_off = _count_isolated_off(emp.name, schedule)
 
         result.append(
             EmployeeStats(
@@ -177,6 +205,7 @@ def _compute_stats(
                 holiday_work=holiday_work,
                 max_streak_work=max_streak_work,
                 max_streak_rest=max_streak_rest,
+                isolated_off=isolated_off,
             )
         )
     return result
@@ -297,10 +326,10 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
             if shift_key in ("morning", "evening", "night", "workday"):
                 working_total += 1
             label = SHIFT_LABELS.get(shift_key, "?")
-            color = COLORS.get(shift_key, "FFFFFF")
+            color = CELL_COLORS.get(shift_key, "FFFFFF")
             cell = ws.cell(row=row_idx, column=col_idx, value=label)
             cell.fill = _fill(color)
-            cell.font = _font(white=shift_key in WHITE_FONT_KEYS, size=9)
+            cell.font = _font(white=False, size=9)
             cell.alignment = _align()
 
         itogo = ws.cell(row=row_idx, column=total_col, value=working_total)
@@ -332,7 +361,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     year = schedule.config.year
     title = f"Статистика дежурств — {MONTHS_RU[month]} {year}"
 
-    ws.merge_cells("A1:N1")
+    ws.merge_cells("A1:O1")
     title_cell = ws.cell(row=1, column=1, value=title)
     title_cell.fill = _fill(COLORS["stat_header"])
     title_cell.font = _font(bold=True, white=True, size=14)
@@ -345,7 +374,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         (3, 4, "Норма"),
         (5, 8, "Смены"),
         (9, 12, "Отдых"),
-        (13, 14, "Нагрузка"),
+        (13, 15, "Нагрузка"),
     ]
     for start, end, label in groups:
         if label:
@@ -371,6 +400,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         "Работал в\nпраздники",
         "Макс. серия\nработы",
         "Макс. серия\nотдыха",
+        "Изол.\nвыходных",
     ]
     ws.row_dimensions[3].height = 32
     for col_idx, h in enumerate(headers, start=1):
@@ -389,6 +419,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         "vacation": 0,
         "weekend_work": 0,
         "holiday_work": 0,
+        "isolated_off": 0,
     }
 
     for row_idx, st in enumerate(stats, start=4):
@@ -427,6 +458,14 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         streak_r_color = COLORS["warn"] if st.max_streak_rest >= 3 else COLORS["ok"]
         _stat_cell(ws, row_idx, 14, st.max_streak_rest, streak_r_color)
 
+        if st.isolated_off >= 2:
+            iso_color = COLORS["bad"]
+        elif st.isolated_off == 1:
+            iso_color = COLORS["warn"]
+        else:
+            iso_color = COLORS["ok"]
+        _stat_cell(ws, row_idx, 15, st.isolated_off, iso_color)
+
         totals["total"] += st.total_working
         totals["morning"] += st.morning
         totals["evening"] += st.evening
@@ -436,6 +475,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         totals["vacation"] += st.vacation
         totals["weekend_work"] += st.weekend_work
         totals["holiday_work"] += st.holiday_work
+        totals["isolated_off"] += st.isolated_off
 
     total_row = len(stats) + 4
     ws.row_dimensions[total_row].height = 22
@@ -453,8 +493,9 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     _stat_cell(ws, total_row, 12, totals["holiday_work"], COLORS["total_row"], white=True)
     _stat_cell(ws, total_row, 13, "", COLORS["total_row"])
     _stat_cell(ws, total_row, 14, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 15, totals["isolated_off"], COLORS["total_row"], white=True)
 
-    col_widths = [20, 12, 10, 8, 7, 7, 7, 7, 10, 10, 14, 14, 16, 16]
+    col_widths = [20, 12, 10, 8, 7, 7, 7, 7, 10, 10, 14, 14, 16, 16, 12]
     for i, w in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -495,8 +536,8 @@ def _add_legend(wb: Workbook) -> None:
 
     for i, (label, key, desc) in enumerate(items, start=2):
         c1 = ws.cell(row=i, column=1, value=label)
-        c1.fill = _fill(COLORS[key])
-        c1.font = _font(white=key in WHITE_FONT_KEYS, bold=True, size=10)
+        c1.fill = _fill(CELL_COLORS[key])
+        c1.font = _font(white=False, bold=True, size=10)
         c1.alignment = _align()
         c2 = ws.cell(row=i, column=2, value=desc)
         c2.font = _font(size=10)

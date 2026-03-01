@@ -740,6 +740,7 @@ def _minimize_isolated_off(
                     if consec_off_if_freed(emp.name, extend_idx) > _max_co_postprocess(emp):
                         continue
 
+                    comp_candidates = []
                     for comp_i, comp_day in enumerate(days):
                         if emp.name not in comp_day.day_off:
                             continue
@@ -757,7 +758,12 @@ def _minimize_isolated_off(
                             continue
                         if _consec_work_if_added(emp.name, comp_i, days, carry_over_cw) > _max_cw_postprocess(emp):
                             continue
+                        comp_candidates.append(comp_i)
 
+                    comp_candidates.sort(key=lambda ci: abs(ci - isolated_idx))
+
+                    for comp_i in comp_candidates:
+                        comp_day = days[comp_i]
                         free_day.workday.remove(emp.name)
                         free_day.day_off.append(emp.name)
                         comp_day.day_off.remove(emp.name)
@@ -817,6 +823,7 @@ def _minimize_isolated_off(
                             break
 
                     if not improved:
+                        swap_candidates = []
                         for comp_i in range(len(days)):
                             comp_day = days[comp_i]
                             if emp.name not in comp_day.workday:
@@ -831,6 +838,12 @@ def _minimize_isolated_off(
                                 continue
                             if _streak_around(emp.name, comp_i, days, working=False) > _max_co(emp):
                                 continue
+                            swap_candidates.append(comp_i)
+
+                        swap_candidates.sort(key=lambda ci: abs(ci - isolated_idx))
+
+                        for comp_i in swap_candidates:
+                            comp_day = days[comp_i]
                             days[isolated_idx].day_off.remove(emp.name)
                             days[isolated_idx].workday.append(emp.name)
                             comp_day.workday.remove(emp.name)
@@ -846,6 +859,86 @@ def _minimize_isolated_off(
 
             if not improved_any:
                 break
+
+    return days
+
+
+def _break_evening_isolated_pattern(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    pinned_on: set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
+) -> list[DaySchedule]:
+    def is_off(name: str, idx: int) -> bool:
+        if idx < 0 or idx >= len(days):
+            return True
+        return name in days[idx].day_off or name in days[idx].vacation
+
+    moscow_flex = [
+        e for e in employees
+        if e.on_duty and e.schedule_type == ScheduleType.FLEXIBLE
+        and e.city == City.MOSCOW and not e.morning_only and not e.evening_only
+    ]
+
+    for emp_a in moscow_flex:
+        if _count_isolated_off(emp_a.name, days) <= 1:
+            continue
+
+        for iso_idx in range(len(days)):
+            if _count_isolated_off(emp_a.name, days) <= 1:
+                break
+            if emp_a.name not in days[iso_idx].day_off:
+                continue
+            if is_off(emp_a.name, iso_idx - 1) or is_off(emp_a.name, iso_idx + 1):
+                continue
+
+            if iso_idx == 0 or emp_a.name not in days[iso_idx - 1].evening:
+                continue
+            ev_idx = iso_idx - 1
+
+            if ev_idx > 0 and emp_a.name in days[ev_idx - 1].evening:
+                continue
+
+            count_a_before = _count_isolated_off(emp_a.name, days)
+
+            for emp_b in moscow_flex:
+                if emp_b.name == emp_a.name:
+                    continue
+
+                ev_day = days[ev_idx]
+
+                if (ev_day.date, emp_a.name) in pinned_on or (ev_day.date, emp_b.name) in pinned_on:
+                    continue
+
+                if emp_b.name in ev_day.morning:
+                    b_source = "morning"
+                elif emp_b.name in ev_day.workday:
+                    b_source = "workday"
+                else:
+                    continue
+
+                if ev_idx + 1 < len(days):
+                    next_d = days[ev_idx + 1]
+                    if not (emp_b.name in next_d.evening or emp_b.name in next_d.day_off or emp_b.name in next_d.vacation):
+                        continue
+
+                count_b_before = _count_isolated_off(emp_b.name, days)
+
+                ev_day.evening.remove(emp_a.name)
+                b_list = ev_day.morning if b_source == "morning" else ev_day.workday
+                b_list.remove(emp_b.name)
+                ev_day.evening.append(emp_b.name)
+                (ev_day.morning if b_source == "morning" else ev_day.workday).append(emp_a.name)
+
+                count_b_after = _count_isolated_off(emp_b.name, days)
+
+                if count_b_after <= 1:
+                    break
+
+                ev_day.evening.remove(emp_b.name)
+                (ev_day.morning if b_source == "morning" else ev_day.workday).remove(emp_a.name)
+                ev_day.evening.append(emp_a.name)
+                (ev_day.morning if b_source == "morning" else ev_day.workday).append(emp_b.name)
 
     return days
 
@@ -890,7 +983,7 @@ def _trim_long_off_blocks(
                     i = j
                     continue
 
-                trim_idx = None
+                candidates = []
                 for k in range(i, j):
                     if emp.name not in days[k].day_off:
                         continue
@@ -904,8 +997,14 @@ def _trim_long_off_blocks(
                         continue
                     if _consec_work_if_added(emp.name, k, days, carry_over_cw) > max_cw:
                         continue
-                    trim_idx = k
-                    break
+                    candidates.append(k)
+
+                if not candidates:
+                    i = j
+                    continue
+
+                candidates.sort(key=lambda k: min(k - i, j - 1 - k))
+                trim_idx = candidates[0]
 
                 if trim_idx is None:
                     i = j
@@ -1025,15 +1124,35 @@ def _target_adjustment_pass(
         elif actual < target and not _duty_only(emp):
             deficit = target - actual
 
-            def _in_off_block(idx: int) -> bool:
-                left = idx > 0 and (emp.name in days[idx - 1].day_off or emp.name in days[idx - 1].vacation)
-                right = idx < len(days) - 1 and (emp.name in days[idx + 1].day_off or emp.name in days[idx + 1].vacation)
-                return left or right
+            def _off_block_priority(idx: int) -> int:
+                def _is_off(i: int) -> bool:
+                    if i < 0 or i >= len(days):
+                        return False
+                    return emp.name in days[i].day_off or emp.name in days[i].vacation
+
+                if not _is_off(idx):
+                    return 1
+
+                block_size = 1
+                left = idx - 1
+                while left >= 0 and _is_off(left):
+                    block_size += 1
+                    left -= 1
+                right = idx + 1
+                while right < len(days) and _is_off(right):
+                    block_size += 1
+                    right += 1
+
+                if block_size == 1:
+                    return 0
+                if block_size >= 3:
+                    return 1
+                return 2
 
             prefer_isolated = emp.schedule_type == ScheduleType.FLEXIBLE and emp.on_duty
             day_indices: list[int] = list(range(len(days)))
             if prefer_isolated:
-                day_indices.sort(key=lambda idx: (_in_off_block(idx), idx))
+                day_indices.sort(key=lambda idx: (_off_block_priority(idx), idx))
 
             for i in day_indices:
                 if deficit == 0:
@@ -1375,6 +1494,8 @@ def generate_schedule(
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
     days = _target_adjustment_pass(days, employees, states, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    days = _break_evening_isolated_pattern(days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw)
     days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
 
     duty_employees = [e for e in employees if e.on_duty]
