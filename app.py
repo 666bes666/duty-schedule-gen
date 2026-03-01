@@ -1252,7 +1252,7 @@ if st.button("⚡ Сгенерировать расписание", type="primar
 
     with st.spinner("Загружаем производственный календарь (isdayoff.ru)…"):
         try:
-            holidays = fetch_holidays(year, month)
+            holidays, short_days = fetch_holidays(year, month)
         except CalendarError as e:
             st.error(f"Не удалось загрузить производственный календарь: {e}")
             st.info("Проверьте подключение к интернету.")
@@ -1404,7 +1404,7 @@ if st.session_state.get("last_result"):
     _xls_hash = _XLS_VERSION + str(pd.util.hash_pandas_object(edited_schedule_df).sum())
     if st.session_state.get("_xls_hash") != _xls_hash:
         with tempfile.TemporaryDirectory() as tmpdir:
-            xls_path = export_xls(final_schedule, Path(tmpdir))
+            xls_path = export_xls(final_schedule, Path(tmpdir), short_days=short_days)
             st.session_state["_xls_bytes"] = xls_path.read_bytes()
             st.session_state["_xls_hash"]  = _xls_hash
     xls_bytes: bytes = st.session_state["_xls_bytes"]

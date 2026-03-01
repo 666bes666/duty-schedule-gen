@@ -15,19 +15,14 @@ ISDAYOFF_URL = "https://isdayoff.ru/api/getdata"
 TIMEOUT = 5.0
 
 _HOLIDAY_CODE = "1"
+_SHORT_DAY_CODE = "2"
 
 
 class CalendarError(Exception):
     """Ошибка при получении производственного календаря."""
 
 
-def fetch_holidays(year: int, month: int) -> set[date]:
-    """
-    Загрузить праздники/выходные из isdayoff.ru.
-
-    Возвращает множество дат-выходных (включая праздники).
-    Raises CalendarError если API недоступен.
-    """
+def fetch_holidays(year: int, month: int) -> tuple[set[date], set[date]]:
     try:
         resp = httpx.get(
             ISDAYOFF_URL,
@@ -48,25 +43,24 @@ def fetch_holidays(year: int, month: int) -> set[date]:
         )
 
     holidays: set[date] = set()
+    short_days: set[date] = set()
     for day_idx, code in enumerate(data, start=1):
         if code == _HOLIDAY_CODE:
             holidays.add(date(year, month, day_idx))
+        elif code == _SHORT_DAY_CODE:
+            short_days.add(date(year, month, day_idx))
 
     logger.info(
         "Праздники загружены",
         year=year,
         month=month,
         holidays_count=len(holidays),
+        short_days_count=len(short_days),
     )
-    return holidays
+    return holidays, short_days
 
 
-def parse_manual_holidays(holidays_str: str, year: int, month: int) -> set[date]:
-    """
-    Распарсить праздники из строки формата YYYY-MM-DD,YYYY-MM-DD,...
-
-    Используется как запасной вариант при недоступности API.
-    """
+def parse_manual_holidays(holidays_str: str, year: int, month: int) -> tuple[set[date], set[date]]:
     holidays: set[date] = set()
     for raw in holidays_str.split(","):
         raw = raw.strip()
@@ -82,7 +76,7 @@ def parse_manual_holidays(holidays_str: str, year: int, month: int) -> set[date]
             logger.warning("Праздник вне указанного месяца пропущен", date=raw)
             continue
         holidays.add(d)
-    return holidays
+    return holidays, set()
 
 
 def get_all_days(year: int, month: int) -> list[date]:

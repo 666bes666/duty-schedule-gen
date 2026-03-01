@@ -34,21 +34,23 @@ class TestGetAllDays:
 
 class TestParseManualHolidays:
     def test_valid_dates(self):
-        result = parse_manual_holidays("2025-03-08,2025-03-09", 2025, 3)
+        result, short = parse_manual_holidays("2025-03-08,2025-03-09", 2025, 3)
         assert date(2025, 3, 8) in result
         assert date(2025, 3, 9) in result
         assert len(result) == 2
+        assert short == set()
 
     def test_empty_string(self):
-        result = parse_manual_holidays("", 2025, 3)
+        result, short = parse_manual_holidays("", 2025, 3)
         assert result == set()
+        assert short == set()
 
     def test_invalid_format_raises(self):
         with pytest.raises(CalendarError, match="Неверный формат"):
             parse_manual_holidays("08.03.2025", 2025, 3)
 
     def test_wrong_month_skipped(self):
-        result = parse_manual_holidays("2025-04-01,2025-03-08", 2025, 3)
+        result, short = parse_manual_holidays("2025-04-01,2025-03-08", 2025, 3)
         assert date(2025, 3, 8) in result
         assert date(2025, 4, 1) not in result
 
@@ -63,9 +65,24 @@ class TestFetchHolidays:
             mock_resp.text = mock_data
             mock_resp.raise_for_status = lambda: None
 
-            result = fetch_holidays(2025, 3)
+            result, short = fetch_holidays(2025, 3)
 
         assert date(2025, 3, 8) in result
+        assert short == set()
+
+    def test_short_days_detected(self):
+        mock_data = "0000000100000020000000000000000"
+        assert len(mock_data) == 31
+
+        with patch("httpx.get") as mock_get:
+            mock_resp = mock_get.return_value
+            mock_resp.text = mock_data
+            mock_resp.raise_for_status = lambda: None
+
+            result, short = fetch_holidays(2025, 3)
+
+        assert date(2025, 3, 8) in result
+        assert date(2025, 3, 15) in short
 
     def test_http_error_raises(self):
         with (

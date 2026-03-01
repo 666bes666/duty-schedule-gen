@@ -129,12 +129,8 @@ def _build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
     return result
 
 
-SHIFT_HOURS = {
-    "morning": 9,
-    "evening": 9,
-    "night": 8,
-    "workday": 9,
-}
+HOURS_NORMAL = 8
+HOURS_SHORT = 7
 
 
 @dataclass
@@ -197,12 +193,14 @@ def _compute_stats(
     assignments: dict[str, dict[date, str]],
     production_days: int,
     employees: list | None = None,
+    short_days: set[date] | None = None,
 ) -> list[EmployeeStats]:
     """Вычислить статистику для каждого сотрудника."""
     holiday_dates = {day.date for day in schedule.days if day.is_holiday}
     sorted_dates = sorted(day.date for day in schedule.days)
     _employees = employees if employees is not None else schedule.config.employees
 
+    _short = short_days or set()
     result = []
     for emp in _employees:
         emp_days = assignments.get(emp.name, {})
@@ -231,11 +229,9 @@ def _compute_stats(
         isolated_off = _count_isolated_off(emp.name, schedule)
         paired_off = _count_paired_off(emp.name, schedule)
 
-        total_hours = (
-            morning * SHIFT_HOURS["morning"]
-            + evening * SHIFT_HOURS["evening"]
-            + night * SHIFT_HOURS["night"]
-            + workday * SHIFT_HOURS["workday"]
+        total_hours = sum(
+            HOURS_SHORT if d in _short else HOURS_NORMAL
+            for d, v in emp_days.items() if v in working_keys
         )
 
         result.append(
@@ -281,7 +277,7 @@ def _max_streak(
     return max_s
 
 
-def export_xls(schedule: Schedule, output_dir: Path) -> Path:
+def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | None = None) -> Path:
     """
     Сгенерировать .xlsx файл с тремя листами:
       1. «График дежурств» — строки=сотрудники, столбцы=даты
@@ -310,7 +306,7 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     )
     assignments = _build_assignments(schedule)
     production_days = schedule.metadata.get("production_working_days", 21)
-    stats = _compute_stats(schedule, assignments, production_days, employees)
+    stats = _compute_stats(schedule, assignments, production_days, employees, short_days)
 
     _build_schedule_sheet(ws, days, employees, assignments, stats)
 

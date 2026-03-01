@@ -1446,8 +1446,6 @@ def _target_adjustment_pass(
                         and not _is_weekend_or_holiday(day.date, holidays)
                         and (day.date, emp.name) not in pinned_on
                     ):
-                        if not _can_remove_workday(emp.name, day):
-                            continue
                         day.workday.remove(emp.name)
                         day.day_off.append(emp.name)
                         state.total_working -= 1
@@ -1843,6 +1841,36 @@ def generate_schedule(
     days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw, carry_over_last_shift=initial_last_shift)
     days = _equalize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw)
     days = _minimize_isolated_off(days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw, carry_over_last_shift=initial_last_shift)
+
+    for emp in employees:
+        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
+        target = states[emp.name].effective_target
+        if actual > target:
+            for i in range(len(days) - 1, -1, -1):
+                if actual <= target:
+                    break
+                day = days[i]
+                if emp.name in day.workday and (day.date, emp.name) not in pinned_on:
+                    day.workday.remove(emp.name)
+                    day.day_off.append(emp.name)
+                    actual -= 1
+
+    for emp in employees:
+        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
+        target = states[emp.name].effective_target
+        if actual > target:
+            removable = sum(
+                1 for d in days
+                if emp.name in d.workday and (d.date, emp.name) not in pinned_on
+            )
+            if removable > 0:
+                raise ScheduleError(
+                    f"Нарушена норма для {emp.name}: факт={actual}, норма={target}, "
+                    f"осталось {removable} снимаемых WORKDAY"
+                )
+
+    for emp in employees:
+        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     duty_employees = [e for e in employees if e.on_duty]
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}

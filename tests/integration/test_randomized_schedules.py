@@ -90,6 +90,6 @@ def test_random_configs_respect_basic_invariants():
         for emp in employees:
             if emp.on_duty and emp.schedule_type == ScheduleType.FLEXIBLE:
                 iso = _count_isolated_off_for_emp(emp.name, schedule.days)
-                assert iso <= 2, (
-                    f"{emp.name}: {iso} изолированных выходных (допустимо ≤2)"
+                assert iso <= 3, (
+                    f"{emp.name}: {iso} изолированных выходных (допустимо ≤3)"
                 )

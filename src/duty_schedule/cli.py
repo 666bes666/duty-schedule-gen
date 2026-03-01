@@ -83,7 +83,7 @@ def generate(
             console.print(f"  • {msg}")
 
     with console.status("Загрузка производственного календаря..."):
-        holiday_set = _load_holidays(config, holidays)
+        holiday_set, short_days = _load_holidays(config, holidays)
 
     console.print(f"✓ Праздников в месяце: [bold]{len(holiday_set)}[/bold]")
 
@@ -101,7 +101,7 @@ def generate(
 
     if fmt_lower in ("xls", "all"):
         with console.status("Экспорт в XLS..."):
-            xls_path = export_xls(schedule, output_dir)
+            xls_path = export_xls(schedule, output_dir, short_days=short_days)
         console.print(f"✓ XLS: [green]{xls_path}[/green]")
         exported.append(str(xls_path))
 
@@ -162,8 +162,7 @@ def version() -> None:
     console.print(f"duty-schedule v{__version__}")
 
 
-def _load_holidays(config: Config, holidays_arg: str | None) -> set:
-    """Загрузить праздники из API или из аргумента командной строки."""
+def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
     from datetime import date as _date
 
     try:
@@ -194,7 +193,7 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> set:
             f"[yellow]Используются только выходные дни ({len(weekends)} дней). "
             "Укажите --holidays для точного производственного календаря.[/yellow]"
         )
-        return weekends
+        return weekends, set()
 
 
 def _print_summary(schedule) -> None:
