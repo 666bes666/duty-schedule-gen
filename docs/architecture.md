@@ -50,22 +50,31 @@ Pydantic v2 модели с встроенной валидацией:
 
 ### `scheduler.py` — Движок планирования
 
-Жадный алгоритм с откатом:
+Жадный алгоритм с откатом + 12-шаговый постобработочный pipeline:
 
 ```
 for day in month:
     Phase 1: Ночная смена (Хабаровск, обязательно)
     Phase 2: Утро + Вечер (Москва, обязательно)
+    Phase 2b: WORKDAY для дежурных (Москва)
+    Phase 2c: WORKDAY для дежурных (Хабаровск)
     Phase 3: Рабочий день (не-дежурные)
-    Phase 4: Принудительное назначение при 3+ выходных подряд
+    Phase 4: Anti-isolated-off + Anti-short-work overrides
     → update state
     if fail: backtrack up to 3 days
+
+Post-processing:
+    balance_weekend → balance_shifts → target_adjustment →
+    trim_long_off → target_adjustment → minimize_isolated →
+    break_evening_pattern → minimize_isolated →
+    equalize_isolated → minimize_isolated
 ```
 
 ### `export/xls.py` — Excel экспорт
 
 - openpyxl с цветовым кодированием
-- Строки = даты, столбцы = типы смен
+- 3 листа: «График дежурств», «Статистика» (17 метрик), «Легенда»
+- Статистика: норма, смены, отдых, нагрузка (вкл. изолированные и сдвоенные выходные)
 - Совместим с Excel 2016+
 
 ### `export/ics.py` — iCalendar экспорт
