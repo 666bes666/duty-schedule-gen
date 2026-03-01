@@ -68,7 +68,7 @@ class TestCanWork:
 
     def test_max_consecutive_cannot_work(self):
         emp = _emp("Максимум")
-        state = EmployeeState(consecutive_working=5)
+        state = EmployeeState(consecutive_working=6)
         assert _can_work(emp, state, date(2025, 3, 10), set()) is False
 
     def test_52_weekend_cannot_work(self):

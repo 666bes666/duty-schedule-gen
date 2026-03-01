@@ -59,19 +59,16 @@ _EMPTY_ROW = {
     "Макс. утренних": None,
     "Макс. вечерних": None,
     "Макс. ночных": None,
-    "Макс. подряд": 5,
+    "Макс. подряд": 6,
     "Группа": "",
 }
 
 _DEFAULT_ROWS = [
-    {**_EMPTY_ROW, "Имя": "Левченко",    "График": "5/2",                          "Дежурный": False},
-    {**_EMPTY_ROW, "Имя": "Хадзугов",    "График": "5/2",                          "Дежурный": False},
     {**_EMPTY_ROW, "Имя": "Абашина",                       "Предпочт. смена": "Утро"},
-    {**_EMPTY_ROW, "Имя": "Екат",         "График": "5/2", "Только утро": True, "Всегда на деж.": True},
+    {**_EMPTY_ROW, "Имя": "Скрябин",     "График": "5/2", "Только утро": True, "Всегда на деж.": True},
     {**_EMPTY_ROW, "Имя": "Ищенко"},
-    {**_EMPTY_ROW, "Имя": "Пантелеймон"},
+    {**_EMPTY_ROW, "Имя": "Корох"},
     {**_EMPTY_ROW, "Имя": "Ужахов"},
-    {**_EMPTY_ROW, "Имя": "Кочкин",      "Город": "Хабаровск", "График": "5/2",   "Дежурный": False},
     {**_EMPTY_ROW, "Имя": "Вика",         "Город": "Хабаровск"},
     {**_EMPTY_ROW, "Имя": "Голубев",     "Город": "Хабаровск"},
     {**_EMPTY_ROW, "Имя": "Карпенко",    "Город": "Хабаровск"},
@@ -968,6 +965,54 @@ with _setup_tab1:
         )
         _bump_table()
         st.rerun()
+
+    with st.expander("Массовое редактирование"):
+        _bulk_names = [
+            str(r["Имя"]).strip()
+            for _, r in edited_df.iterrows()
+            if str(r["Имя"]).strip()
+        ]
+        _bulk_selected = st.multiselect(
+            "Сотрудники",
+            options=_bulk_names,
+            key="bulk_employees",
+        )
+        _bulk_columns = [
+            "Город", "График", "Дежурный", "Всегда на деж.",
+            "Только утро", "Только вечер", "Предпочт. смена",
+            "Загрузка%", "Макс. утренних", "Макс. вечерних",
+            "Макс. ночных", "Макс. подряд", "Группа",
+        ]
+        _bulk_col = st.selectbox(
+            "Столбец",
+            options=_bulk_columns,
+            key="bulk_column",
+        )
+        _bulk_value = None
+        if _bulk_col == "Город":
+            _bulk_value = st.selectbox("Значение", ["Москва", "Хабаровск"], key="bulk_val")
+        elif _bulk_col == "График":
+            _bulk_value = st.selectbox("Значение", ["Гибкий", "5/2"], key="bulk_val")
+        elif _bulk_col in ("Дежурный", "Всегда на деж.", "Только утро", "Только вечер"):
+            _bulk_value = st.checkbox("Значение", key="bulk_val")
+        elif _bulk_col == "Предпочт. смена":
+            _bulk_value = st.selectbox(
+                "Значение", ["", "Утро", "Вечер", "Ночь", "Рабочий день"], key="bulk_val",
+            )
+        elif _bulk_col == "Загрузка%":
+            _bulk_value = st.number_input("Значение", min_value=1, max_value=100, value=100, step=1, key="bulk_val")
+        elif _bulk_col in ("Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд"):
+            _bulk_value = st.number_input("Значение", min_value=1, value=6, step=1, key="bulk_val")
+        elif _bulk_col == "Группа":
+            _bulk_value = st.text_input("Значение", key="bulk_val")
+
+        if st.button("Применить", key="bulk_apply", disabled=not _bulk_selected):
+            _bulk_df = edited_df.copy()
+            _mask = _bulk_df["Имя"].astype(str).str.strip().isin(_bulk_selected)
+            _bulk_df.loc[_mask, _bulk_col] = _bulk_value
+            st.session_state["employees_df"] = _bulk_df
+            _bump_table()
+            st.rerun()
 
 with _setup_tab2:
     _emp_names = [

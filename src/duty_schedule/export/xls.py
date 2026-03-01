@@ -47,7 +47,7 @@ MEDIUM_SIDE = Side(style="medium", color="808080")
 THIN_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
 MONDAY_BORDER = Border(left=MEDIUM_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
 SECTION_BORDER = Border(left=MEDIUM_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
-SECTION_COLS = {3, 6, 10, 14}
+SECTION_COLS = {3, 7, 11, 15}
 
 SHIFT_LABELS = {
     "morning": "Утро",
@@ -129,6 +129,14 @@ def _build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
     return result
 
 
+SHIFT_HOURS = {
+    "morning": 9,
+    "evening": 9,
+    "night": 8,
+    "workday": 9,
+}
+
+
 @dataclass
 class EmployeeStats:
     name: str
@@ -147,6 +155,7 @@ class EmployeeStats:
     max_streak_rest: int
     isolated_off: int
     paired_off: int
+    total_hours: int = 0
 
 
 def _count_isolated_off(emp_name: str, schedule: Schedule) -> int:
@@ -222,6 +231,13 @@ def _compute_stats(
         isolated_off = _count_isolated_off(emp.name, schedule)
         paired_off = _count_paired_off(emp.name, schedule)
 
+        total_hours = (
+            morning * SHIFT_HOURS["morning"]
+            + evening * SHIFT_HOURS["evening"]
+            + night * SHIFT_HOURS["night"]
+            + workday * SHIFT_HOURS["workday"]
+        )
+
         result.append(
             EmployeeStats(
                 name=emp.name,
@@ -240,6 +256,7 @@ def _compute_stats(
                 max_streak_rest=max_streak_rest,
                 isolated_off=isolated_off,
                 paired_off=paired_off,
+                total_hours=total_hours,
             )
         )
     return result
@@ -295,7 +312,7 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     production_days = schedule.metadata.get("production_working_days", 21)
     stats = _compute_stats(schedule, assignments, production_days, employees)
 
-    _build_schedule_sheet(ws, days, employees, assignments)
+    _build_schedule_sheet(ws, days, employees, assignments, stats)
 
     ws_stat = wb.create_sheet(title="Статистика")
     _build_stats_sheet(ws_stat, stats, schedule)
@@ -306,13 +323,14 @@ def export_xls(schedule: Schedule, output_dir: Path) -> Path:
     return filename
 
 
-def _build_schedule_sheet(ws, days, employees, assignments) -> None:
+def _build_schedule_sheet(ws, days, employees, assignments, stats: list[EmployeeStats] | None = None) -> None:
     """Заполнить лист «График дежурств»."""
     total_col = len(days) + 3
+    hours_col = total_col + 1
 
     first_day = days[0].date
     month_label = f"График дежурств — {MONTHS_RU[first_day.month]} {first_day.year}"
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_col)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=hours_col)
     title = ws.cell(row=1, column=1, value=month_label)
     title.fill = _fill(COLORS["header"])
     title.font = _font(bold=True, white=True, size=14)
@@ -348,6 +366,14 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
     tc.font = _font(bold=True, white=True, size=9)
     tc.alignment = _align()
     tc.border = THIN_BORDER
+
+    hc2 = ws.cell(row=2, column=hours_col, value="Итого\nчасов")
+    hc2.fill = _fill(COLORS["header"])
+    hc2.font = _font(bold=True, white=True, size=9)
+    hc2.alignment = _align()
+    hc2.border = THIN_BORDER
+
+    stats_by_name = {s.name: s for s in stats} if stats else {}
 
     for row_idx, emp in enumerate(employees, start=3):
         ws.row_dimensions[row_idx].height = 20
@@ -387,11 +413,20 @@ def _build_schedule_sheet(ws, days, employees, assignments) -> None:
         itogo.alignment = _align()
         itogo.border = THIN_BORDER
 
+        emp_stats = stats_by_name.get(emp.name)
+        hours_val = emp_stats.total_hours if emp_stats else 0
+        hc3 = ws.cell(row=row_idx, column=hours_col, value=hours_val)
+        hc3.fill = _fill(COLORS["name"])
+        hc3.font = _font(bold=True, size=10)
+        hc3.alignment = _align()
+        hc3.border = THIN_BORDER
+
     ws.column_dimensions["A"].width = 18
     ws.column_dimensions["B"].width = 12
     for col_idx in range(3, len(days) + 3):
         ws.column_dimensions[get_column_letter(col_idx)].width = 5.5
     ws.column_dimensions[get_column_letter(total_col)].width = 8
+    ws.column_dimensions[get_column_letter(hours_col)].width = 8
     ws.freeze_panes = "C3"
 
 
@@ -411,7 +446,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     year = schedule.config.year
     title = f"Статистика дежурств — {MONTHS_RU[month]} {year}"
 
-    ws.merge_cells("A1:Q1")
+    ws.merge_cells("A1:R1")
     title_cell = ws.cell(row=1, column=1, value=title)
     title_cell.fill = _fill(COLORS["stat_header"])
     title_cell.font = _font(bold=True, white=True, size=14)
@@ -422,10 +457,10 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     groups = [
         (1, 1, ""),
         (2, 2, ""),
-        (3, 5, "Норма"),
-        (6, 9, "Смены"),
-        (10, 13, "Отдых"),
-        (14, 17, "Нагрузка"),
+        (3, 6, "Норма"),
+        (7, 10, "Смены"),
+        (11, 14, "Отдых"),
+        (15, 18, "Нагрузка"),
     ]
     for start, end, label in groups:
         if label:
@@ -443,6 +478,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         "Рабочих\nдней",
         "Норма",
         "±Норма",
+        "Часов",
         "Утро",
         "Вечер",
         "Ночь",
@@ -466,6 +502,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
 
     totals = {
         "total": 0,
+        "total_hours": 0,
         "morning": 0,
         "evening": 0,
         "night": 0,
@@ -507,24 +544,26 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
         delta_label = f"+{delta}" if delta > 0 else str(delta)
         _stat_cell(ws, row_idx, 5, delta_label, delta_color)
 
-        _stat_cell(ws, row_idx, 6, st.morning or "—", COLORS["morning"], white=False)
-        _stat_cell(ws, row_idx, 7, st.evening or "—", COLORS["evening"], white=True)
-        _stat_cell(ws, row_idx, 8, st.night or "—", COLORS["night"], white=True)
-        _stat_cell(ws, row_idx, 9, st.workday or "—", COLORS["workday"], white=True)
+        _stat_cell(ws, row_idx, 6, st.total_hours, COLORS["name"])
 
-        _stat_cell(ws, row_idx, 10, st.day_off, COLORS["day_off"])
-        _stat_cell(ws, row_idx, 11, st.vacation or "—", COLORS["vacation"], white=True)
+        _stat_cell(ws, row_idx, 7, st.morning or "—", COLORS["morning"], white=False)
+        _stat_cell(ws, row_idx, 8, st.evening or "—", COLORS["evening"], white=True)
+        _stat_cell(ws, row_idx, 9, st.night or "—", COLORS["night"], white=True)
+        _stat_cell(ws, row_idx, 10, st.workday or "—", COLORS["workday"], white=True)
+
+        _stat_cell(ws, row_idx, 11, st.day_off, COLORS["day_off"])
+        _stat_cell(ws, row_idx, 12, st.vacation or "—", COLORS["vacation"], white=True)
 
         ww_color = COLORS["warn"] if st.weekend_work > 0 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 12, st.weekend_work or "—", ww_color)
+        _stat_cell(ws, row_idx, 13, st.weekend_work or "—", ww_color)
 
         hw_color = COLORS["warn"] if st.holiday_work > 0 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 13, st.holiday_work or "—", hw_color)
+        _stat_cell(ws, row_idx, 14, st.holiday_work or "—", hw_color)
 
-        streak_w_color = COLORS["bad"] if st.max_streak_work >= 5 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 14, st.max_streak_work, streak_w_color)
+        streak_w_color = COLORS["bad"] if st.max_streak_work >= 6 else COLORS["ok"]
+        _stat_cell(ws, row_idx, 15, st.max_streak_work, streak_w_color)
         streak_r_color = COLORS["warn"] if st.max_streak_rest >= 3 else COLORS["ok"]
-        _stat_cell(ws, row_idx, 15, st.max_streak_rest, streak_r_color)
+        _stat_cell(ws, row_idx, 16, st.max_streak_rest, streak_r_color)
 
         if st.isolated_off >= 2:
             iso_color = COLORS["bad"]
@@ -532,7 +571,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
             iso_color = COLORS["warn"]
         else:
             iso_color = COLORS["ok"]
-        _stat_cell(ws, row_idx, 16, st.isolated_off, iso_color)
+        _stat_cell(ws, row_idx, 17, st.isolated_off, iso_color)
 
         if st.paired_off >= 3:
             paired_color = COLORS["ok"]
@@ -540,9 +579,10 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
             paired_color = COLORS["warn"]
         else:
             paired_color = COLORS["bad"]
-        _stat_cell(ws, row_idx, 17, st.paired_off, paired_color)
+        _stat_cell(ws, row_idx, 18, st.paired_off, paired_color)
 
         totals["total"] += st.total_working
+        totals["total_hours"] += st.total_hours
         totals["morning"] += st.morning
         totals["evening"] += st.evening
         totals["night"] += st.night
@@ -561,25 +601,26 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
     _stat_cell(ws, total_row, 3, totals["total"], COLORS["total_row"], white=True, bold=True)
     _stat_cell(ws, total_row, 4, "", COLORS["total_row"])
     _stat_cell(ws, total_row, 5, "", COLORS["total_row"])
-    _stat_cell(ws, total_row, 6, totals["morning"], COLORS["morning"], bold=True)
-    _stat_cell(ws, total_row, 7, totals["evening"], COLORS["evening"], white=True, bold=True)
-    _stat_cell(ws, total_row, 8, totals["night"], COLORS["night"], white=True, bold=True)
-    _stat_cell(ws, total_row, 9, totals["workday"], COLORS["workday"], white=True, bold=True)
-    _stat_cell(ws, total_row, 10, totals["day_off"], COLORS["day_off"], bold=True)
-    _stat_cell(ws, total_row, 11, totals["vacation"], COLORS["vacation"], white=True, bold=True)
-    _stat_cell(ws, total_row, 12, totals["weekend_work"], COLORS["total_row"], white=True)
-    _stat_cell(ws, total_row, 13, totals["holiday_work"], COLORS["total_row"], white=True)
-    _stat_cell(ws, total_row, 14, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 6, totals["total_hours"], COLORS["total_row"], white=True, bold=True)
+    _stat_cell(ws, total_row, 7, totals["morning"], COLORS["morning"], bold=True)
+    _stat_cell(ws, total_row, 8, totals["evening"], COLORS["evening"], white=True, bold=True)
+    _stat_cell(ws, total_row, 9, totals["night"], COLORS["night"], white=True, bold=True)
+    _stat_cell(ws, total_row, 10, totals["workday"], COLORS["workday"], white=True, bold=True)
+    _stat_cell(ws, total_row, 11, totals["day_off"], COLORS["day_off"], bold=True)
+    _stat_cell(ws, total_row, 12, totals["vacation"], COLORS["vacation"], white=True, bold=True)
+    _stat_cell(ws, total_row, 13, totals["weekend_work"], COLORS["total_row"], white=True)
+    _stat_cell(ws, total_row, 14, totals["holiday_work"], COLORS["total_row"], white=True)
     _stat_cell(ws, total_row, 15, "", COLORS["total_row"])
-    _stat_cell(ws, total_row, 16, totals["isolated_off"], COLORS["total_row"], white=True)
-    _stat_cell(ws, total_row, 17, totals["paired_off"], COLORS["total_row"], white=True)
+    _stat_cell(ws, total_row, 16, "", COLORS["total_row"])
+    _stat_cell(ws, total_row, 17, totals["isolated_off"], COLORS["total_row"], white=True)
+    _stat_cell(ws, total_row, 18, totals["paired_off"], COLORS["total_row"], white=True)
 
-    col_widths = [20, 12, 10, 8, 8, 7, 7, 7, 7, 10, 10, 14, 14, 16, 16, 12, 12]
+    col_widths = [20, 12, 10, 8, 8, 8, 7, 7, 7, 7, 10, 10, 14, 14, 16, 16, 12, 12]
     for i, w in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
     ws.freeze_panes = "A4"
-    ws.auto_filter.ref = f"A3:{get_column_letter(17)}{total_row}"
+    ws.auto_filter.ref = f"A3:{get_column_letter(18)}{total_row}"
 
 
 def _stat_cell(
