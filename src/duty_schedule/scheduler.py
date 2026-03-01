@@ -290,6 +290,7 @@ def _build_day(
     rng: random.Random,
     remaining_days: int,
     pins_today: dict[str, ShiftType] | None = None,
+    pins_tomorrow: dict[str, ShiftType] | None = None,
 ) -> DaySchedule:
     """Построить расписание на один день."""
     is_holiday = _is_weekend_or_holiday(day, holidays)
@@ -439,6 +440,12 @@ def _build_day(
                 for e in evening_eligible
                 if e not in morning_pick and (not e.group or e.group not in evening_groups_taken)
             ]
+        if pins_tomorrow:
+            _pinned_non_evening = {
+                name for name, shift in pins_tomorrow.items()
+                if shift in (ShiftType.MORNING, ShiftType.WORKDAY)
+            }
+            evening_pick_pool = [e for e in evening_pick_pool if e.name not in _pinned_non_evening]
         if not evening_pick_pool:
             raise ScheduleError(
                 f"Невозможно покрыть вечернюю смену {day}: все доступные дежурные заняты утром"
@@ -778,6 +785,14 @@ def _try_duty_shift_swap(
         if partner_source == "day_off":
             if _consec_work_if_added(partner.name, extend_idx, days, carry_over_cw) > _max_cw_postprocess(partner):
                 continue
+
+        if duty_shift_type == "evening" and extend_idx + 1 < len(days):
+            next_day = days[extend_idx + 1]
+            if partner.name in next_day.morning or partner.name in next_day.workday:
+                continue
+
+        if duty_shift_type in ("morning", "night") and _had_evening_before(partner.name, extend_idx, days, carry_over_last_shift):
+            continue
 
         if duty_shift_type == "morning" and partner.max_morning_shifts is not None:
             if sum(1 for d in days if partner.name in d.morning) >= partner.max_morning_shifts:
@@ -1602,6 +1617,10 @@ def _balance_weekend_work(
                 if max_attr == "morning" and prev and min_name in prev.evening:
                     continue
 
+                nxt = day_by_date.get(day.date + timedelta(days=1))
+                if max_attr == "evening" and nxt and (min_name in nxt.morning or min_name in nxt.workday):
+                    continue
+
                 if _consec_work_if_added(min_name, day_idx_map[day.date], days, carry_over_cw) > _max_cw(min_emp):
                     continue
 
@@ -1710,6 +1729,10 @@ def _balance_duty_shifts(
                 if max_attr == "morning" and prev and min_name in prev.evening:
                     continue
 
+                nxt = day_by_date.get(day.date + timedelta(days=1))
+                if max_attr == "evening" and nxt and (min_name in nxt.morning or min_name in nxt.workday):
+                    continue
+
                 getattr(day, max_attr).remove(max_name)
                 day.workday.append(max_name)
                 day.workday.remove(min_name)
@@ -1794,6 +1817,7 @@ def generate_schedule(
         remaining_days = len(all_days) - day_idx
 
         try:
+            _next_day = day + timedelta(days=1)
             ds = _build_day(
                 day,
                 employees,
@@ -1802,6 +1826,7 @@ def generate_schedule(
                 rng,
                 remaining_days,
                 pins_today=pins_by_date.get(day),
+                pins_tomorrow=pins_by_date.get(_next_day),
             )
             days.append(ds)
             backtrack_stack.append((day, saved_states))
@@ -1877,6 +1902,14 @@ def generate_schedule(
     if ev_counts:
         max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
         logger.info("Баланс вечерних смен", max=max_ev, min=min_ev, diff=max_ev - min_ev)
+
+    for i in range(len(days) - 1):
+        for emp_name in days[i].evening:
+            if emp_name in days[i + 1].morning or emp_name in days[i + 1].workday:
+                raise ScheduleError(
+                    f"Нарушение отдыха: {emp_name} вечер {days[i].date} → "
+                    f"утро/день {days[i + 1].date}"
+                )
 
     total_nights = sum(len(d.night) for d in days)
     total_mornings = sum(len(d.morning) for d in days)
