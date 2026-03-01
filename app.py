@@ -941,21 +941,6 @@ with _setup_tab1:
                                    min_value=1, step=1,
                                    help="Макс. рабочих дней подряд (пусто = 5)",
                                ),
-            "Подряд: утро":    st.column_config.NumberColumn(
-                                   "↑П.Утр",
-                                   min_value=1, step=1,
-                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
-                               ),
-            "Подряд: вечер":   st.column_config.NumberColumn(
-                                   "↑П.Веч",
-                                   min_value=1, step=1,
-                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
-                               ),
-            "Подряд: день":    st.column_config.NumberColumn(
-                                   "↑П.День",
-                                   min_value=1, step=1,
-                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
-                               ),
             "Группа":          st.column_config.SelectboxColumn(
                                    "Группа",
                                    options=_group_options,
@@ -967,7 +952,6 @@ with _setup_tab1:
             "Дежурный", "Всегда на деж.", "Только утро", "Только вечер",
             "Предпочт. смена", "Загрузка%",
             "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
-            "Подряд: утро", "Подряд: вечер", "Подряд: день",
             "Группа",
         ],
         disabled=["№"],
@@ -1019,7 +1003,6 @@ with _setup_tab1:
             "Только утро", "Только вечер", "Предпочт. смена",
             "Загрузка%", "Макс. утренних", "Макс. вечерних",
             "Макс. ночных", "Макс. подряд",
-            "Подряд: утро", "Подряд: вечер", "Подряд: день",
             "Группа",
         ]
         _bulk_col = st.selectbox(
@@ -1052,6 +1035,54 @@ with _setup_tab1:
             st.session_state["employees_df"] = _bulk_df
             _bump_table()
             st.rerun()
+
+    with st.expander("Лимит однотипных смен подряд"):
+        st.caption("Ограничить число одинаковых дежурных смен подряд. "
+                   "Применимо только к дежурным с гибким графиком.")
+        _consec_candidates = [
+            str(r["Имя"]).strip()
+            for _, r in edited_df.iterrows()
+            if str(r["Имя"]).strip()
+            and bool(r.get("Дежурный", True))
+            and str(r.get("График", "")) == "Гибкий"
+        ]
+        if not _consec_candidates:
+            st.info("Нет дежурных с гибким графиком.")
+        else:
+            _consec_sel = st.selectbox(
+                "Сотрудник", options=_consec_candidates, key="consec_employee"
+            )
+            _mask = edited_df["Имя"].astype(str).str.strip() == _consec_sel
+            _cur = edited_df.loc[_mask].iloc[0] if _mask.any() else None
+
+            if _cur is not None:
+                c1, c2, c3 = st.columns(3)
+                _v_m = c1.number_input(
+                    "Подряд: утро", min_value=1, step=1,
+                    value=int(_cur["Подряд: утро"]) if pd.notna(_cur["Подряд: утро"]) else None,
+                    help="Пусто = без ограничений",
+                    key="consec_morning",
+                )
+                _v_e = c2.number_input(
+                    "Подряд: вечер", min_value=1, step=1,
+                    value=int(_cur["Подряд: вечер"]) if pd.notna(_cur["Подряд: вечер"]) else None,
+                    help="Пусто = без ограничений",
+                    key="consec_evening",
+                )
+                _v_w = c3.number_input(
+                    "Подряд: день", min_value=1, step=1,
+                    value=int(_cur["Подряд: день"]) if pd.notna(_cur["Подряд: день"]) else None,
+                    help="Пусто = без ограничений",
+                    key="consec_workday",
+                )
+                if st.button("Сохранить", key="consec_save"):
+                    _upd = edited_df.copy()
+                    _upd.loc[_mask, "Подряд: утро"] = _v_m
+                    _upd.loc[_mask, "Подряд: вечер"] = _v_e
+                    _upd.loc[_mask, "Подряд: день"] = _v_w
+                    st.session_state["employees_df"] = _upd
+                    _bump_table()
+                    st.rerun()
 
 with _setup_tab2:
     _emp_names = [
@@ -1177,7 +1208,7 @@ with _setup_tab2:
 | **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
-| **Подряд: утро/вечер/день** | Макс. однотипных дежурств подряд (пусто = без ограничений) |
+| **Подряд: утро/вечер/день** | Настраивается в разделе «Лимит однотипных смен подряд» ниже |
 | **Группа** | Не ставить двух из одной группы на одну смену в один день |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
