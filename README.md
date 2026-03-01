@@ -6,21 +6,13 @@
 
 ## Быстрый старт
 
-**→ [Подробная инструкция по установке для всех ОС](УСТАНОВКА.md)** _(для тех, кто не работал с терминалом)_
-
-**Для тех, кто знаком с терминалом:**
 ```bash
 git clone https://github.com/666bes666/duty-schedule-gen.git
 cd duty-schedule-gen
-uv sync && uv pip install -e ".[web]"
+uv sync
 
 # Веб-интерфейс
 uv run streamlit run app.py
-
-# Или через лончер (двойной клик)
-# macOS:   launchers/start-macos.command
-# Windows: launchers/start-windows.bat
-# Linux:   launchers/start-linux.sh
 ```
 
 ## Возможности
@@ -41,13 +33,9 @@ uv run streamlit run app.py
 Удобный браузерный интерфейс — заполните таблицу сотрудников и скачайте готовый XLS.
 
 ```bash
-uv pip install -e ".[web]"
 uv run streamlit run app.py
 # Открыть в браузере: http://localhost:8501
 ```
-
-Или запустить двойным кликом через лончеры из папки `launchers/`.
-Подробнее — [УСТАНОВКА.md](УСТАНОВКА.md).
 
 ## Установка (CLI)
 
@@ -181,7 +169,7 @@ uv run pytest --cov=duty_schedule --cov-report=html
 
 ## Архитектура
 
-Подробная документация: [`docs/architecture.md`](docs/architecture.md)
+Подробная документация: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## Лицензия
 

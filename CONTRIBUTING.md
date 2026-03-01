@@ -85,6 +85,5 @@ refactor: упростить алгоритм отката
 src/duty_schedule/    # Основной код
 tests/unit/           # Модульные тесты
 tests/integration/    # Интеграционные тесты
-docs/                 # Документация
 examples/             # Примеры конфигурации
 ```

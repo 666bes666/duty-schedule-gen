@@ -29,7 +29,6 @@
 | Логирование | structlog |
 | Менеджер пакетов | uv |
 | Тесты | pytest |
-| Деплой | Yandex Cloud Serverless Containers + GitHub Actions |
 
 ---
 
@@ -499,13 +498,6 @@ uv run duty-schedule generate --month 3 --year 2026 --output schedule.xlsx
 ```bash
 uv run streamlit run app.py
 ```
-
-### Yandex Cloud Serverless Containers
-
-- Docker-образ → Yandex Container Registry
-- Развёртывание через `yc serverless container revision deploy`
-- GitHub Actions workflow: сборка → push → deploy при push в `main`
-- URL: `https://bbal7kfrf454cvfhrnv1.containers.yandexcloud.net/`
 
 ---
 
