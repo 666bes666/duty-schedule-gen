@@ -82,6 +82,31 @@ def _shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) 
     return False
 
 
+def _consecutive_shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) -> bool:
+    if shift == ShiftType.MORNING and emp.max_consecutive_morning is not None:
+        return state.consecutive_morning >= emp.max_consecutive_morning
+    if shift == ShiftType.EVENING and emp.max_consecutive_evening is not None:
+        return state.consecutive_evening >= emp.max_consecutive_evening
+    if shift == ShiftType.WORKDAY and emp.max_consecutive_workday is not None:
+        return state.consecutive_workday >= emp.max_consecutive_workday
+    return False
+
+
+def _consecutive_shift_count_at(emp_name: str, idx: int, days: list[DaySchedule], shift_attr: str) -> int:
+    count = 1
+    for i in range(idx - 1, -1, -1):
+        if emp_name in getattr(days[i], shift_attr):
+            count += 1
+        else:
+            break
+    for i in range(idx + 1, len(days)):
+        if emp_name in getattr(days[i], shift_attr):
+            count += 1
+        else:
+            break
+    return count
+
+
 class ScheduleError(Exception):
     """Расписание не может быть построено."""
 
@@ -98,6 +123,9 @@ class EmployeeState:
     total_working: int = 0
     target_working_days: int = 0
     vacation_days: int = 0
+    consecutive_morning: int = 0
+    consecutive_evening: int = 0
+    consecutive_workday: int = 0
 
     def shift_count(self, shift: ShiftType) -> int:
         return {
@@ -118,12 +146,28 @@ class EmployeeState:
         self.last_shift = shift
         if shift == ShiftType.MORNING:
             self.morning_count += 1
+            self.consecutive_morning += 1
+            self.consecutive_evening = 0
+            self.consecutive_workday = 0
         elif shift == ShiftType.EVENING:
             self.evening_count += 1
+            self.consecutive_evening += 1
+            self.consecutive_morning = 0
+            self.consecutive_workday = 0
         elif shift == ShiftType.NIGHT:
             self.night_count += 1
+            self.consecutive_morning = 0
+            self.consecutive_evening = 0
+            self.consecutive_workday = 0
         elif shift == ShiftType.WORKDAY:
             self.workday_count += 1
+            self.consecutive_workday += 1
+            self.consecutive_morning = 0
+            self.consecutive_evening = 0
+        else:
+            self.consecutive_morning = 0
+            self.consecutive_evening = 0
+            self.consecutive_workday = 0
 
     @property
     def effective_target(self) -> int:
@@ -322,6 +366,8 @@ def _build_day(
         _aod_shift = ShiftType.MORNING if _aod_emp.morning_only else ShiftType.EVENING
         if _shift_limit_reached(_aod_emp, states[_aod_emp.name], _aod_shift):
             continue
+        if _consecutive_shift_limit_reached(_aod_emp, states[_aod_emp.name], _aod_shift):
+            continue
         if _aod_shift == ShiftType.MORNING and _resting_after_evening(states[_aod_emp.name]):
             continue
         assigned[_aod_emp.name] = _aod_shift
@@ -376,12 +422,15 @@ def _build_day(
         if e.can_work_morning()
         and not _resting_after_evening(states[e.name])
         and not _shift_limit_reached(e, states[e.name], ShiftType.MORNING)
+        and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.MORNING)
         and (not e.group or e.group not in morning_groups_taken)
     ]
     evening_eligible = [
         e
         for e in moscow_available
-        if e.can_work_evening() and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+        if e.can_work_evening()
+        and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+        and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
     ]
 
     if not _morning_pinned:
@@ -397,12 +446,14 @@ def _build_day(
                 if e not in morning_eligible
                 and e.can_work_evening()
                 and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
             ]
             evening_capable_inside = [
                 e
                 for e in morning_eligible
                 if e.can_work_evening()
                 and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
             ]
             if not evening_capable_outside and len(evening_capable_inside) <= 1:
                 _morning_select_pool = morning_only_pool
@@ -432,6 +483,7 @@ def _build_day(
             if e.can_work_evening()
             and e not in morning_pick
             and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+            and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
             and (not e.group or e.group not in evening_groups_taken)
         ]
         if not evening_pick_pool:
@@ -487,6 +539,7 @@ def _build_day(
                 and states[e.name].consecutive_working < _max_cw(e)
                 and not _resting_after_evening(states[e.name])
                 and not (e.schedule_type == ScheduleType.FLEXIBLE and states[e.name].consecutive_off == 1)
+                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.WORKDAY)
             ]
             if not extra:
                 break
@@ -799,6 +852,11 @@ def _try_duty_shift_swap(
                 continue
         if duty_shift_type == "evening" and partner.max_evening_shifts is not None:
             if sum(1 for d in days if partner.name in d.evening) >= partner.max_evening_shifts:
+                continue
+
+        _consec_limit = getattr(partner, f"max_consecutive_{duty_shift_type}", None)
+        if _consec_limit is not None:
+            if _consecutive_shift_count_at(partner.name, extend_idx, days, duty_shift_type) >= _consec_limit:
                 continue
 
         emp_comp_candidates = []
@@ -1624,6 +1682,12 @@ def _balance_weekend_work(
                 if _consec_work_if_added(min_name, day_idx_map[day.date], days, carry_over_cw) > _max_cw(min_emp):
                     continue
 
+                _wk_idx = day_idx_map[day.date]
+                _consec_limit = getattr(min_emp, f"max_consecutive_{max_attr}", None)
+                if _consec_limit is not None:
+                    if _consecutive_shift_count_at(min_name, _wk_idx, days, max_attr) >= _consec_limit:
+                        continue
+
                 max_emp = next(e for e in duty_emps if e.name == max_name)
                 if max_emp.schedule_type == ScheduleType.FLEXIBLE:
                     max_idx = day_idx_map[day.date]
@@ -1676,6 +1740,8 @@ def _balance_duty_shifts(
         duty_attrs = ["morning", "evening"] if city == City.MOSCOW else ["night"]
 
         day_by_date = {d.date: d for d in days}
+        day_idx_map = {d.date: i for i, d in enumerate(days)}
+        emp_by_name = {e.name: e for e in duty_emps}
 
         for _ in range(len(days) * len(duty_emps)):
             counts: dict[str, int] = {
@@ -1732,6 +1798,12 @@ def _balance_duty_shifts(
                 nxt = day_by_date.get(day.date + timedelta(days=1))
                 if max_attr == "evening" and nxt and (min_name in nxt.morning or min_name in nxt.workday):
                     continue
+
+                idx = day_idx_map[day.date]
+                _consec_limit = getattr(emp_by_name.get(min_name), f"max_consecutive_{max_attr}", None)
+                if _consec_limit is not None:
+                    if _consecutive_shift_count_at(min_name, idx, days, max_attr) >= _consec_limit:
+                        continue
 
                 getattr(day, max_attr).remove(max_name)
                 day.workday.append(max_name)
@@ -1797,6 +1869,13 @@ def generate_schedule(
                 states[emp.name].last_shift = co.last_shift
             states[emp.name].consecutive_working = co.consecutive_working
             states[emp.name].consecutive_off = co.consecutive_off
+            if co.consecutive_same_shift > 0 and co.last_shift is not None:
+                if co.last_shift == ShiftType.MORNING:
+                    states[emp.name].consecutive_morning = co.consecutive_same_shift
+                elif co.last_shift == ShiftType.EVENING:
+                    states[emp.name].consecutive_evening = co.consecutive_same_shift
+                elif co.last_shift == ShiftType.WORKDAY:
+                    states[emp.name].consecutive_workday = co.consecutive_same_shift
 
     initial_cw: dict[str, int] = {emp.name: states[emp.name].consecutive_working for emp in employees}
     initial_last_shift: dict[str, ShiftType] = {
@@ -1938,6 +2017,11 @@ def generate_schedule(
             "last_shift": str(states[emp.name].last_shift) if states[emp.name].last_shift else None,
             "consecutive_working": states[emp.name].consecutive_working,
             "consecutive_off": states[emp.name].consecutive_off,
+            "consecutive_same_shift": max(
+                states[emp.name].consecutive_morning,
+                states[emp.name].consecutive_evening,
+                states[emp.name].consecutive_workday,
+            ),
         }
         for emp in employees
     ]

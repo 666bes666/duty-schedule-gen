@@ -60,6 +60,9 @@ _EMPTY_ROW = {
     "Макс. вечерних": None,
     "Макс. ночных": None,
     "Макс. подряд": 6,
+    "Подряд: утро": None,
+    "Подряд: вечер": None,
+    "Подряд: день": None,
     "Группа": "",
 }
 
@@ -214,6 +217,9 @@ def _df_to_yaml(
         max_evening = _parse_limit(row.get("Макс. вечерних"))
         max_night   = _parse_limit(row.get("Макс. ночных"))
         max_cw      = _parse_limit(row.get("Макс. подряд"))
+        max_consec_morning = _parse_limit(row.get("Подряд: утро"))
+        max_consec_evening = _parse_limit(row.get("Подряд: вечер"))
+        max_consec_workday = _parse_limit(row.get("Подряд: день"))
         group = str(row.get("Группа", "")).strip() or None
 
         emp: dict = {
@@ -243,6 +249,12 @@ def _df_to_yaml(
             emp["max_night_shifts"] = max_night
         if max_cw is not None:
             emp["max_consecutive_working"] = max_cw
+        if max_consec_morning is not None:
+            emp["max_consecutive_morning"] = max_consec_morning
+        if max_consec_evening is not None:
+            emp["max_consecutive_evening"] = max_consec_evening
+        if max_consec_workday is not None:
+            emp["max_consecutive_workday"] = max_consec_workday
         if group is not None:
             emp["group"] = group
         employees.append(emp)
@@ -349,6 +361,9 @@ def _yaml_to_df(
             "Макс. вечерних":  emp.get("max_evening_shifts"),
             "Макс. ночных":    emp.get("max_night_shifts"),
             "Макс. подряд":    emp.get("max_consecutive_working"),
+            "Подряд: утро":    emp.get("max_consecutive_morning"),
+            "Подряд: вечер":   emp.get("max_consecutive_evening"),
+            "Подряд: день":    emp.get("max_consecutive_workday"),
             "Группа":          emp.get("group", "") or "",
         })
 
@@ -409,6 +424,9 @@ def _build_employees(
         max_evening = _parse_limit(row.get("Макс. вечерних"))
         max_night   = _parse_limit(row.get("Макс. ночных"))
         max_cw      = _parse_limit(row.get("Макс. подряд"))
+        max_consec_morning = _parse_limit(row.get("Подряд: утро"))
+        max_consec_evening = _parse_limit(row.get("Подряд: вечер"))
+        max_consec_workday = _parse_limit(row.get("Подряд: день"))
         group = str(row.get("Группа", "")).strip() or None
 
         try:
@@ -427,6 +445,9 @@ def _build_employees(
                 max_evening_shifts=max_evening,
                 max_night_shifts=max_night,
                 max_consecutive_working=max_cw,
+                max_consecutive_morning=max_consec_morning,
+                max_consecutive_evening=max_consec_evening,
+                max_consecutive_workday=max_consec_workday,
                 group=group,
             ))
         except Exception as e:
@@ -920,6 +941,21 @@ with _setup_tab1:
                                    min_value=1, step=1,
                                    help="Макс. рабочих дней подряд (пусто = 5)",
                                ),
+            "Подряд: утро":    st.column_config.NumberColumn(
+                                   "↑П.Утр",
+                                   min_value=1, step=1,
+                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
+                               ),
+            "Подряд: вечер":   st.column_config.NumberColumn(
+                                   "↑П.Веч",
+                                   min_value=1, step=1,
+                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
+                               ),
+            "Подряд: день":    st.column_config.NumberColumn(
+                                   "↑П.День",
+                                   min_value=1, step=1,
+                                   help="Макс. однотипных дежурств подряд (пусто = без ограничений)",
+                               ),
             "Группа":          st.column_config.SelectboxColumn(
                                    "Группа",
                                    options=_group_options,
@@ -931,6 +967,7 @@ with _setup_tab1:
             "Дежурный", "Всегда на деж.", "Только утро", "Только вечер",
             "Предпочт. смена", "Загрузка%",
             "Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд",
+            "Подряд: утро", "Подряд: вечер", "Подряд: день",
             "Группа",
         ],
         disabled=["№"],
@@ -981,7 +1018,9 @@ with _setup_tab1:
             "Город", "График", "Дежурный", "Всегда на деж.",
             "Только утро", "Только вечер", "Предпочт. смена",
             "Загрузка%", "Макс. утренних", "Макс. вечерних",
-            "Макс. ночных", "Макс. подряд", "Группа",
+            "Макс. ночных", "Макс. подряд",
+            "Подряд: утро", "Подряд: вечер", "Подряд: день",
+            "Группа",
         ]
         _bulk_col = st.selectbox(
             "Столбец",
@@ -1138,6 +1177,7 @@ with _setup_tab2:
 | **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
 | **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
+| **Подряд: утро/вечер/день** | Макс. однотипных дежурств подряд (пусто = без ограничений) |
 | **Группа** | Не ставить двух из одной группы на одну смену в один день |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.

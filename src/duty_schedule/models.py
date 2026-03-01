@@ -79,6 +79,9 @@ class Employee(BaseModel):
     workload_pct: int = 100
     days_off_weekly: list[int] = []
     max_consecutive_working: int | None = None
+    max_consecutive_morning: int | None = None
+    max_consecutive_evening: int | None = None
+    max_consecutive_workday: int | None = None
     group: str | None = None
 
     @model_validator(mode="after")
@@ -159,6 +162,7 @@ class CarryOverState(BaseModel):
     last_shift: ShiftType | None = None
     consecutive_working: int = 0
     consecutive_off: int = 0
+    consecutive_same_shift: int = 0
 
 
 class Config(BaseModel):
