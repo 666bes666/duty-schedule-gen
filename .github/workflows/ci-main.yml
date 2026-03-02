@@ -1,0 +1,113 @@
+name: CI Main (Full Regression)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint + Mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+      - run: uv run ruff check src/ tests/
+      - run: uv run ruff format --check src/ tests/
+      - run: uv run mypy src/
+
+  test-all:
+    name: Tests (${{ matrix.os }} / py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ matrix.python }}
+          extra-groups: ci-perf
+      - run: uv run pytest tests/unit tests/integration tests/contract tests/e2e tests/system tests/performance -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
+      - uses: codecov/codecov-action@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          extra-groups: ci-security
+      - run: uv run pip-audit
+      - run: uv run bandit -r src/ -c pyproject.toml
+
+  ui-tests:
+    name: UI Tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          extra-groups: ci-ui
+      - name: Install Playwright browsers
+        run: uv run playwright install chromium --with-deps
+      - name: Start Streamlit
+        run: |
+          uv run streamlit run app.py \
+            --server.headless true \
+            --server.port 8501 \
+            --server.enableCORS false \
+            --browser.gatherUsageStats false &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8501/_stcore/health > /dev/null 2>&1; then
+              echo "Streamlit is healthy"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:8501/_stcore/health
+      - name: Run UI tests
+        run: uv run pytest tests/ui -q
+      - name: Stop Streamlit
+        if: always()
+        run: kill %1 || true
+
+  system-tests:
+    name: System Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+      - run: uv run pytest tests/system -q
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test-all, security, ui-tests, system-tests]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          dev-deps: "false"
+      - name: Build wheel
+        run: uv build
+      - name: Smoke test from wheel
+        run: |
+          uv run --no-project --with dist/*.whl duty-schedule --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

@@ -1,0 +1,34 @@
+name: Setup Python with uv
+description: Install Python via uv, sync dependencies
+
+inputs:
+  python-version:
+    description: Python version to install
+    default: "3.12"
+  dev-deps:
+    description: Install dev dependencies
+    default: "true"
+  extra-groups:
+    description: Additional dependency groups (comma-separated)
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v3
+    - run: uv python install ${{ inputs.python-version }}
+      shell: bash
+    - run: |
+        ARGS=""
+        if [ "${{ inputs.dev-deps }}" = "true" ]; then
+          ARGS="--dev"
+        fi
+        IFS=',' read -ra GROUPS <<< "${{ inputs.extra-groups }}"
+        for group in "${GROUPS[@]}"; do
+          group=$(echo "$group" | xargs)
+          if [ -n "$group" ]; then
+            ARGS="$ARGS --group $group"
+          fi
+        done
+        uv sync $ARGS
+      shell: bash
