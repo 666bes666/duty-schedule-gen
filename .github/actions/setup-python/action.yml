@@ -23,12 +23,14 @@ runs:
         if [ "${{ inputs.dev-deps }}" = "true" ]; then
           ARGS="--dev"
         fi
-        IFS=',' read -ra GROUPS <<< "${{ inputs.extra-groups }}"
-        for group in "${GROUPS[@]}"; do
-          group=$(echo "$group" | xargs)
-          if [ -n "$group" ]; then
-            ARGS="$ARGS --group $group"
-          fi
-        done
+        if [ -n "${{ inputs.extra-groups }}" ]; then
+          IFS=',' read -ra DEP_GROUPS <<< "${{ inputs.extra-groups }}"
+          for g in "${DEP_GROUPS[@]}"; do
+            g=$(echo "$g" | xargs)
+            if [ -n "$g" ]; then
+              ARGS="$ARGS --group $g"
+            fi
+          done
+        fi
         uv sync $ARGS
       shell: bash
