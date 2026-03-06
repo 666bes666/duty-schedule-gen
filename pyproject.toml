@@ -33,6 +33,18 @@ dev = [
     "pytest-cov>=5.0",
     "pytest-httpx>=0.30",
     "ruff>=0.4",
+    "mypy>=1.10",
+]
+ci-security = [
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+]
+ci-perf = [
+    "pytest-benchmark>=4.0",
+]
+ci-ui = [
+    "playwright>=1.40",
+    "pytest-playwright>=0.4",
 ]
 
 [tool.ruff]
@@ -47,6 +59,13 @@ ignore = ["B008"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "benchmark: performance benchmark tests",
+    "ui: UI tests requiring Playwright",
+    "e2e: end-to-end tests",
+    "system: system-level tests",
+    "contract: contract tests",
+]
 
 [tool.coverage.run]
 source = ["duty_schedule"]
@@ -54,3 +73,14 @@ branch = true
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B311"]

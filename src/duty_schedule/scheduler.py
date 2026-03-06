@@ -416,9 +416,11 @@ def _build_day(
     _evening_pinned = any(s == ShiftType.EVENING for s in assigned.values())
 
     morning_groups_taken: set[str] = {
-        emp_by_name[name].group
+        g
         for name, s in assigned.items()
-        if s == ShiftType.MORNING and name in emp_by_name and emp_by_name[name].group
+        if s == ShiftType.MORNING
+        and name in emp_by_name
+        and (g := emp_by_name[name].group) is not None
     }
 
     morning_eligible = [
@@ -478,9 +480,11 @@ def _build_day(
 
     if not _evening_pinned:
         evening_groups_taken: set[str] = {
-            emp_by_name[name].group
+            g
             for name, s in assigned.items()
-            if s == ShiftType.EVENING and name in emp_by_name and emp_by_name[name].group
+            if s == ShiftType.EVENING
+            and name in emp_by_name
+            and (g := emp_by_name[name].group) is not None
         }
         evening_pick_pool = [
             e
@@ -806,7 +810,7 @@ def _try_duty_shift_swap(
     isolated_idx: int,
     days: list[DaySchedule],
     employees: list[Employee],
-    pinned_on: set[tuple[date, str]],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
     holidays: set[date],
     carry_over_cw: dict[str, int] | None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
@@ -833,9 +837,9 @@ def _try_duty_shift_swap(
             continue
         if _duty_only(partner):
             continue
-        if duty_shift_type == "morning" and not partner.can_work_morning:
+        if duty_shift_type == "morning" and not partner.can_work_morning():
             continue
-        if duty_shift_type == "evening" and not partner.can_work_evening:
+        if duty_shift_type == "evening" and not partner.can_work_evening():
             continue
         if (free_day.date, partner.name) in pinned_on:
             continue
@@ -958,7 +962,7 @@ def _minimize_isolated_off(
     days: list[DaySchedule],
     employees: list[Employee],
     holidays: set[date],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
 ) -> list[DaySchedule]:
@@ -1167,7 +1171,7 @@ def _minimize_isolated_off(
 def _break_evening_isolated_pattern(
     days: list[DaySchedule],
     employees: list[Employee],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     def is_off(name: str, idx: int) -> bool:
@@ -1255,7 +1259,7 @@ def _equalize_isolated_off(
     days: list[DaySchedule],
     employees: list[Employee],
     holidays: set[date],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     flex_duty = [
@@ -1268,8 +1272,8 @@ def _equalize_isolated_off(
 
     for _ in range(len(days)):
         iso_counts = {e.name: _count_isolated_off(e.name, days) for e in flex_duty}
-        max_name = max(iso_counts, key=iso_counts.get)
-        min_name = min(iso_counts, key=iso_counts.get)
+        max_name = max(iso_counts, key=lambda n: iso_counts[n])
+        min_name = min(iso_counts, key=lambda n: iso_counts[n])
         max_val = iso_counts[max_name]
         min_val = iso_counts[min_name]
 
@@ -1372,7 +1376,7 @@ def _trim_long_off_blocks(
     days: list[DaySchedule],
     employees: list[Employee],
     holidays: set[date],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
 ) -> list[DaySchedule]:
@@ -1486,7 +1490,7 @@ def _target_adjustment_pass(
     employees: list[Employee],
     states: dict[str, EmployeeState],
     holidays: set[date],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
 ) -> list[DaySchedule]:
@@ -1586,8 +1590,8 @@ def _target_adjustment_pass(
         elif actual < target and not _duty_only(emp):
             deficit = target - actual
 
-            def _off_block_priority(idx: int, _emp=emp) -> int:
-                def _is_off(di: int, _e=_emp) -> bool:
+            def _off_block_priority(idx: int, _emp: Employee = emp) -> int:
+                def _is_off(di: int, _e: Employee = _emp) -> bool:
                     if di < 0 or di >= len(days):
                         return False
                     return _e.name in days[di].day_off or _e.name in days[di].vacation
@@ -1650,7 +1654,7 @@ def _target_adjustment_pass(
 def _balance_weekend_work(
     days: list[DaySchedule],
     employees: list[Employee],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
 ) -> list[DaySchedule]:
     """
@@ -1784,7 +1788,7 @@ def _balance_duty_shifts(
     days: list[DaySchedule],
     employees: list[Employee],
     holidays: set[date],
-    pinned_on: set[tuple[date, str]] = frozenset(),
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
 ) -> list[DaySchedule]:
     """
     Пост-обработка: выровнять число дежурных смен между сотрудниками одного города.
@@ -1951,9 +1955,7 @@ def generate_schedule(
         emp.name: states[emp.name].consecutive_working for emp in employees
     }
     initial_last_shift: dict[str, ShiftType] = {
-        emp.name: states[emp.name].last_shift
-        for emp in employees
-        if states[emp.name].last_shift is not None
+        emp.name: ls for emp in employees if (ls := states[emp.name].last_shift) is not None
     }
 
     days: list[DaySchedule] = []
@@ -2073,10 +2075,10 @@ def generate_schedule(
             for i in range(len(days) - 1, -1, -1):
                 if actual <= target:
                     break
-                day = days[i]
-                if emp.name in day.workday and (day.date, emp.name) not in pinned_on:
-                    day.workday.remove(emp.name)
-                    day.day_off.append(emp.name)
+                ds = days[i]
+                if emp.name in ds.workday and (ds.date, emp.name) not in pinned_on:
+                    ds.workday.remove(emp.name)
+                    ds.day_off.append(emp.name)
                     actual -= 1
 
     for emp in employees:
