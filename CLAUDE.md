@@ -1,0 +1,69 @@
+# Claude Code Instructions for duty-schedule-gen
+
+## Branching Flow
+
+feature -> dev -> test -> main
+
+NEVER push directly to main (except hotfixes).
+
+### Feature delivery:
+1. `git checkout -b feature/xxx dev`
+2. Develop, run local checks
+3. PR -> dev (ci-dev must be green)
+4. PR dev -> test (ci-test must be green)
+5. PR test -> main (ci-main must be green)
+6. Update version -> tag -> release
+
+### Hotfix:
+1. Branch from main
+2. PR directly to main
+3. Cherry-pick into dev and test
+
+## Before Every Push
+
+Run locally:
+```
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+uv run mypy src/
+uv run pytest tests/ -q --ignore=tests/ui
+```
+
+## Before Merge to Next Branch
+
+Ensure CI on current branch is green.
+
+## Code Rules
+
+- NO comments in source code (no `#`-comments). All notes go in NOTES.md
+- No docstrings required
+- Coverage minimum: 80%. New features MUST include tests
+- Conventional Commits: feat:, fix:, docs:, test:, refactor:, ci:
+
+## Tools
+
+- Package manager: uv (NOT pip, NOT poetry)
+- Tests: `uv run pytest tests/ -q` (or `--ignore=tests/ui` without playwright)
+- Lint: `uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/`
+- Type check: `uv run mypy src/`
+- Security: `uv run bandit -r src/ -c pyproject.toml`
+
+## CI/CD Levels
+
+| Branch | Workflow | Checks | Time |
+|--------|----------|--------|------|
+| dev | ci-dev.yml | lint, unit+integration tests, smoke | ~20s |
+| test | ci-test.yml | + mypy, 4 platforms, security, performance | ~45s |
+| main | ci-main.yml | + 6 platforms, UI/Playwright, system, e2e, build | ~2min |
+
+## Project Structure
+
+- `src/duty_schedule/` — main package (models, scheduler, calendar, cli, logging, export/)
+- `app.py` — Streamlit UI
+- `tests/unit/` — unit tests
+- `tests/integration/` — integration tests
+- `tests/contract/` — contract tests
+- `tests/e2e/` — end-to-end CLI tests
+- `tests/system/` — system tests
+- `tests/performance/` — benchmarks
+- `tests/ui/` — Playwright UI tests (require ci-ui group)
