@@ -13,7 +13,10 @@ from duty_schedule.models import (
     Employee,
     ScheduleType,
 )
-from duty_schedule.scheduler import MAX_CONSECUTIVE_WORKING, MAX_CONSECUTIVE_WORKING_FLEX, generate_schedule
+from duty_schedule.scheduler import (
+    MAX_CONSECUTIVE_WORKING_FLEX,
+    generate_schedule,
+)
 
 
 def _make_config(month: int = 3, year: int = 2025, seed: int = 42) -> Config:
@@ -99,12 +102,17 @@ def _max_streak_with_carryover(emp_name: str, schedule_days: list, carry_over: i
 
 class TestCarryOverConsecutiveConstraint:
     def test_no_violation_with_carryover_4(self):
-        """carry_over=4 + первый день февраля = 6 (max для гибких). Больше 6 подряд быть не должно."""
+        """carry_over=4 + первый день февраля = 6 (max для гибких).
+
+        Больше 6 подряд быть не должно.
+        """
         employees = [
             Employee(name=f"Москва {i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE)
             for i in range(1, 5)
         ] + [
-            Employee(name=f"Хабаровск {i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
+            Employee(
+                name=f"Хабаровск {i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE
+            )
             for i in range(1, 3)
         ]
         carry_over = [
@@ -117,7 +125,8 @@ class TestCarryOverConsecutiveConstraint:
         for emp_name, co_cw in [("Москва 1", 4), ("Хабаровск 1", 4)]:
             ms = _max_streak_with_carryover(emp_name, schedule.days, carry_over=co_cw)
             assert ms <= MAX_CONSECUTIVE_WORKING_FLEX, (
-                f"{emp_name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_FLEX} (с учётом переноса {co_cw} дней)"
+                f"{emp_name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_FLEX}"
+                f" (с учётом переноса {co_cw} дней)"
             )
 
     def test_no_violation_without_carryover(self):
