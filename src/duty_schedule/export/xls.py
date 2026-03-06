@@ -231,7 +231,8 @@ def _compute_stats(
 
         total_hours = sum(
             HOURS_SHORT if d in _short else HOURS_NORMAL
-            for d, v in emp_days.items() if v in working_keys
+            for d, v in emp_days.items()
+            if v in working_keys
         )
 
         result.append(
@@ -319,7 +320,9 @@ def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | Non
     return filename
 
 
-def _build_schedule_sheet(ws, days, employees, assignments, stats: list[EmployeeStats] | None = None) -> None:
+def _build_schedule_sheet(
+    ws, days, employees, assignments, stats: list[EmployeeStats] | None = None
+) -> None:
     """Заполнить лист «График дежурств»."""
     total_col = len(days) + 3
     hours_col = total_col + 1
