@@ -9,8 +9,9 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
-from duty_schedule.models import City, Schedule, ScheduleType
+from duty_schedule.models import City, DaySchedule, Employee, Schedule, ScheduleType
 
 COLORS = {
     "morning": "FFC107",
@@ -321,7 +322,11 @@ def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | Non
 
 
 def _build_schedule_sheet(
-    ws, days, employees, assignments, stats: list[EmployeeStats] | None = None
+    ws: Worksheet,
+    days: list[DaySchedule],
+    employees: list[Employee],
+    assignments: dict[str, dict[date, str]],
+    stats: list[EmployeeStats] | None = None,
 ) -> None:
     """Заполнить лист «График дежурств»."""
     total_col = len(days) + 3
@@ -429,7 +434,7 @@ def _build_schedule_sheet(
     ws.freeze_panes = "C3"
 
 
-def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> None:
+def _build_stats_sheet(ws: Worksheet, stats: list[EmployeeStats], schedule: Schedule) -> None:
     """
     Заполнить лист «Статистика».
 
@@ -623,7 +628,7 @@ def _build_stats_sheet(ws, stats: list[EmployeeStats], schedule: Schedule) -> No
 
 
 def _stat_cell(
-    ws,
+    ws: Worksheet,
     row: int,
     col: int,
     value: object,

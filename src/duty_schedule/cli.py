@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
@@ -16,7 +16,7 @@ from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.logging import get_logger, setup_logging
-from duty_schedule.models import City, Config, collect_config_issues
+from duty_schedule.models import City, Config, Schedule, collect_config_issues
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
 app = typer.Typer(
@@ -196,7 +196,7 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
         return weekends, set()
 
 
-def _print_summary(schedule) -> None:
+def _print_summary(schedule: Schedule) -> None:
     """Вывести итоговую статистику."""
     table = Table(title="Итог генерации", show_header=True, header_style="bold cyan")
     table.add_column("Показатель", style="dim")
