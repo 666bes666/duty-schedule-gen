@@ -29,6 +29,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.12", "3.13"]
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
@@ -96,7 +98,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [lint, test-all, security, ui-tests, system-tests]
-    environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
