@@ -24,6 +24,8 @@ jobs:
   test-matrix:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
