@@ -38,4 +38,4 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 def get_logger() -> structlog.BoundLogger:
-    return structlog.get_logger()
+    return structlog.get_logger()  # type: ignore[no-any-return]

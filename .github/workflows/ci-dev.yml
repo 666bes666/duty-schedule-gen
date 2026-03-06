@@ -1,0 +1,59 @@
+name: CI Dev (Fast Gate)
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+concurrency:
+  group: ci-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+      - run: uv run ruff check src/ tests/
+      - run: uv run ruff format --check src/ tests/
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+      - run: uv run pytest tests/unit tests/integration -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
+
+  smoke:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+      - name: CLI --help
+        run: uv run duty-schedule --help
+      - name: Validate example config
+        run: uv run duty-schedule validate examples/config.yaml
+      - name: Streamlit healthcheck
+        run: |
+          uv run streamlit run app.py \
+            --server.headless true \
+            --server.port 8501 \
+            --server.enableCORS false \
+            --browser.gatherUsageStats false &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8501/_stcore/health > /dev/null 2>&1; then
+              echo "Streamlit is healthy"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:8501/_stcore/health
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8501)
+          echo "HTTP status: $STATUS"
+          [ "$STATUS" = "200" ]
+          kill %1 || true
