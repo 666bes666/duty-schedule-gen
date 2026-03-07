@@ -1,0 +1,16 @@
+.git
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.benchmarks
+.coverage
+coverage.xml
+htmlcov/
+dist/
+output/
+*.xlsx
+*.ics
+__pycache__
+*.py[cod]
+.env

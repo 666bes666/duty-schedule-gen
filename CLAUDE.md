@@ -48,6 +48,16 @@ Ensure CI on current branch is green.
 - Type check: `uv run mypy src/`
 - Security: `uv run bandit -r src/ -c pyproject.toml`
 
+## Local Docker
+
+For local development and staging:
+```
+docker compose up dev       # development with hot-reload (port 8501)
+docker compose up staging   # staging-like build (port 8502)
+```
+
+Do NOT use Docker for cloud deployment — this is a local-only setup.
+
 ## CI/CD Levels
 
 | Branch | Workflow | Checks | Time |
@@ -55,6 +65,8 @@ Ensure CI on current branch is green.
 | dev | ci-dev.yml | lint, unit+integration tests, smoke | ~20s |
 | test | ci-test.yml | + mypy, 4 platforms, security, performance | ~45s |
 | main | ci-main.yml | + 6 platforms, UI/Playwright, system, e2e, build | ~2min |
+| main (push) | ci-tag.yml | auto-create git tag on version change | ~5s |
+| tag v*.*.* | release.yml | build + GitHub Release | ~1min |
 
 ## Project Structure
 
