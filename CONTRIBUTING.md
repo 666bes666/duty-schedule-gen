@@ -18,9 +18,9 @@ feature/xyz ──PR──> dev ──PR──> test ──PR──> main
 
 | Ветка | Назначение | CI |
 |-------|-----------|-----|
-| `dev` | Интеграция фич, быстрая проверка | ci-dev.yml (~3 мин) |
-| `test` | Стабилизация, расширенное тестирование | ci-test.yml (~8 мин) |
-| `main` | Production, полная регрессия | ci-main.yml (~15 мин) |
+| `dev` | Интеграция фич, быстрая проверка | ci-dev.yml (~20 сек) |
+| `test` | Стабилизация, расширенное тестирование | ci-test.yml (~45 сек) |
+| `main` | Production, полная регрессия | ci-main.yml (~2 мин) |
 
 ### Создание фичи
 
@@ -107,7 +107,7 @@ main:  X.Y.Z (стабильный релиз)
 
 1. Обновить версию в `src/duty_schedule/__init__.py` и `pyproject.toml`
 2. PR через `dev → test → main`
-3. При мерже в `main` — `ci-deploy.yml` автоматически создаёт tag `vX.Y.Z`
+3. При мерже в `main` — `ci-tag.yml` автоматически создаёт tag `vX.Y.Z`
 4. Tag запускает `release.yml` → GitHub Release
 
 ## Dependency Groups
@@ -138,9 +138,25 @@ ci: обновить ci-test workflow
 src/duty_schedule/    # Основной код
 tests/                # Тесты (unit, integration, contract, e2e, performance, system, ui)
 examples/             # Примеры конфигурации
-.github/workflows/    # CI/CD (ci-dev, ci-test, ci-main, ci-deploy, release)
+Dockerfile            # Docker-образ для локальной разработки
+docker-compose.yml    # dev (hot-reload) и staging сервисы
+.dockerignore         # Исключения для Docker-контекста
+.github/workflows/    # CI/CD (ci-dev, ci-test, ci-main, ci-tag, release)
 .github/actions/      # Переиспользуемые composite actions
 ```
+
+## Локальный Docker
+
+Для разработки и тестирования без установки Python:
+
+```bash
+docker compose up dev       # разработка с hot-reload (порт 8501)
+docker compose up staging   # сборка, имитация продакшена (порт 8502)
+```
+
+- `dev`: монтирует `app.py`, `src/`, `examples/` — изменения видны сразу (Streamlit auto-reload)
+- `staging`: собранный образ без монтирования — для проверки перед мержем
+- Оба сервиса stateless, БД не требуется
 
 ## Branch Protection
 
@@ -149,3 +165,17 @@ examples/             # Примеры конфигурации
 | `dev` | Да | 0 | lint, unit-tests, smoke | Нет |
 | `test` | Да | 1 | Все ci-test jobs | Нет |
 | `main` | Да | 1 + env approval | Все ci-main jobs | Нет |
+
+## Дорожная карта CI/CD
+
+### Реализовано
+- Трёхуровневый pipeline: dev -> test -> main
+- Авто-тегирование при изменении версии (ci-tag.yml)
+- GitHub Releases с артефактами (release.yml)
+- Локальный Docker (Dockerfile + docker-compose.yml)
+
+### Планируется
+1. **Pre-commit хуки** — ruff check, ruff format, mypy до push (пакет pre-commit)
+2. **Docker smoke в CI** — сборка образа и healthcheck в ci-test.yml
+3. **Автоматический CHANGELOG** — генерация из Conventional Commits (git-cliff)
+4. **Dependabot** — автообновление зависимостей (.github/dependabot.yml)

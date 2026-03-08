@@ -15,6 +15,13 @@ uv sync
 uv run streamlit run app.py
 ```
 
+### Docker (альтернатива)
+
+```bash
+docker compose up dev
+# Открыть в браузере: http://localhost:8501
+```
+
 ## Возможности
 
 - Генерация оптимального расписания на месяц с покрытием трёх смен (утро, вечер, ночь) каждый день
@@ -166,10 +173,15 @@ uv run pytest --cov=duty_schedule --cov-report=html
 
 ## CI/CD
 
-Проект использует GitHub Actions:
+Трёхуровневый pipeline через GitHub Actions:
 
-- **CI** (`ci.yml`): запускается при каждом push и PR — линтинг, unit-тесты, интеграционные тесты, покрытие ≥ 80%
-- **Release** (`release.yml`): при публикации тега `v*.*.*` — сборка wheel и создание GitHub Release
+| Ветка | Workflow | Проверки |
+|-------|----------|----------|
+| dev | ci-dev.yml | lint, unit+integration, smoke |
+| test | ci-test.yml | + mypy, 4 платформы, security, performance |
+| main | ci-main.yml | + 6 платформ, UI/Playwright, system, e2e, build |
+
+При изменении версии в `pyproject.toml` на main — автоматический tag и GitHub Release.
 
 ## Архитектура
 
