@@ -14,9 +14,9 @@ from duty_schedule.models import (
     CarryOverState,
     Config,
     PinnedAssignment,
-    ScheduleType,
     collect_config_issues,
 )
+from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.ui.builders import (
     _build_employees,
@@ -749,53 +749,13 @@ if st.session_state.get("last_result"):
     _rc5.metric("Выходных", _total_dayoffs)
     _rc6.metric("Отпусков", _total_vacations)
 
-    _flex_duty = [
-        e
-        for e in _schedule.config.employees
-        if e.on_duty and e.schedule_type == ScheduleType.FLEXIBLE
-    ]
+    _prod_days = int(_meta.get("production_working_days", 21))
+    _assignments = build_assignments(_schedule)
+    _stats_list = compute_stats(_schedule, _assignments, _prod_days)
 
-    def _isolated_off_count(name: str) -> int:
-        count = 0
-        _days = _schedule.days
-        for i, day in enumerate(_days):
-            if name not in day.day_off:
-                continue
-            left_ok = i == 0 or name in _days[i - 1].day_off or name in _days[i - 1].vacation
-            right_ok = (
-                i == len(_days) - 1 or name in _days[i + 1].day_off or name in _days[i + 1].vacation
-            )
-            if not left_ok and not right_ok:
-                count += 1
-        return count
-
-    _total_isolated = sum(_isolated_off_count(e.name) for e in _flex_duty)
-
-    def _emp_working_on(name: str, day: object) -> bool:
-        return (
-            name in day.morning
-            or name in day.evening  # type: ignore[operator]
-            or name in day.night
-            or name in day.workday  # type: ignore[operator]
-        )
-
-    _max_streak = 0
-    for _emp in _schedule.config.employees:
-        streak = 0
-        for day in _schedule.days:
-            if _emp_working_on(_emp.name, day):
-                streak += 1
-                _max_streak = max(_max_streak, streak)
-            else:
-                streak = 0
-
-    _weekend_work_total = sum(
-        1
-        for day in _schedule.days
-        if day.date.weekday() >= 5
-        for e in _flex_duty
-        if _emp_working_on(e.name, day)
-    )
+    _total_isolated = sum(s.isolated_off for s in _stats_list)
+    _max_streak = max((s.max_streak_work for s in _stats_list), default=0)
+    _weekend_work_total = sum(s.weekend_work for s in _stats_list)
 
     _rc7, _rc8, _rc9 = st.columns(3)
     _rc7.metric("Изолированных выходных", _total_isolated)
@@ -808,7 +768,7 @@ if st.session_state.get("last_result"):
         _render_calendar(_schedule)
 
     with _tab_dash:
-        _render_load_dashboard(_schedule, _res["emp_df_snap"])
+        _render_load_dashboard(_schedule, _res["emp_df_snap"], _stats_list)
 
     edited_schedule_df: pd.DataFrame = _res["schedule_df"]
     with _tab_edit:
