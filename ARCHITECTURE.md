@@ -49,6 +49,9 @@ duty-schedule-gen/
 ├── tests/
 │   ├── unit/                     # Юнит-тесты (ограничения, утилиты)
 │   └── integration/              # Интеграционные тесты (полная генерация)
+├── Dockerfile                    # Docker-образ для локальной разработки
+├── docker-compose.yml            # dev (hot-reload) и staging сервисы
+├── .dockerignore                 # Исключения для Docker-контекста
 ├── pyproject.toml                # Зависимости и настройки инструментов
 └── ARCHITECTURE.md               # Этот файл
 ```
@@ -526,6 +529,13 @@ uv run duty-schedule generate --month 3 --year 2026 --output schedule.xlsx
 
 ```bash
 uv run streamlit run app.py
+```
+
+### Docker (локальная разработка)
+
+```bash
+docker compose up dev       # разработка с hot-reload (порт 8501)
+docker compose up staging   # staging-like (порт 8502)
 ```
 
 ---
