@@ -14,15 +14,15 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
+from duty_schedule.constants import (
+    MONTHS_RU,
+    SHIFT_COLORS_CELL,
+    SHIFT_COLORS_HEADER,
+)
 from duty_schedule.models import City, DaySchedule, Employee, Schedule, ScheduleType
 
 COLORS = {
-    "morning": "FFC107",
-    "evening": "3F51B5",
-    "night": "673AB7",
-    "workday": "009688",
-    "day_off": "90A4AE",
-    "vacation": "FF5722",
+    **SHIFT_COLORS_HEADER,
     "header": "404040",
     "name": "D9D9D9",
     "weekend": "F2F2F2",
@@ -35,14 +35,7 @@ COLORS = {
     "total_row": "595959",
 }
 
-CELL_COLORS = {
-    "morning": "FFE082",
-    "evening": "C5CAE9",
-    "night": "EDE7F6",
-    "workday": "B2DFDB",
-    "day_off": "ECEFF1",
-    "vacation": "FFCCBC",
-}
+CELL_COLORS = SHIFT_COLORS_CELL
 
 WHITE_FONT_KEYS = {"evening", "header", "workday", "night", "vacation"}
 
@@ -63,21 +56,6 @@ SHIFT_LABELS = {
 }
 
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-MONTHS_RU = [
-    "",
-    "Январь",
-    "Февраль",
-    "Март",
-    "Апрель",
-    "Май",
-    "Июнь",
-    "Июль",
-    "Август",
-    "Сентябрь",
-    "Октябрь",
-    "Ноябрь",
-    "Декабрь",
-]
 MONTHS_RU_SHORT = [
     "",
     "янв",
@@ -549,7 +527,11 @@ def _build_stats_sheet(
         "Сдвоен.\nвыходных",
     ]
     ws.row_dimensions[3].height = 32
-    static_comment = Comment("Вычислено при генерации, не обновляется при ручных правках", "System")
+    static_comment = Comment(
+        "Пересчитывается при скачивании XLS из UI. "
+        "При ручном редактировании XLS в Excel — не обновляется.",
+        "System",
+    )
     for col_idx, h in enumerate(headers, start=1):
         cell = ws.cell(row=3, column=col_idx, value=h)
         cell.fill = _fill(COLORS["header"])
