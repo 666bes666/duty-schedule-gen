@@ -34,6 +34,7 @@ dev = [
     "pytest-httpx>=0.30",
     "ruff>=0.4",
     "mypy>=1.10",
+    "hypothesis>=6.0",
 ]
 ci-security = [
     "bandit>=1.7",
