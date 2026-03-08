@@ -52,6 +52,9 @@ def generate(
     holidays: Annotated[
         str | None, typer.Option("--holidays", help="Праздники YYYY-MM-DD через запятую")
     ] = None,
+    seed: Annotated[
+        int | None, typer.Option("--seed", "-s", help="Переопределить seed из конфигурации")
+    ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Подробный вывод")] = False,
 ) -> None:
     """Сгенерировать график дежурств и экспортировать в XLS и/или ICS."""
@@ -61,6 +64,9 @@ def generate(
 
     with console.status("Загрузка конфигурации..."):
         config = _load_config(config_file)
+
+    if seed is not None:
+        config = config.model_copy(update={"seed": seed})
 
     console.print(
         f"✓ Конфигурация загружена: [bold]{config.month:02d}.{config.year}[/bold], "
