@@ -71,6 +71,7 @@ markers = [
 [tool.coverage.run]
 source = ["duty_schedule"]
 branch = true
+omit = ["src/duty_schedule/ui/*"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING"]
