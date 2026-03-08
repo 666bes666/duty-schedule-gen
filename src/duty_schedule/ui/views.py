@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from duty_schedule.models import Schedule
+from duty_schedule.stats import EmployeeStats
 from duty_schedule.ui.mappings import (
     _CAL_SHIFT_COLORS,
     _SHIFT_PALETTE,
@@ -71,42 +72,71 @@ def _render_calendar(schedule: Schedule) -> None:
     st.dataframe(styled, use_container_width=True, height=height)
 
 
-def _compute_employee_stats(schedule: Schedule) -> pd.DataFrame:
-    stats: dict[str, dict[str, int]] = {}
-    _zero: dict[str, int] = {
-        "Утро": 0,
-        "Вечер": 0,
-        "Ночь": 0,
-        "Рабочий": 0,
-        "Выходных": 0,
-        "Отпуск": 0,
-    }
+def _render_red_flags(stats_list: list[EmployeeStats]) -> None:
+    flags: list[str] = []
+    for s in stats_list:
+        if s.max_streak_work > 5:
+            flags.append(f"**{s.name}**: серия работы {s.max_streak_work} дней подряд")
+        if s.isolated_off > 2:
+            flags.append(f"**{s.name}**: {s.isolated_off} изолированных выходных")
+        delta = s.total_working - s.target
+        if abs(delta) > 2:
+            flags.append(f"**{s.name}**: отклонение от нормы {delta:+d} дн.")
 
-    for d in schedule.days:
-        for nm in d.morning:
-            stats.setdefault(nm, dict(_zero))["Утро"] += 1
-        for nm in d.evening:
-            stats.setdefault(nm, dict(_zero))["Вечер"] += 1
-        for nm in d.night:
-            stats.setdefault(nm, dict(_zero))["Ночь"] += 1
-        for nm in d.workday:
-            stats.setdefault(nm, dict(_zero))["Рабочий"] += 1
-        for nm in d.day_off:
-            stats.setdefault(nm, dict(_zero))["Выходных"] += 1
-        for nm in d.vacation:
-            stats.setdefault(nm, dict(_zero))["Отпуск"] += 1
+    weekend_counts = [s.weekend_work for s in stats_list if s.weekend_work > 0]
+    if weekend_counts and len(weekend_counts) >= 2:
+        wk_min, wk_max = min(weekend_counts), max(weekend_counts)
+        if wk_max - wk_min > 3:
+            flags.append(f"Неравномерное распределение работы в выходные: от {wk_min} до {wk_max}")
 
-    if not stats:
-        return pd.DataFrame()
-
-    result = pd.DataFrame(stats).T.fillna(0).astype(int)
-    result["Всего смен"] = result["Утро"] + result["Вечер"] + result["Ночь"]
-    return result
+    if flags:
+        st.warning("\n".join([f"- {f}" for f in flags]))
+    else:
+        st.success("Качество расписания в норме")
 
 
-def _render_load_dashboard(schedule: Schedule, employees_df: pd.DataFrame) -> None:
-    stats_df = _compute_employee_stats(schedule)
-    if stats_df.empty:
+def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
+    rows = []
+    for s in stats_list:
+        rows.append(
+            {
+                "Загр.%": round(s.target / max(s.target, 1) * 100) if s.target > 0 else 100,
+                "Утро": s.morning,
+                "Вечер": s.evening,
+                "Ночь": s.night,
+                "Рабочий": s.workday,
+                "Всего смен": s.morning + s.evening + s.night,
+                "Выходных": s.day_off,
+                "Отпуск": s.vacation,
+                "Часы": s.total_hours,
+                "Вых.раб.": s.weekend_work,
+                "Празд.раб.": s.holiday_work,
+                "Макс.серия": s.max_streak_work,
+                "Изол.вых.": s.isolated_off,
+                "Парн.вых.": s.paired_off,
+                "Норма дн.": s.target,
+                "Факт дн.": s.total_working,
+                "Δ": s.total_working - s.target,
+            }
+        )
+    return pd.DataFrame(rows, index=[s.name for s in stats_list])
+
+
+def _render_load_dashboard(
+    schedule: Schedule,
+    employees_df: pd.DataFrame,
+    stats_list: list[EmployeeStats] | None = None,
+) -> None:
+    if stats_list is not None and len(stats_list) > 0:
+        _stats = stats_list
+    else:
+        from duty_schedule.stats import build_assignments, compute_stats
+
+        prod_days = int(schedule.metadata.get("production_working_days", 21))
+        assignments = build_assignments(schedule)
+        _stats = compute_stats(schedule, assignments, prod_days)
+
+    if not _stats:
         st.info("Нет данных для отображения.")
         return
 
@@ -115,18 +145,37 @@ def _render_load_dashboard(schedule: Schedule, employees_df: pd.DataFrame) -> No
         for _, r in employees_df.iterrows()
         if str(r["Имя"]).strip()
     }
-    prod_days = int(schedule.metadata.get("production_working_days", 0))
+    for s in _stats:
+        pct = workload_map.get(s.name, 100)
+        if pct != 100:
+            pass
+
+    _render_red_flags(_stats)
+
+    show_df = _stats_to_dataframe(_stats)
+    for s in _stats:
+        show_df.loc[s.name, "Загр.%"] = workload_map.get(s.name, 100)
 
     display_cols = [
-        c
-        for c in ["Утро", "Вечер", "Ночь", "Рабочий", "Всего смен", "Выходных", "Отпуск"]
-        if c in stats_df.columns
+        "Загр.%",
+        "Утро",
+        "Вечер",
+        "Ночь",
+        "Рабочий",
+        "Всего смен",
+        "Выходных",
+        "Отпуск",
+        "Часы",
+        "Вых.раб.",
+        "Празд.раб.",
+        "Макс.серия",
+        "Изол.вых.",
+        "Парн.вых.",
+        "Норма дн.",
+        "Факт дн.",
+        "Δ",
     ]
-    show_df = stats_df[display_cols].copy()
-    show_df.insert(0, "Загр.%", show_df.index.map(lambda n: workload_map.get(n, 100)))
-    show_df["Норма дн."] = (show_df["Загр.%"] * prod_days / 100).round(0).astype(int)
-    show_df["Факт дн."] = show_df.get("Всего смен", 0) + show_df.get("Рабочий", 0)
-    show_df["Δ"] = show_df["Факт дн."] - show_df["Норма дн."]
+    table_df = show_df[display_cols]
 
     def _delta_style(val: Any) -> str:
         try:
@@ -139,7 +188,29 @@ def _render_load_dashboard(schedule: Schedule, employees_df: pd.DataFrame) -> No
             return "color: #2471A3; font-weight: bold;"
         return ""
 
-    styled = show_df.style.map(_delta_style, subset=["Δ"])
+    def _streak_style(val: Any) -> str:
+        try:
+            v = int(val)
+        except (ValueError, TypeError):
+            return ""
+        if v > 5:
+            return "color: #C0392B; font-weight: bold;"
+        return ""
+
+    def _isolated_style(val: Any) -> str:
+        try:
+            v = int(val)
+        except (ValueError, TypeError):
+            return ""
+        if v > 0:
+            return "background-color: #FFF3CD;"
+        return ""
+
+    styled = (
+        table_df.style.map(_delta_style, subset=["Δ"])
+        .map(_streak_style, subset=["Макс.серия"])
+        .map(_isolated_style, subset=["Изол.вых."])
+    )
     try:
         import matplotlib  # noqa: F401
 
@@ -148,8 +219,15 @@ def _render_load_dashboard(schedule: Schedule, employees_df: pd.DataFrame) -> No
         pass
     st.dataframe(styled, use_container_width=True)
 
-    chart_cols = [c for c in ["Утро", "Вечер", "Ночь"] if c in stats_df.columns]
-    if chart_cols:
+    shift_df = pd.DataFrame(
+        {
+            "Утро": [s.morning for s in _stats],
+            "Вечер": [s.evening for s in _stats],
+            "Ночь": [s.night for s in _stats],
+        },
+        index=[s.name for s in _stats],
+    )
+    if shift_df.sum().sum() > 0:
         st.markdown("**Структура дежурных смен**")
         _col_palette = {
             "Утро": _SHIFT_PALETTE["У"],
@@ -157,10 +235,17 @@ def _render_load_dashboard(schedule: Schedule, employees_df: pd.DataFrame) -> No
             "Ночь": _SHIFT_PALETTE["Н"],
         }
         st.bar_chart(
-            stats_df[chart_cols],
-            color=[_col_palette[c] for c in chart_cols],
+            shift_df,
+            color=[_col_palette[c] for c in ["Утро", "Вечер", "Ночь"]],
             use_container_width=True,
         )
+
+    hours_df = pd.DataFrame(
+        {"Часы": [s.total_hours for s in _stats], "Норма": [s.target * 8 for s in _stats]},
+        index=[s.name for s in _stats],
+    )
+    st.markdown("**Часы по сотрудникам**")
+    st.bar_chart(hours_df, use_container_width=True, horizontal=True)
 
     cov_rows = [
         {
