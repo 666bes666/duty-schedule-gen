@@ -6,7 +6,7 @@ services:
     volumes:
       - ./app.py:/app/app.py
       - ./src:/app/src
-      - ./examples:/app/examples
+      - ./config.example.yaml:/app/config.example.yaml
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0

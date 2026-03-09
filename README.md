@@ -74,31 +74,31 @@ uv run duty-schedule --help
 ### Генерация расписания
 
 ```bash
-uv run duty-schedule generate examples/config.yaml
+uv run duty-schedule generate config.example.yaml
 ```
 
 С указанием директории вывода:
 
 ```bash
-uv run duty-schedule generate examples/config.yaml --output-dir ./output
+uv run duty-schedule generate config.example.yaml --output-dir ./output
 ```
 
 Только XLS:
 
 ```bash
-uv run duty-schedule generate examples/config.yaml --format xls
+uv run duty-schedule generate config.example.yaml --format xls
 ```
 
 С указанием праздников вручную (если API недоступен):
 
 ```bash
-uv run duty-schedule generate examples/config.yaml --holidays "2025-03-08,2025-03-10"
+uv run duty-schedule generate config.example.yaml --holidays "2025-03-08,2025-03-10"
 ```
 
 ### Проверка конфигурации
 
 ```bash
-uv run duty-schedule validate examples/config.yaml
+uv run duty-schedule validate config.example.yaml
 ```
 
 ### Версия
@@ -149,8 +149,8 @@ employees:
 | Смена | Время (МСК) | Цвет в XLS |
 |-------|-------------|------------|
 | Утро | 08:00–17:00 | Янтарный |
-| Вечер | 15:00–00:00 | Тёмно-синий |
-| Ночь | 00:00–08:00 | Фиолетовый |
+| Вечер | 15:00–00:00 | Индиго |
+| Ночь | 00:00–08:00 | Лавандовый |
 | Рабочий день | 09:00–18:00 | Бирюзовый |
 | Выходной | — | Серый |
 

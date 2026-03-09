@@ -37,7 +37,7 @@ jobs:
       - name: CLI --help
         run: uv run duty-schedule --help
       - name: Validate example config
-        run: uv run duty-schedule validate examples/config.yaml
+        run: uv run duty-schedule validate config.example.yaml
       - name: Streamlit healthcheck
         run: |
           uv run streamlit run app.py \
