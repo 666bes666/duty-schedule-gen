@@ -32,6 +32,11 @@ _SHIFT_ICS_COLORS = {
     ShiftType.WORKDAY: "teal",
 }
 
+
+def _sanitize_ics_value(value: str) -> str:
+    return value.replace("\n", " ").replace("\r", "").replace(";", "_").replace(",", "_")
+
+
 KHABAROVSK_WORKDAY_START = (9, 0)
 KHABAROVSK_WORKDAY_END = (18, 0)
 
@@ -124,7 +129,7 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
                 event.add(
                     "UID",
                     vText(
-                        f"{year}{month:02d}{day.date.day:02d}-{shift.value}-{name}@duty-schedule"
+                        f"{year}{month:02d}{day.date.day:02d}-{shift.value}-{_sanitize_ics_value(name)}@duty-schedule"
                     ),
                 )
                 calendars[shift].add_component(event)
@@ -183,7 +188,7 @@ def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes
             event.add(
                 "UID",
                 vText(
-                    f"{year}{month:02d}{day.date.day:02d}-{shift.value}-{employee_name}@duty-schedule"
+                    f"{year}{month:02d}{day.date.day:02d}-{shift.value}-{_sanitize_ics_value(employee_name)}@duty-schedule"
                 ),
             )
             cal.add_component(event)

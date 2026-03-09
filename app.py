@@ -641,7 +641,7 @@ if st.button("⚡ Сгенерировать расписание", type="primar
         try:
             pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
         except Exception as e:
-            st.warning(f"Пин ({emp_name} / {raw_date}): {e}")
+            st.warning(f"Пин ({emp_name} / {raw_date}): некорректные данные")
 
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
     carry_over_objs: list[CarryOverState] = []
@@ -659,7 +659,7 @@ if st.button("⚡ Сгенерировать расписание", type="primar
             carry_over=carry_over_objs,
         )
     except Exception as e:
-        st.error(f"Ошибка конфигурации: {e}")
+        st.error("Ошибка конфигурации. Проверьте введённые данные.")
         st.stop()
 
     cfg_errors, cfg_warnings = collect_config_issues(config)
