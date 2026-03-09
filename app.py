@@ -741,6 +741,21 @@ if st.button("Сгенерировать расписание", type="primary", 
         with contextlib.suppress(Exception):
             carry_over_objs.append(CarryOverState(**co))
 
+    emp_names = {e.name for e in employees}
+    matched = [co for co in carry_over_objs if co.employee_name in emp_names]
+    skipped = len(carry_over_objs) - len(matched)
+    if skipped and matched:
+        st.info(
+            f"Carry-over: применено для {len(matched)} из {len(carry_over_objs)} сотрудников "
+            f"({skipped} не найдены в текущем составе)."
+        )
+    elif skipped and not matched:
+        st.warning(
+            f"Carry-over: ни один из {len(carry_over_objs)} сотрудников "
+            "не найден в текущем составе. Имена должны совпадать точно."
+        )
+    carry_over_objs = matched
+
     try:
         config = Config(
             month=month,
