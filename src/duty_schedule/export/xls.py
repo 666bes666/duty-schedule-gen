@@ -61,6 +61,13 @@ SHIFT_LABELS = {
     "vacation": "Отп",
 }
 
+
+def _sanitize_cell(value: str) -> str:
+    if value and value[0] in ("=", "+", "-", "@"):
+        return "'" + value
+    return value
+
+
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 MONTHS_RU_SHORT = [
     "",
@@ -186,7 +193,7 @@ def _build_helper_sheet(
 
     for i, emp in enumerate(employees):
         row = 6 + i
-        ws.cell(row=row, column=1, value=emp.name)
+        ws.cell(row=row, column=1, value=_sanitize_cell(emp.name))
         ws.cell(row=row, column=2, value=emp.workload_pct)
 
 
@@ -253,7 +260,7 @@ def _build_schedule_sheet(
 
     for row_idx, emp in enumerate(employees, start=3):
         ws.row_dimensions[row_idx].height = 20
-        nc = ws.cell(row=row_idx, column=1, value=emp.name)
+        nc = ws.cell(row=row_idx, column=1, value=_sanitize_cell(emp.name))
         nc.fill = _fill(COLORS["name"])
         nc.font = _font(bold=True, size=10)
         nc.alignment = _align(horizontal="left")
@@ -391,7 +398,7 @@ def _build_stats_sheet(
         sched_row = 3 + i
         helper_row = 6 + i
 
-        nc = ws.cell(row=row_idx, column=1, value=st.name)
+        nc = ws.cell(row=row_idx, column=1, value=_sanitize_cell(st.name))
         nc.fill = _fill(COLORS["name"])
         nc.font = _font(bold=True, size=10)
         nc.alignment = _align(horizontal="left")
