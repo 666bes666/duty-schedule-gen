@@ -25,6 +25,13 @@ CITY_TZ = {
     City.KHABAROVSK: "Asia/Vladivostok",
 }
 
+_SHIFT_ICS_COLORS = {
+    ShiftType.MORNING: "goldenrod",
+    ShiftType.EVENING: "indigo",
+    ShiftType.NIGHT: "purple",
+    ShiftType.WORKDAY: "teal",
+}
+
 KHABAROVSK_WORKDAY_START = (9, 0)
 KHABAROVSK_WORKDAY_END = (18, 0)
 
@@ -136,3 +143,49 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
         output_files.append(path)
 
     return output_files
+
+
+def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes:
+    msk_tz = ZoneInfo(schedule.config.timezone)
+    khb_tz = ZoneInfo(CITY_TZ[City.KHABAROVSK])
+    year = schedule.config.year
+    month = schedule.config.month
+
+    employee_city = {emp.name: emp.city for emp in schedule.config.employees}
+
+    cal = Calendar()
+    cal.add("PRODID", "-//Duty Schedule Generator//RU")
+    cal.add("VERSION", "2.0")
+    cal.add("X-WR-CALNAME", f"Расписание: {employee_name}")
+    cal.add("CALSCALE", "GREGORIAN")
+    cal.add("METHOD", "PUBLISH")
+
+    for day in schedule.days:
+        for shift in ICS_SHIFTS:
+            names = _employees_on_shift(day, shift)
+            if employee_name not in names:
+                continue
+
+            if shift == ShiftType.WORKDAY and employee_city.get(employee_name) == City.KHABAROVSK:
+                sh, sm = KHABAROVSK_WORKDAY_START
+                eh, em = KHABAROVSK_WORKDAY_END
+                dt_start = _make_datetime(day.date, sh, sm, khb_tz)
+                dt_end = _make_datetime(day.date, eh, em, khb_tz)
+            else:
+                dt_start, dt_end = _shift_times(shift, day.date, msk_tz)
+
+            event = Event()
+            event.add("SUMMARY", vText(SHIFT_NAMES_RU[shift]))
+            event.add("DTSTART", dt_start)
+            event.add("DTEND", dt_end)
+            event.add("CATEGORIES", [SHIFT_NAMES_RU[shift]])
+            event.add("COLOR", _SHIFT_ICS_COLORS[shift])
+            event.add(
+                "UID",
+                vText(
+                    f"{year}{month:02d}{day.date.day:02d}-{shift.value}-{employee_name}@duty-schedule"
+                ),
+            )
+            cal.add_component(event)
+
+    return bytes(cal.to_ical())

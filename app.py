@@ -47,6 +47,7 @@ from duty_schedule.ui.state import (
 from duty_schedule.ui.views import (
     _render_calendar,
     _render_load_dashboard,
+    render_employee_ics_downloads,
 )
 
 st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
@@ -766,6 +767,7 @@ if st.session_state.get("last_result"):
 
     with _tab_cal:
         _render_calendar(_schedule)
+        render_employee_ics_downloads(_schedule)
 
     with _tab_dash:
         _render_load_dashboard(_schedule, _res["emp_df_snap"], _stats_list)
