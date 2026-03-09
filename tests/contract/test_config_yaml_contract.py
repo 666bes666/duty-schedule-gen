@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from duty_schedule.models import Config
 
-EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "examples" / "config.yaml"
+EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "config.example.yaml"
 
 
 class TestConfigYamlContract:
