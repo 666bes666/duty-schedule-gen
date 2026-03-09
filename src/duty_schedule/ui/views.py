@@ -229,7 +229,7 @@ def _render_load_dashboard(
         index=[s.name for s in _stats],
     )
     if shift_df.sum().sum() > 0:
-        st.markdown("**Структура дежурных смен**")
+        st.subheader("Структура дежурных смен")
         _col_palette = {
             "Утро": _SHIFT_PALETTE["У"],
             "Вечер": _SHIFT_PALETTE["В"],
@@ -245,7 +245,7 @@ def _render_load_dashboard(
         {"Часы": [s.total_hours for s in _stats], "Норма": [s.target * 8 for s in _stats]},
         index=[s.name for s in _stats],
     )
-    st.markdown("**Часы по сотрудникам**")
+    st.subheader("Часы по сотрудникам")
     st.bar_chart(hours_df, use_container_width=True, horizontal=True)
 
     cov_rows = [
@@ -257,7 +257,7 @@ def _render_load_dashboard(
     ]
     if cov_rows:
         cov_df = pd.DataFrame(cov_rows).set_index("День")
-        st.markdown("**Покрытие по дням**")
+        st.subheader("Покрытие по дням")
         st.area_chart(cov_df, use_container_width=True, color=_SHIFT_PALETTE["В"])
 
 

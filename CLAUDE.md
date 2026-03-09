@@ -2,17 +2,17 @@
 
 ## Branching Flow
 
-feature -> dev -> test -> main
+dev -> test -> main
 
+Commit directly to `dev`. Do NOT create feature branches.
 NEVER push directly to main (except hotfixes).
 
-### Feature delivery:
-1. `git checkout -b feature/xxx dev`
-2. Develop, run local checks
-3. PR -> dev (ci-dev must be green)
-4. PR dev -> test (ci-test must be green)
-5. PR test -> main (ci-main must be green)
-6. Update version -> tag -> release
+### Delivery:
+1. Commit directly to `dev`
+2. Run local checks before push
+3. PR dev -> test (ci-test must be green)
+4. PR test -> main (ci-main must be green)
+5. Update version -> tag -> release
 
 ### Hotfix:
 1. Branch from main
