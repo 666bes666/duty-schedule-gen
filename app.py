@@ -16,8 +16,8 @@ from duty_schedule.models import (
     PinnedAssignment,
     collect_config_issues,
 )
-from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.scheduler import ScheduleError, generate_schedule
+from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.ui.builders import (
     _build_employees,
     _edit_df_to_schedule,
@@ -50,13 +50,60 @@ from duty_schedule.ui.views import (
     render_employee_ics_downloads,
 )
 
-st.set_page_config(page_title="График дежурств", page_icon="📅", layout="wide")
+st.set_page_config(page_title="График дежурств", page_icon=None, layout="wide")
 _init_state()
 
-st.title("📅 График дежурств")
+st.markdown("""
+<style>
+:root {
+    --fs-section:    1.05rem;
+    --fs-tab:        0.9rem;
+    --fs-body:       0.875rem;
+    --fs-caption:    0.78rem;
+    --fs-alert:      0.82rem;
+}
+
+/* Tabs: full-width stretch */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    width: 100%;
+    display: flex;
+}
+.stTabs [data-baseweb="tab"] {
+    flex: 1 1 0;
+    justify-content: center;
+    height: 2.75rem;
+    padding: 0 1rem;
+    font-size: var(--fs-tab);
+    font-weight: 600;
+    border-radius: 4px 4px 0 0;
+}
+
+/* Section headers (st.subheader → h3) */
+h3 {
+    font-size: var(--fs-section) !important;
+    font-weight: 600 !important;
+    margin-top: 0.75rem !important;
+    margin-bottom: 0.25rem !important;
+}
+
+/* Captions */
+.stCaption, small {
+    font-size: var(--fs-caption) !important;
+}
+
+/* Alert banners */
+.stAlert > div {
+    padding: 0.45rem 0.75rem !important;
+    font-size: var(--fs-alert) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("График дежурств")
 
 with st.sidebar:
-    st.header("⚙️ Конфигурация")
+    st.header("Конфигурация")
 
     uploaded = st.file_uploader(
         "Загрузить конфиг (.yaml)",
@@ -90,7 +137,7 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    st.caption("Сохранить текущую конфигурацию:")
+    st.markdown("**Сохранить конфигурацию**")
 
     _dl_df = st.session_state["_df_for_download"]
     _dl_pins = st.session_state["_pins_for_download"]
@@ -107,7 +154,7 @@ with st.sidebar:
         pins_df=_dl_pins,
     )
     st.download_button(
-        label="⬇️ Скачать конфиг (.yaml)",
+        label="Скачать конфиг (.yaml)",
         data=yaml_str.encode("utf-8"),
         file_name=f"config_{_cfg_year}_{_cfg_month:02d}.yaml",
         mime="text/yaml",
@@ -131,9 +178,9 @@ with col_y:
         key="cfg_year",
     )
 
-st.divider()
+st.caption("Заполните все три раздела, затем нажмите «Сгенерировать расписание» ниже.")
 
-_setup_tab1, _setup_tab2, _setup_tab3 = st.tabs(["1️⃣ Состав", "2️⃣ Ограничения", "3️⃣ Пины"])
+_setup_tab1, _setup_tab2, _setup_tab3 = st.tabs(["1. Состав", "2. Ограничения", "3. Пины"])
 
 with _setup_tab1:
     st.subheader("Сотрудники")
@@ -302,7 +349,7 @@ with _setup_tab1:
 
     st.caption("Быстро добавить сотрудника с типовыми настройками:")
     _pr1, _pr2, _pr3 = st.columns(3)
-    if _pr1.button("＋ Москва, дежурный", use_container_width=True, key="preset_msk"):
+    if _pr1.button("+ Москва, дежурный", use_container_width=True, key="preset_msk"):
         _preset_row = {**_EMPTY_ROW, "Город": "Москва", "Дежурный": True}
         st.session_state["employees_df"] = pd.concat(
             [edited_df, pd.DataFrame([_preset_row])],
@@ -310,7 +357,7 @@ with _setup_tab1:
         )
         _bump_table()
         st.rerun()
-    if _pr2.button("＋ Хабаровск, ночной", use_container_width=True, key="preset_khb"):
+    if _pr2.button("+ Хабаровск, ночной", use_container_width=True, key="preset_khb"):
         _preset_row = {**_EMPTY_ROW, "Город": "Хабаровск", "Дежурный": True}
         st.session_state["employees_df"] = pd.concat(
             [edited_df, pd.DataFrame([_preset_row])],
@@ -318,7 +365,7 @@ with _setup_tab1:
         )
         _bump_table()
         st.rerun()
-    if _pr3.button("＋ Не дежурит (5/2)", use_container_width=True, key="preset_nodty"):
+    if _pr3.button("+ Не дежурит (5/2)", use_container_width=True, key="preset_nodty"):
         _preset_row = {**_EMPTY_ROW, "Дежурный": False, "График": "5/2"}
         st.session_state["employees_df"] = pd.concat(
             [edited_df, pd.DataFrame([_preset_row])],
@@ -405,30 +452,39 @@ with _setup_tab1:
             st.info("Нет дежурных с гибким графиком.")
         else:
             c1, c2, c3 = st.columns(3)
-            _v_m = c1.number_input(
-                "Подряд: утро",
-                min_value=1,
-                step=1,
-                value=None,
-                help="Пусто = без ограничений",
-                key="consec_morning",
-            )
-            _v_e = c2.number_input(
-                "Подряд: вечер",
-                min_value=1,
-                step=1,
-                value=None,
-                help="Пусто = без ограничений",
-                key="consec_evening",
-            )
-            _v_w = c3.number_input(
-                "Подряд: день",
-                min_value=1,
-                step=1,
-                value=None,
-                help="Пусто = без ограничений",
-                key="consec_workday",
-            )
+            with c1:
+                _unlim_m = st.checkbox("Без лимита", value=True, key="consec_morning_unlim")
+                _raw_m = st.number_input(
+                    "Подряд: утро",
+                    min_value=1,
+                    step=1,
+                    value=3,
+                    disabled=_unlim_m,
+                    key="consec_morning",
+                )
+                _v_m = None if _unlim_m else _raw_m
+            with c2:
+                _unlim_e = st.checkbox("Без лимита", value=True, key="consec_evening_unlim")
+                _raw_e = st.number_input(
+                    "Подряд: вечер",
+                    min_value=1,
+                    step=1,
+                    value=3,
+                    disabled=_unlim_e,
+                    key="consec_evening",
+                )
+                _v_e = None if _unlim_e else _raw_e
+            with c3:
+                _unlim_w = st.checkbox("Без лимита", value=True, key="consec_workday_unlim")
+                _raw_w = st.number_input(
+                    "Подряд: день",
+                    min_value=1,
+                    step=1,
+                    value=3,
+                    disabled=_unlim_w,
+                    key="consec_workday",
+                )
+                _v_w = None if _unlim_w else _raw_w
             if st.button("Применить ко всем дежурным", key="consec_save"):
                 _upd = edited_df.copy()
                 _upd.loc[_consec_mask, "Подряд: утро"] = _v_m
@@ -442,7 +498,7 @@ with _setup_tab2:
     _emp_names = [str(r["Имя"]).strip() for _, r in edited_df.iterrows() if str(r["Имя"]).strip()]
 
     if not _emp_names:
-        st.info("Сначала добавьте сотрудников на вкладке **1️⃣ Состав**.")
+        st.info("Сначала добавьте сотрудников на вкладке **1. Состав**.")
     else:
         _sel = st.selectbox("Сотрудник", _emp_names, key="date_emp_selector")
         _cfg = _get_emp_dates(_sel)
@@ -473,7 +529,7 @@ with _setup_tab2:
 
         st.divider()
 
-        st.markdown("**Отпуска**")
+        st.subheader("Отпуска")
         _vac_del: list[int] = []
         for _i, (_vs, _ve) in enumerate(_cfg["vacations"]):
             _c1, _c2, _c3 = st.columns([4, 4, 1])
@@ -494,20 +550,21 @@ with _setup_tab2:
                 )
             _cfg["vacations"][_i] = (_new_vs, _new_ve)
             with _c3:
-                if st.button("✕", key=f"vdel_{_sel}_{_i}", help="Удалить период"):
+                if st.button("×", key=f"vdel_{_sel}_{_i}", help="Удалить период"):
                     _vac_del.append(_i)
 
         for _i in reversed(_vac_del):
             _cfg["vacations"].pop(_i)
             st.rerun()
 
-        if st.button("＋ Добавить период отпуска", key=f"vadd_{_sel}"):
+        if st.button("+ Добавить период отпуска", key=f"vadd_{_sel}"):
             _cfg["vacations"].append((date(year, month, 1), date(year, month, 7)))
             st.rerun()
 
         st.divider()
 
-        st.markdown("**Недоступные дни** (не отпуск — разовые блокировки)")
+        st.subheader("Недоступные дни")
+        st.caption("Не отпуск — разовые блокировки")
         _unavail_del: list[int] = []
         for _i, _ud in enumerate(_cfg["unavailable"]):
             _c1, _c2 = st.columns([8, 1])
@@ -520,20 +577,20 @@ with _setup_tab2:
                 )
             _cfg["unavailable"][_i] = _new_ud
             with _c2:
-                if st.button("✕", key=f"udel_{_sel}_{_i}", help="Удалить дату"):
+                if st.button("×", key=f"udel_{_sel}_{_i}", help="Удалить дату"):
                     _unavail_del.append(_i)
 
         for _i in reversed(_unavail_del):
             _cfg["unavailable"].pop(_i)
             st.rerun()
 
-        if st.button("＋ Добавить недоступный день", key=f"uadd_{_sel}"):
+        if st.button("+ Добавить недоступный день", key=f"uadd_{_sel}"):
             _cfg["unavailable"].append(date(year, month, 1))
             st.rerun()
 
         st.divider()
 
-        st.markdown("**Постоянные выходные дни недели**")
+        st.subheader("Постоянные выходные дни недели")
         st.caption("Сотрудник не будет назначаться в эти дни недели каждую неделю.")
         _current_days_off = _cfg.get("days_off_weekly", [])
         _current_labels = [
@@ -550,7 +607,7 @@ with _setup_tab2:
 
     st.divider()
 
-    with st.expander("ℹ️ Правила заполнения"):
+    with st.expander("Правила заполнения"):
         st.markdown("""
 | Поле | Описание |
 |---|---|
@@ -569,7 +626,7 @@ with _setup_tab2:
         """)
 
 with _setup_tab3:
-    st.subheader("📌 Фиксированные назначения")
+    st.subheader("Фиксированные назначения")
     st.caption("Зафиксировать конкретного сотрудника на определённый день и смену.")
     pins_edited: pd.DataFrame = st.data_editor(
         st.session_state["pins_df"],
@@ -603,11 +660,11 @@ st.divider()
 
 _val_errors, _val_warnings = _validate_config(edited_df)
 for _verr in _val_errors:
-    st.error(f"⛔ {_verr}")
+    st.error(_verr)
 for _vwarn in _val_warnings:
-    st.warning(f"⚠️ {_vwarn}")
+    st.warning(_vwarn)
 
-if st.button("⚡ Сгенерировать расписание", type="primary", use_container_width=True):
+if st.button("Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(
         edited_df, employee_dates=st.session_state["employee_dates"]
     )
@@ -640,7 +697,7 @@ if st.button("⚡ Сгенерировать расписание", type="primar
             continue
         try:
             pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
-        except Exception as e:
+        except Exception:
             st.warning(f"Пин ({emp_name} / {raw_date}): некорректные данные")
 
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
@@ -658,7 +715,7 @@ if st.button("⚡ Сгенерировать расписание", type="primar
             pins=pins,
             carry_over=carry_over_objs,
         )
-    except Exception as e:
+    except Exception:
         st.error("Ошибка конфигурации. Проверьте введённые данные.")
         st.stop()
 
@@ -730,7 +787,7 @@ if st.session_state.get("last_result"):
     _meta = _res["meta"]
 
     st.success(
-        f"✅ {MONTHS_RU[_res['gen_month'] - 1]} {_res['gen_year']} — "
+        f"{MONTHS_RU[_res['gen_month'] - 1]} {_res['gen_year']} — "
         f"{len(_schedule.days)} дней, {_res['emp_count']} сотрудников, "
         f"норма {_meta.get('production_working_days', '?')} дн. "
         f"· сгенерировано в {_res['gen_at']}"
@@ -763,7 +820,7 @@ if st.session_state.get("last_result"):
     _rc8.metric("Макс. серия работы", _max_streak)
     _rc9.metric("Работа в выходные", _weekend_work_total)
 
-    _tab_cal, _tab_dash, _tab_edit = st.tabs(["📅 Календарь", "📊 Нагрузка", "✏️ Редактирование"])
+    _tab_cal, _tab_dash, _tab_edit = st.tabs(["Календарь", "Нагрузка", "Редактирование"])
 
     with _tab_cal:
         _render_calendar(_schedule)
@@ -776,7 +833,7 @@ if st.session_state.get("last_result"):
     with _tab_edit:
         st.caption(
             "Можно вручную изменить назначения. Имена сотрудников через запятую. "
-            "Нажмите **⬇️ Скачать XLS** — в файл попадёт актуальная версия таблицы."
+            "Нажмите **Скачать XLS** — в файл попадёт актуальная версия таблицы."
         )
         edited_schedule_df = st.data_editor(
             _res["schedule_df"],
@@ -819,7 +876,7 @@ if st.session_state.get("last_result"):
     xls_bytes: bytes = st.session_state["_xls_bytes"]
 
     st.download_button(
-        label="⬇️ Скачать XLS",
+        label="Скачать XLS",
         data=xls_bytes,
         file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -827,7 +884,7 @@ if st.session_state.get("last_result"):
         use_container_width=True,
     )
     st.download_button(
-        label=(f"📅 Скачать конфиг для {MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"),
+        label=(f"Скачать конфиг для {MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"),
         data=_res["next_yaml"].encode("utf-8"),
         file_name=f"config_{_res['next_year']}_{_res['next_month']:02d}.yaml",
         mime="text/yaml",
