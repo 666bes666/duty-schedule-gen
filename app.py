@@ -49,11 +49,13 @@ from duty_schedule.ui.views import (
     _render_load_dashboard,
     render_employee_ics_downloads,
 )
+from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
 
 st.set_page_config(page_title="График дежурств", page_icon=None, layout="wide")
 _init_state()
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 :root {
     --fs-section:    1.05rem;
@@ -98,7 +100,9 @@ h3 {
     font-size: var(--fs-alert) !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 st.title("График дежурств")
 
@@ -160,6 +164,37 @@ with st.sidebar:
         mime="text/yaml",
         use_container_width=True,
     )
+
+    st.divider()
+    st.markdown("**Перенос состояния из прошлого месяца**")
+    xls_uploaded = st.file_uploader(
+        "Загрузить график предыдущего месяца (.xlsx)",
+        type=["xlsx"],
+        help="XLS-файл с графиком дежурств за прошлый месяц. "
+        "Из него будет автоматически извлечено состояние сотрудников.",
+    )
+    if xls_uploaded is not None:
+        try:
+            carry_list = parse_carry_over_from_xls(xls_uploaded.read())
+        except XlsImportError as exc:
+            st.error(str(exc))
+        else:
+            co_dicts = [co.model_dump() for co in carry_list]
+            st.session_state["carry_over"] = co_dicts
+            st.success(f"Загружено состояние для {len(carry_list)} сотрудников")
+            with st.expander("Предпросмотр carry-over"):
+                _co_rows = []
+                for co in carry_list:
+                    _co_rows.append(
+                        {
+                            "Имя": co.employee_name,
+                            "Посл. смена": co.last_shift.value if co.last_shift else "—",
+                            "Раб. подряд": co.consecutive_working,
+                            "Вых. подряд": co.consecutive_off,
+                            "Однотип. подряд": co.consecutive_same_shift,
+                        }
+                    )
+                st.dataframe(pd.DataFrame(_co_rows), use_container_width=True, hide_index=True)
 
 col_m, col_y, _ = st.columns([2, 1, 6])
 with col_m:
