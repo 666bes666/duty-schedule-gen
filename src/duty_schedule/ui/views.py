@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from duty_schedule.export.ics import generate_employee_ics_bytes
-from duty_schedule.models import Schedule
+from duty_schedule.models import City, Schedule, ScheduleType
 from duty_schedule.stats import EmployeeStats
 from duty_schedule.ui.mappings import (
     _CAL_SHIFT_COLORS,
@@ -36,15 +36,31 @@ def _schedule_to_calendar_df(schedule: Schedule) -> pd.DataFrame:
         for nm in d.vacation:
             emp_days.setdefault(nm, {})[header] = "О"
 
+    _city_order = {City.MOSCOW: 0, City.KHABAROVSK: 1}
+    _sched_order = {ScheduleType.FIVE_TWO: 0, ScheduleType.FLEXIBLE: 1}
+    emp_by_name = {e.name: e for e in schedule.config.employees}
+
+    def _sort_key(name: str) -> tuple[int, int, int, str]:
+        e = emp_by_name.get(name)
+        if e is None:
+            return (99, 99, 99, name)
+        return (
+            _city_order.get(e.city, 99),
+            int(not e.on_duty),
+            _sched_order.get(e.schedule_type, 99),
+            name,
+        )
+
     rows = {
-        name: {col: emp_days[name].get(col, "") for col in col_order} for name in sorted(emp_days)
+        name: {col: emp_days[name].get(col, "") for col in col_order}
+        for name in sorted(emp_days, key=_sort_key)
     }
     return pd.DataFrame(rows).T[col_order]
 
 
 def _style_calendar_cell(val: str) -> str:
     color = _CAL_SHIFT_COLORS.get(str(val), "#FFFFFF")
-    return f"background-color: {color}; text-align: center; font-size: 0.85em;"
+    return f"background-color: {color}; color: #1a1a1a; text-align: center; font-size: 0.85em;"
 
 
 def _render_calendar(schedule: Schedule) -> None:
@@ -240,13 +256,6 @@ def _render_load_dashboard(
             color=[_col_palette[c] for c in ["Утро", "Вечер", "Ночь"]],
             use_container_width=True,
         )
-
-    hours_df = pd.DataFrame(
-        {"Часы": [s.total_hours for s in _stats], "Норма": [s.target * 8 for s in _stats]},
-        index=[s.name for s in _stats],
-    )
-    st.subheader("Часы по сотрудникам")
-    st.bar_chart(hours_df, use_container_width=True, horizontal=True)
 
     cov_rows = [
         {
