@@ -1,5 +1,5 @@
 # Пример конфигурации — реальный состав команды
-# Запуск: uv run duty-schedule generate examples/config.yaml
+# Запуск: uv run duty-schedule generate config.example.yaml
 
 month: 3
 year: 2025

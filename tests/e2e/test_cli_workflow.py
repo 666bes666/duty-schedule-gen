@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "examples" / "config.yaml"
+EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "config.example.yaml"
 
 
 class TestCliWorkflow:
