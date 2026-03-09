@@ -257,13 +257,6 @@ def _render_load_dashboard(
             use_container_width=True,
         )
 
-    hours_df = pd.DataFrame(
-        {"Часы": [s.total_hours for s in _stats], "Норма": [s.target * 8 for s in _stats]},
-        index=[s.name for s in _stats],
-    )
-    st.subheader("Часы по сотрудникам")
-    st.bar_chart(hours_df, use_container_width=True, horizontal=True)
-
     cov_rows = [
         {
             "День": f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}",
