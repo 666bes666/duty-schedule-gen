@@ -2,7 +2,7 @@ services:
   dev:
     build: .
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
       - ./app.py:/app/app.py
       - ./src:/app/src
