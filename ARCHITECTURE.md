@@ -1,6 +1,6 @@
 # Архитектура и логика duty-schedule-gen
 
-> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v1.6.0.
+> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v1.7.0.
 
 ---
 
@@ -37,18 +37,39 @@
 ```
 duty-schedule-gen/
 ├── app.py                        # Streamlit UI (точка входа веб-приложения)
+├── config.example.yaml           # Пример конфигурации
 ├── src/duty_schedule/
+│   ├── __init__.py
 │   ├── models.py                 # Pydantic-модели данных
-│   ├── scheduler.py              # Ядро: генерация расписания
 │   ├── calendar.py               # Загрузка праздников (isdayoff.ru)
 │   ├── cli.py                    # CLI (Typer)
+│   ├── constants.py              # Константы
 │   ├── logging.py                # Настройка structlog
+│   ├── stats.py                  # Статистика расписания
+│   ├── scheduler/                # Ядро: генерация расписания (пакет)
+│   │   ├── __init__.py
+│   │   ├── constraints.py        # Проверки ограничений
+│   │   ├── core.py               # Состояния и вспомогательные функции
+│   │   ├── greedy.py             # Жадный алгоритм с откатом
+│   │   └── postprocess.py        # Постобработочный pipeline
+│   ├── ui/                       # Модули Streamlit UI (пакет)
+│   │   ├── __init__.py
+│   │   ├── builders.py           # Построение UI-компонентов
+│   │   ├── config_io.py          # Импорт/экспорт конфигурации
+│   │   ├── mappings.py           # Маппинги данных для UI
+│   │   ├── state.py              # Управление состоянием сессии
+│   │   └── views.py              # Отображение результатов
 │   └── export/
 │       ├── xls.py                # Экспорт в Excel
 │       └── ics.py                # Экспорт в ICS (iCalendar)
 ├── tests/
-│   ├── unit/                     # Юнит-тесты (ограничения, утилиты)
-│   └── integration/              # Интеграционные тесты (полная генерация)
+│   ├── unit/                     # Юнит-тесты
+│   ├── integration/              # Интеграционные тесты
+│   ├── contract/                 # Контрактные тесты (сериализация, форматы)
+│   ├── e2e/                      # End-to-end (CLI workflow)
+│   ├── performance/              # Бенчмарки (pytest-benchmark)
+│   ├── system/                   # Системные (бизнес-правила, детерминированность)
+│   └── ui/                       # UI тесты (Playwright)
 ├── Dockerfile                    # Docker-образ для локальной разработки
 ├── docker-compose.yml            # dev (hot-reload) и staging сервисы
 ├── .dockerignore                 # Исключения для Docker-контекста
@@ -133,7 +154,13 @@ DaySchedule(
 
 ---
 
-## 5. Алгоритм генерации расписания (`scheduler.py`)
+## 5. Алгоритм генерации расписания (`scheduler/`)
+
+Пакет `scheduler/` содержит:
+- `scheduler/constraints.py` — проверки ограничений (`_can_work`, `_resting_after_evening`, `_consecutive_shift_limit_reached` и др.)
+- `scheduler/core.py` — состояния (`EmployeeState`) и вспомогательные функции
+- `scheduler/greedy.py` — жадный алгоритм с откатом (`generate_schedule`, `_build_day`)
+- `scheduler/postprocess.py` — постобработочный pipeline
 
 ### 5.1 Ключевые константы
 
@@ -447,9 +474,9 @@ generate:
 
 ---
 
-## 10. Streamlit UI (`app.py`)
+## 10. Streamlit UI (`app.py` + `ui/`)
 
-Одностраничное приложение с боковой панелью и основным полем.
+Одностраничное приложение с боковой панелью и основным полем. UI-логика модуляризирована в пакет `src/duty_schedule/ui/` (builders, config_io, mappings, state, views).
 
 ### Боковая панель
 
@@ -546,11 +573,15 @@ docker compose up staging   # staging-like (порт 8502)
 uv run pytest tests/ -q
 ```
 
-| Категория | Файл | Что тестируется |
+| Категория | Директория | Что тестируется |
 |---|---|---|
-| Ограничения | `unit/test_constraints.py` | `_can_work`, `_is_weekend_or_holiday`, `_resting_after_evening` |
-| Полная генерация | `integration/test_full_schedule.py` | Покрытие смен, отсутствие дублей, carry_over, XLS/ICS экспорт |
-| Новые функции | `integration/test_new_features.py` | Пины, отпуска, `workload_pct`, `always_on_duty`, `group` |
+| Юнит-тесты | `unit/` | `_can_work`, `_is_weekend_or_holiday`, `_resting_after_evening`, ограничения |
+| Интеграционные | `integration/` | Покрытие смен, отсутствие дублей, carry_over, XLS/ICS экспорт, пины, отпуска, `workload_pct`, `always_on_duty`, `group` |
+| Контрактные | `contract/` | Валидация YAML-конфигурации, сериализация моделей |
+| End-to-end | `e2e/` | CLI workflow: validate, generate, version |
+| Performance | `performance/` | Бенчмарки генерации (pytest-benchmark) |
+| Системные | `system/` | Бизнес-правила, детерминированность |
+| UI | `ui/` | Playwright-тесты Streamlit-интерфейса |
 
 ---
 

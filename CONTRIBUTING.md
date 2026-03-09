@@ -137,7 +137,7 @@ ci: обновить ci-test workflow
 ```
 src/duty_schedule/    # Основной код
 tests/                # Тесты (unit, integration, contract, e2e, performance, system, ui)
-examples/             # Примеры конфигурации
+config.example.yaml   # Пример конфигурации
 Dockerfile            # Docker-образ для локальной разработки
 docker-compose.yml    # dev (hot-reload) и staging сервисы
 .dockerignore         # Исключения для Docker-контекста
@@ -154,7 +154,7 @@ docker compose up dev       # разработка с hot-reload (порт 8501)
 docker compose up staging   # сборка, имитация продакшена (порт 8502)
 ```
 
-- `dev`: монтирует `app.py`, `src/`, `examples/` — изменения видны сразу (Streamlit auto-reload)
+- `dev`: монтирует `app.py`, `src/`, `config.example.yaml` — изменения видны сразу (Streamlit auto-reload)
 - `staging`: собранный образ без монтирования — для проверки перед мержем
 - Оба сервиса stateless, БД не требуется
 
