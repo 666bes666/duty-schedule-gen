@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from duty_schedule.export.ics import generate_employee_ics_bytes
 from duty_schedule.models import Schedule
 from duty_schedule.stats import EmployeeStats
 from duty_schedule.ui.mappings import (
@@ -258,3 +259,28 @@ def _render_load_dashboard(
         cov_df = pd.DataFrame(cov_rows).set_index("День")
         st.markdown("**Покрытие по дням**")
         st.area_chart(cov_df, use_container_width=True, color=_SHIFT_PALETTE["В"])
+
+
+def render_employee_ics_downloads(schedule: Schedule) -> None:
+    year = schedule.config.year
+    month = schedule.config.month
+    cache_key = f"ics_cache_{year}_{month}_{id(schedule)}"
+
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = {}
+
+    employees = sorted(schedule.config.employees, key=lambda e: e.name)
+
+    with st.expander("Скачать календарь для сотрудника"):
+        cols = st.columns(4)
+        for i, emp in enumerate(employees):
+            cache = st.session_state[cache_key]
+            if emp.name not in cache:
+                cache[emp.name] = generate_employee_ics_bytes(schedule, emp.name)
+            cols[i % 4].download_button(
+                label=emp.name,
+                data=cache[emp.name],
+                file_name=f"{emp.name}_{year}_{month:02d}.ics",
+                mime="text/calendar",
+                key=f"ics_dl_{emp.name}_{year}_{month}",
+            )
