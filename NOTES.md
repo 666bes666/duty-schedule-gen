@@ -377,3 +377,20 @@ Line  138: # Ограничение снято — хабаровчане дол
 Line  191: # Проверяем что хабаровские не в московских сменах
 ```
 
+## `xls_import.py`
+
+```
+LABEL_TO_SHIFT: инвертированный маппинг SHIFT_LABELS из export/xls.py (label→ShiftType), lowercase
+SCHED_SHEET_NAME: название листа для поиска ("График дежурств")
+WORKING_SHIFTS: frozenset рабочих смен (MORNING, EVENING, NIGHT, WORKDAY)
+XlsImportError: кастомное исключение для ошибок разбора XLS
+_find_sheet: поиск листа "График дежурств" с fallback на первый лист
+_resolve_shift: преобразование текста ячейки в ShiftType, нечувствительно к регистру, unknown→DAY_OFF
+_find_day_columns: определение диапазона колонок дней (C до первой "Итого" в строке 2)
+_build_carry_over: обход смен с конца для вычисления last_shift, consecutive_working/off/same_shift
+  - если месяц кончается выходными: last_shift=None, consecutive_off>0, consecutive_working=0
+  - если месяц кончается рабочими днями: last_shift=тип, consecutive_working>0, consecutive_off=0
+  - consecutive_same_shift: считает только непрерывную серию одинаковых смен с конца
+parse_carry_over_from_xls: точка входа, принимает bytes, возвращает list[CarryOverState]
+  - strip("'") на именах для обработки _sanitize_cell из export/xls.py
+```
