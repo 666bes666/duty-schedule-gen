@@ -269,6 +269,18 @@ def generate_schedule(
     )
 
     for emp in employees:
+        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
+    days = _target_adjustment_pass(
+        days,
+        employees,
+        states,
+        holidays,
+        pinned_on=pinned_on,
+        carry_over_cw=initial_cw,
+        carry_over_last_shift=initial_last_shift,
+    )
+
+    for emp in employees:
         actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
         target = states[emp.name].effective_target
         if actual > target:

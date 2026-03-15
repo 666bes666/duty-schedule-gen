@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 
@@ -16,6 +16,25 @@ TIMEOUT = 5.0
 
 _HOLIDAY_CODE = "1"
 _SHORT_DAY_CODE = "2"
+
+RUSSIAN_PUBLIC_HOLIDAYS: frozenset[tuple[int, int]] = frozenset(
+    {
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (1, 4),
+        (1, 5),
+        (1, 6),
+        (1, 7),
+        (1, 8),
+        (2, 23),
+        (3, 8),
+        (5, 1),
+        (5, 9),
+        (6, 12),
+        (11, 4),
+    }
+)
 
 
 class CalendarError(Exception):
@@ -76,7 +95,30 @@ def parse_manual_holidays(holidays_str: str, year: int, month: int) -> tuple[set
             logger.warning("Праздник вне указанного месяца пропущен", date=raw)
             continue
         holidays.add(d)
-    return holidays, set()
+    return holidays, compute_short_days(year, month, holidays)
+
+
+def compute_short_days(year: int, month: int, holidays: set[date]) -> set[date]:
+    _, days_in_month = calendar.monthrange(year, month)
+    month_start = date(year, month, 1)
+    month_end = date(year, month, days_in_month)
+
+    next_month = month % 12 + 1
+    next_year = year + (1 if month == 12 else 0)
+
+    target_holidays = set(holidays)
+    for m, d in RUSSIAN_PUBLIC_HOLIDAYS:
+        if m == next_month:
+            target_holidays.add(date(next_year, next_month, d))
+
+    short: set[date] = set()
+    for h in target_holidays:
+        prev = h - timedelta(days=1)
+        while prev >= month_start and (prev.weekday() >= 5 or prev in target_holidays):
+            prev -= timedelta(days=1)
+        if month_start <= prev <= month_end and prev.weekday() < 5 and prev not in target_holidays:
+            short.add(prev)
+    return short
 
 
 def get_all_days(year: int, month: int) -> list[date]:

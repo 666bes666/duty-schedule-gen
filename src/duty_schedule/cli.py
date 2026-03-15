@@ -199,7 +199,9 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
             f"[yellow]Используются только выходные дни ({len(weekends)} дней). "
             "Укажите --holidays для точного производственного календаря.[/yellow]"
         )
-        return weekends, set()
+        from duty_schedule.calendar import compute_short_days
+
+        return weekends, compute_short_days(config.year, config.month, weekends)
 
 
 def _print_summary(schedule: Schedule) -> None:
