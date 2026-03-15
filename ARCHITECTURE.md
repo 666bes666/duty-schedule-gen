@@ -1,6 +1,6 @@
 # Архитектура и логика duty-schedule-gen
 
-> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v1.9.0.
+> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v1.9.1.
 
 ---
 
@@ -181,6 +181,7 @@ MAX_BACKTRACK_ATTEMPTS       = 10   # Макс. число откатов
 - `_max_co(emp)` — макс. выходных подряд (не строгий лимит, 100)
 - `_duty_only(emp)` — True если `on_duty AND (morning_only OR evening_only OR always_on_duty)`: такой сотрудник работает только дежурными сменами, никогда WORKDAY
 - `_consecutive_shift_limit_reached(emp, state, shift)` — True если сотрудник достиг лимита однотипных смен подряд (`max_consecutive_morning/evening/workday`)
+- `_calc_blocked_working_days(emp, year, month)` — число рабочих будних дней, на которые приходится отпуск сотрудника. Учитывает **только отпуск** (`is_on_vacation`), а не `unavailable_dates` — разовая недоступность не снижает норму отработки
 - `_can_work(emp, state, day, holidays)` — может ли сотрудник работать в день: не в отпуске/недоступен, не достиг `_max_cw`, для `FIVE_TWO` — не выходной/праздник
 - `_resting_after_evening(state)` — True если последняя смена была EVENING: следующий день запрещены MORNING и WORKDAY (слишком мало отдыха)
 - `_resting_after_night(state)` — True если последняя смена NIGHT
@@ -207,7 +208,7 @@ EmployeeState(
 
 `state.needs_more_work(remaining_days)` → True если текущий дефицит относительно нормы требует работы (с учётом оставшихся дней).
 
-`state.effective_target` → `target_working_days - vacation_days`.
+`state.effective_target` → `target_working_days - vacation_days`. `vacation_days` включает только дни отпуска, попадающие на рабочие будни; `unavailable_dates` не влияют на `effective_target` — планировщик компенсирует их, назначая WORKDAY в другие дни.
 
 ### 5.4 Жадный алгоритм с откатом (`generate_schedule`)
 
@@ -284,7 +285,7 @@ while day_idx < len(all_days):
 
 ## 6. Постобработочный pipeline
 
-После жадной генерации выполняется pipeline из 5 функций:
+После жадной генерации выполняется pipeline из 7 функций:
 
 ```
 generate:
@@ -300,8 +301,10 @@ generate:
 10. _minimize_isolated_off        — повторный проход после свопов
 11. _equalize_isolated_off        — выравнивание изолированных между сотрудниками
 12. _minimize_isolated_off        — финальный проход
-13. Финальный enforcement нормы   — снятие лишних WORKDAY с конца месяца
-14. Проверка evening→morning      — ScheduleError если после вечерней смены стоит утро/WORKDAY
+13. recalc states
+14. _target_adjustment_pass       — подгонка под норму (3-й проход)
+15. Финальный enforcement нормы   — снятие лишних WORKDAY с конца месяца
+16. Проверка evening→morning      — ScheduleError если после вечерней смены стоит утро/WORKDAY
 ```
 
 ### 6.1 `_balance_weekend_work`
@@ -468,9 +471,13 @@ generate:
 
 Ответ: строка из символов длиной `days_in_month`. `0` = рабочий день, `1` = нерабочий (выходной/праздник), `2` = сокращённый (предпраздничный) день.
 
+Константы:
+- `RUSSIAN_PUBLIC_HOLIDAYS: frozenset[tuple[int, int]]` — множество (месяц, день) официальных праздников РФ (новогодние каникулы, 23 февраля, 8 марта, 1/9 мая, 12 июня, 4 ноября)
+
 Функции:
 - `fetch_holidays(year, month)` → `tuple[set[date], set[date]]` — `(holidays, short_days)`. `short_days` используется при расчёте часов в XLS: 7ч вместо 8ч
-- `parse_manual_holidays(string, year, month)` → `tuple[set[date], set[date]]` — запасной вариант при недоступности API; формат: `YYYY-MM-DD,YYYY-MM-DD,...`; `short_days` всегда пустой
+- `compute_short_days(year, month, holidays) → set[date]` — вычисление предпраздничных сокращённых дней: для каждого праздника (включая праздники следующего месяца) ищет ближайший предшествующий рабочий будний день в пределах текущего месяца
+- `parse_manual_holidays(string, year, month)` → `tuple[set[date], set[date]]` — запасной вариант при недоступности API; формат: `YYYY-MM-DD,YYYY-MM-DD,...`; `short_days` вычисляются через `compute_short_days()`
 - `get_all_days(year, month)` — все даты месяца
 
 ---
