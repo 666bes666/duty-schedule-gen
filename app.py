@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from duty_schedule.calendar import CalendarError, fetch_holidays
+from duty_schedule.calendar import CalendarError, compute_short_days, fetch_holidays
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
     CarryOverState,
@@ -791,7 +791,7 @@ if st.button("Сгенерировать расписание", type="primary", 
                 for d in range(1, _n_days + 1)
                 if date(year, month, d).weekday() >= 5
             }
-            short_days: set[date] = set()
+            short_days = compute_short_days(year, month, holidays)
             st.warning(
                 "Не удалось загрузить производственный календарь. "
                 "Праздничные дни не учтены — только суббота/воскресенье."
@@ -829,6 +829,7 @@ if st.button("Сгенерировать расписание", type="primary", 
         "gen_month": month,
         "gen_year": year,
         "emp_df_snap": edited_df.copy(),
+        "short_days": short_days,
     }
 
 if st.session_state.get("last_result"):
@@ -859,7 +860,8 @@ if st.session_state.get("last_result"):
 
     _prod_days = int(_meta.get("production_working_days", 21))
     _assignments = build_assignments(_schedule)
-    _stats_list = compute_stats(_schedule, _assignments, _prod_days)
+    _short_days = _res.get("short_days")
+    _stats_list = compute_stats(_schedule, _assignments, _prod_days, short_days=_short_days)
 
     _total_isolated = sum(s.isolated_off for s in _stats_list)
     _max_streak = max((s.max_streak_work for s in _stats_list), default=0)
@@ -920,7 +922,8 @@ if st.session_state.get("last_result"):
     _xls_hash = _XLS_VERSION + str(pd.util.hash_pandas_object(edited_schedule_df).sum())
     if st.session_state.get("_xls_hash") != _xls_hash:
         with tempfile.TemporaryDirectory() as tmpdir:
-            xls_path = export_xls(final_schedule, Path(tmpdir), short_days=short_days)
+            _sd = _res.get("short_days")
+            xls_path = export_xls(final_schedule, Path(tmpdir), short_days=_sd)
             st.session_state["_xls_bytes"] = xls_path.read_bytes()
             st.session_state["_xls_hash"] = _xls_hash
     xls_bytes: bytes = st.session_state["_xls_bytes"]
