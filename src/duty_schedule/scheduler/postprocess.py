@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from duty_schedule.constants import MIN_WORK_BETWEEN_OFFS
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT, MIN_WORK_BETWEEN_OFFS
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
@@ -1292,6 +1292,146 @@ def _balance_evening_shifts(
                 day.morning.append(max_name)
                 swapped = True
                 break
+
+            if not swapped:
+                for day in days:
+                    if max_name not in day.evening or min_name not in day.workday:
+                        continue
+                    if (day.date, max_name) in pinned_on or (day.date, min_name) in pinned_on:
+                        continue
+
+                    prev = day_by_date.get(day.date - timedelta(days=1))
+                    if prev and max_name in prev.evening:
+                        continue
+
+                    nxt = day_by_date.get(day.date + timedelta(days=1))
+                    if nxt and (min_name in nxt.morning or min_name in nxt.workday):
+                        continue
+
+                    min_emp = emp_by_name[min_name]
+                    if min_emp.max_evening_shifts is not None:
+                        cur = sum(1 for d in days if min_name in d.evening)
+                        if cur >= min_emp.max_evening_shifts:
+                            continue
+
+                    idx = day_idx_map[day.date]
+
+                    if (
+                        min_emp.max_consecutive_evening is not None
+                        and _consecutive_shift_count_at(min_name, idx, days, "evening")
+                        >= min_emp.max_consecutive_evening
+                    ):
+                        continue
+
+                    day.evening.remove(max_name)
+                    day.workday.remove(min_name)
+                    day.evening.append(min_name)
+                    day.workday.append(max_name)
+                    swapped = True
+                    break
+
+            if not swapped:
+                for day in days:
+                    if max_name not in day.evening or min_name not in day.day_off:
+                        continue
+                    if (day.date, max_name) in pinned_on or (day.date, min_name) in pinned_on:
+                        continue
+
+                    min_emp = emp_by_name[min_name]
+                    max_emp = emp_by_name[max_name]
+                    if min_emp.is_day_off_weekly(day.date):
+                        continue
+
+                    nxt = day_by_date.get(day.date + timedelta(days=1))
+                    if nxt and (min_name in nxt.morning or min_name in nxt.workday):
+                        continue
+
+                    if min_emp.max_evening_shifts is not None:
+                        cur = sum(1 for d in days if min_name in d.evening)
+                        if cur >= min_emp.max_evening_shifts:
+                            continue
+
+                    idx_d = day_idx_map[day.date]
+                    if (
+                        min_emp.max_consecutive_evening is not None
+                        and _consecutive_shift_count_at(min_name, idx_d, days, "evening")
+                        >= min_emp.max_consecutive_evening
+                    ):
+                        continue
+
+                    _max_cw_min = min_emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
+                    cw = 1
+                    for i in range(idx_d - 1, -1, -1):
+                        if min_name in days[i].all_assigned():
+                            cw += 1
+                        else:
+                            break
+                    if cw > _max_cw_min:
+                        continue
+
+                    comp_day = None
+                    comp_shift = ""
+                    for cd in days:
+                        if cd.date == day.date:
+                            continue
+                        if max_name not in cd.day_off:
+                            continue
+                        if (cd.date, min_name) in pinned_on or (cd.date, max_name) in pinned_on:
+                            continue
+                        if max_emp.is_day_off_weekly(cd.date):
+                            continue
+                        prev_cd = day_by_date.get(cd.date - timedelta(days=1))
+                        if prev_cd and max_name in prev_cd.evening:
+                            continue
+                        idx_cd = day_idx_map[cd.date]
+                        _max_cw_max = (
+                            max_emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
+                        )
+                        cw_max = 1
+                        for i in range(idx_cd - 1, -1, -1):
+                            if max_name in days[i].all_assigned():
+                                cw_max += 1
+                            else:
+                                break
+                        for i in range(idx_cd + 1, len(days)):
+                            if max_name in days[i].all_assigned():
+                                cw_max += 1
+                            else:
+                                break
+                        if cw_max > _max_cw_max:
+                            continue
+                        if min_name in cd.workday:
+                            comp_day = cd
+                            comp_shift = "workday"
+                            break
+                        if min_name in cd.morning and not max_emp.evening_only:
+                            if max_emp.max_morning_shifts is not None:
+                                cur_mo = sum(1 for d2 in days if max_name in d2.morning)
+                                if cur_mo >= max_emp.max_morning_shifts:
+                                    continue
+                            if (
+                                max_emp.max_consecutive_morning is not None
+                                and _consecutive_shift_count_at(max_name, idx_cd, days, "morning")
+                                >= max_emp.max_consecutive_morning
+                            ):
+                                continue
+                            comp_day = cd
+                            comp_shift = "morning"
+                            break
+
+                    if comp_day is None:
+                        continue
+
+                    day.evening.remove(max_name)
+                    day.day_off.remove(min_name)
+                    day.evening.append(min_name)
+                    day.day_off.append(max_name)
+                    getattr(comp_day, comp_shift).remove(min_name)
+                    comp_day.day_off.remove(max_name)
+                    comp_day.day_off.append(min_name)
+                    getattr(comp_day, comp_shift).append(max_name)
+                    swapped = True
+                    break
 
             if swapped:
                 break

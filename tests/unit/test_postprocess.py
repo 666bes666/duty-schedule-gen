@@ -106,3 +106,42 @@ class TestBalanceEveningShifts:
 
         for d in result:
             assert d.evening == original_evenings[d.date]
+
+    def test_evening_workday_swap(self):
+        days = [
+            _day(1, morning=["C"], evening=["A"], workday=["B"]),
+            _day(3, morning=["C"], evening=["A"], workday=["B"]),
+            _day(5, morning=["C"], evening=["A"], workday=["B"]),
+            _day(7, morning=["C"], evening=["B"], workday=["A"]),
+        ]
+
+        employees = [_emp("A"), _emp("B"), _emp("C")]
+        result = _balance_evening_shifts(days, employees)
+
+        counts = {e.name: sum(1 for d in result if e.name in d.evening) for e in employees}
+        assert counts["A"] - counts["B"] <= 1
+
+    def test_evening_workday_swap_blocked_by_next_day(self):
+        days = [
+            _day(1, morning=["C"], evening=["A"], workday=["B"]),
+            _day(2, morning=["C"], evening=["A"], workday=["B"]),
+        ]
+
+        employees = [_emp("A"), _emp("B"), _emp("C")]
+        result = _balance_evening_shifts(days, employees)
+
+        assert "A" in result[0].evening
+        assert "A" in result[1].evening
+
+    def test_evening_workday_swap_blocked_by_prev_evening(self):
+        days = [
+            _day(4, morning=["C"], evening=["A"], workday=["B"]),
+            _day(5, morning=["C"], evening=["A"], workday=["B"]),
+        ]
+
+        employees = [_emp("A"), _emp("B"), _emp("C")]
+        result = _balance_evening_shifts(days, employees)
+
+        swapped_day5 = "B" in result[1].evening
+        if swapped_day5:
+            assert "A" not in result[0].evening
