@@ -11,6 +11,7 @@ from duty_schedule.scheduler import (
     EmployeeState,
     ScheduleError,
     _build_day,
+    _calc_blocked_working_days,
     _can_work,
     _is_weekend_or_holiday,
     _resting_after_evening,
@@ -226,3 +227,33 @@ class TestBuildDay:
         rng = _random.Random(42)
         with pytest.raises(ScheduleError, match="ночную смену"):
             _build_day(day, employees, states, set(), rng, remaining_days=29)
+
+
+class TestCalcBlockedWorkingDays:
+    def test_vacation_counted(self):
+        emp = Employee(
+            name="Отпускник",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            vacations=[VacationPeriod(start=date(2025, 3, 3), end=date(2025, 3, 7))],
+        )
+        assert _calc_blocked_working_days(emp, 2025, 3) == 5
+
+    def test_unavailable_not_counted(self):
+        emp = Employee(
+            name="Недоступен",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            unavailable_dates=[date(2025, 3, 3), date(2025, 3, 4), date(2025, 3, 5)],
+        )
+        assert _calc_blocked_working_days(emp, 2025, 3) == 0
+
+    def test_mixed_vacation_and_unavailable(self):
+        emp = Employee(
+            name="Смешанный",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            vacations=[VacationPeriod(start=date(2025, 3, 3), end=date(2025, 3, 5))],
+            unavailable_dates=[date(2025, 3, 6), date(2025, 3, 7)],
+        )
+        assert _calc_blocked_working_days(emp, 2025, 3) == 3

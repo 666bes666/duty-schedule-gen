@@ -260,6 +260,32 @@ class TestUnavailableDates:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
+class TestUnavailableDoesNotReduceTarget:
+    def test_unavailable_does_not_reduce_target(self):
+        from duty_schedule.scheduler.constraints import _calc_blocked_working_days
+
+        team = _base_team()
+        unavailable = [date(2025, 3, 3), date(2025, 3, 4), date(2025, 3, 5)]
+        team[0] = _emp("Москва 1", unavailable_dates=unavailable)
+        config = Config(month=3, year=2025, seed=42, employees=team)
+        schedule = generate_schedule(config, set())
+
+        emp = team[0]
+        blocked = _calc_blocked_working_days(emp, 2025, 3)
+        assert blocked == 0
+
+        from duty_schedule.scheduler.constraints import _calc_production_days
+        from duty_schedule.stats import build_assignments, compute_stats
+
+        production_days = _calc_production_days(2025, 3, set())
+        assignments = build_assignments(schedule)
+        stats = compute_stats(schedule, assignments, production_days, employees=team)
+        stat = next(s for s in stats if s.name == "Москва 1")
+        assert stat.total_working == stat.target, (
+            f"delta != 0: total_working={stat.total_working}, target={stat.target}"
+        )
+
+
 class TestDifferentMonths:
     """Разные месяцы и года."""
 
