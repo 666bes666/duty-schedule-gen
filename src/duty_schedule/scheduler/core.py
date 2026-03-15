@@ -106,6 +106,7 @@ def generate_schedule(
     from duty_schedule.scheduler.greedy import _build_day
     from duty_schedule.scheduler.postprocess import (
         _balance_duty_shifts,
+        _balance_evening_shifts,
         _balance_weekend_work,
         _break_evening_isolated_pattern,
         _equalize_isolated_off,
@@ -209,6 +210,7 @@ def generate_schedule(
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
     days = _target_adjustment_pass(
         days,
         employees,
@@ -267,6 +269,7 @@ def generate_schedule(
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
     )
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
@@ -305,6 +308,8 @@ def generate_schedule(
                     f"Нарушена норма для {emp.name}: факт={actual}, норма={target}, "
                     f"осталось {removable} снимаемых WORKDAY"
                 )
+
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))

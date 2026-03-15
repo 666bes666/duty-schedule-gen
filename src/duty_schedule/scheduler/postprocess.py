@@ -1206,3 +1206,97 @@ def _balance_duty_shifts(
                 break
 
     return days
+
+
+def _balance_evening_shifts(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+) -> list[DaySchedule]:
+    eligible = [
+        e
+        for e in employees
+        if e.city == City.MOSCOW
+        and e.on_duty
+        and not _duty_only(e)
+        and e.can_work_morning()
+        and e.can_work_evening()
+    ]
+    if len(eligible) < 2:
+        return days
+
+    day_by_date = {d.date: d for d in days}
+    day_idx_map = {d.date: i for i, d in enumerate(days)}
+    emp_by_name = {e.name: e for e in eligible}
+
+    for _ in range(len(days) * len(eligible)):
+        counts: dict[str, int] = {
+            e.name: sum(1 for d in days if e.name in d.evening) for e in eligible
+        }
+        sorted_by_count = sorted(eligible, key=lambda e: counts[e.name])
+        max_name = max(counts, key=counts.__getitem__)
+        if counts[max_name] - counts[sorted_by_count[0].name] <= 1:
+            break
+
+        swapped = False
+        for candidate in sorted_by_count:
+            min_name = candidate.name
+            if counts[max_name] - counts[min_name] <= 1:
+                break
+
+            for day in days:
+                if max_name not in day.evening or min_name not in day.morning:
+                    continue
+                if (day.date, max_name) in pinned_on or (day.date, min_name) in pinned_on:
+                    continue
+
+                prev = day_by_date.get(day.date - timedelta(days=1))
+                if prev and max_name in prev.evening:
+                    continue
+
+                nxt = day_by_date.get(day.date + timedelta(days=1))
+                if nxt and (min_name in nxt.morning or min_name in nxt.workday):
+                    continue
+
+                max_emp = emp_by_name[max_name]
+                if max_emp.max_morning_shifts is not None:
+                    cur = sum(1 for d in days if max_name in d.morning)
+                    if cur >= max_emp.max_morning_shifts:
+                        continue
+
+                min_emp = emp_by_name[min_name]
+                if min_emp.max_evening_shifts is not None:
+                    cur = sum(1 for d in days if min_name in d.evening)
+                    if cur >= min_emp.max_evening_shifts:
+                        continue
+
+                idx = day_idx_map[day.date]
+
+                if (
+                    max_emp.max_consecutive_morning is not None
+                    and _consecutive_shift_count_at(max_name, idx, days, "morning")
+                    >= max_emp.max_consecutive_morning
+                ):
+                    continue
+
+                if (
+                    min_emp.max_consecutive_evening is not None
+                    and _consecutive_shift_count_at(min_name, idx, days, "evening")
+                    >= min_emp.max_consecutive_evening
+                ):
+                    continue
+
+                day.evening.remove(max_name)
+                day.morning.remove(min_name)
+                day.evening.append(min_name)
+                day.morning.append(max_name)
+                swapped = True
+                break
+
+            if swapped:
+                break
+
+        if not swapped:
+            break
+
+    return days

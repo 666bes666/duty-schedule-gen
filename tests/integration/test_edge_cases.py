@@ -341,3 +341,66 @@ class TestCarryOver:
         schedule = generate_schedule(config, set())
         for day in schedule.days:
             assert day.is_covered(), f"Смены не покрыты на {day.date}"
+
+
+class TestEveningBalance:
+    def _real_team(self) -> list[Employee]:
+        return [
+            Employee(
+                name="Скрябин",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+                on_duty=True,
+                morning_only=True,
+            ),
+            Employee(
+                name="Абашина",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+                on_duty=True,
+                preferred_shift=ShiftType.MORNING,
+            ),
+            Employee(
+                name="Ищенко",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+                on_duty=True,
+            ),
+            Employee(
+                name="Корох",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+                on_duty=True,
+                vacations=[VacationPeriod(start=date(2026, 4, 6), end=date(2026, 4, 17))],
+            ),
+            Employee(
+                name="Ужахов",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+                on_duty=True,
+            ),
+            _emp("Хабаровск 1", City.KHABAROVSK),
+            _emp("Хабаровск 2", City.KHABAROVSK),
+        ]
+
+    def test_evening_shifts_balanced(self):
+        config = Config(month=4, year=2026, seed=42, employees=self._real_team())
+        schedule = generate_schedule(config, set())
+
+        full_time_names = {"Абашина", "Ищенко", "Ужахов"}
+        evening_counts = {
+            name: sum(1 for d in schedule.days if name in d.evening) for name in full_time_names
+        }
+        assert max(evening_counts.values()) - min(evening_counts.values()) <= 3
+
+    def test_no_rest_violation_after_balance(self):
+        config = Config(month=4, year=2026, seed=42, employees=self._real_team())
+        schedule = generate_schedule(config, set())
+
+        for i, day in enumerate(schedule.days):
+            if i + 1 >= len(schedule.days):
+                break
+            nxt = schedule.days[i + 1]
+            for name in day.evening:
+                assert name not in nxt.morning, f"{name}: вечер {day.date} → утро {nxt.date}"
+                assert name not in nxt.workday, f"{name}: вечер {day.date} → workday {nxt.date}"
