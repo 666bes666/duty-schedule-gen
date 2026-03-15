@@ -149,7 +149,7 @@ def _calc_blocked_working_days(emp: Employee, year: int, month: int) -> int:
     count = 0
     for d in range(1, days_in_month + 1):
         day = date(year, month, d)
-        if day.weekday() < 5 and emp.is_blocked(day):
+        if day.weekday() < 5 and emp.is_on_vacation(day):
             count += 1
     return count
 

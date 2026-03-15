@@ -65,10 +65,20 @@ Line 1211: # edited_schedule_df инициализируем базовым зн
 Line 1236: # Кешируем XLS — перегенерируем только при изменении таблицы редактора
 ```
 
+## `src/duty_schedule/scheduler/constraints.py`
+
+```
+_calc_blocked_working_days: v1.9.1 fix — заменено emp.is_blocked(day) на emp.is_on_vacation(day).
+  is_blocked() включал unavailable_dates, что ошибочно снижало effective_target (норму).
+  unavailable_dates — это закреплённые выходные из пула, а не отпуск; норма не должна падать.
+  Планировщик компенсирует unavailable дни, назначая WORKDAY в другие дни → delta == 0.
+```
+
 ## `src/duty_schedule/calendar.py`
 
 ```
-Line   17: # Коды: 0=рабочий, 1=выходной/праздник, 2=сокращённый (6-часовой), 4=предпраздничный
+Line   17: _HOLIDAY_CODE = "1"
+Line   18: _SHORT_DAY_CODE = "2"
 ```
 
 ## `src/duty_schedule/cli.py`

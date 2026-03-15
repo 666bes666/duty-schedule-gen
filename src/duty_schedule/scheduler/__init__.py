@@ -1,6 +1,7 @@
 from duty_schedule.scheduler.constraints import (
     MAX_CONSECUTIVE_WORKING,
     MAX_CONSECUTIVE_WORKING_FLEX,
+    _calc_blocked_working_days,
     _can_work,
     _is_weekend_or_holiday,
     _resting_after_evening,
@@ -19,6 +20,7 @@ __all__ = [
     "MAX_CONSECUTIVE_WORKING_FLEX",
     "ScheduleError",
     "_build_day",
+    "_calc_blocked_working_days",
     "_can_work",
     "_is_weekend_or_holiday",
     "_resting_after_evening",
