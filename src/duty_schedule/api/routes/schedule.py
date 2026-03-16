@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from duty_schedule.api.schemas import EmployeeStatsSchema
+from duty_schedule.api.schemas import EmployeeStatsSchema, MultiMonthRequest, MultiMonthResponse
 from duty_schedule.calendar import fetch_holidays
 from duty_schedule.models import Config, Schedule
 from duty_schedule.scheduler import generate_schedule
@@ -54,3 +54,22 @@ async def stats(schedule: Schedule) -> list[EmployeeStatsSchema]:
         )
         for s in result
     ]
+
+
+@router.post("/generate-range", response_model=MultiMonthResponse)
+async def generate_range(request: MultiMonthRequest) -> MultiMonthResponse:
+    from duty_schedule.scheduler.multimonth import generate_multimonth
+
+    config = Config.model_validate(request.config)
+
+    def _run() -> list[Schedule]:
+        return generate_multimonth(
+            config,
+            request.start_month,
+            request.start_year,
+            request.end_month,
+            request.end_year,
+        )
+
+    schedules = await asyncio.to_thread(_run)
+    return MultiMonthResponse(schedules=[s.model_dump(mode="json") for s in schedules])

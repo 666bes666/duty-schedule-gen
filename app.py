@@ -698,6 +698,26 @@ with _setup_tab3:
 
 st.divider()
 
+_multi_mode = st.toggle("Мультимесячное планирование", value=False, key="multi_mode")
+if _multi_mode:
+    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+    _multi_start_m = _mc1.selectbox(
+        "Начало (месяц)",
+        range(1, 13),
+        format_func=lambda m: MONTHS_RU[m - 1],
+        key="multi_start_m",
+    )
+    _multi_start_y = _mc2.number_input(
+        "Год начала", min_value=2024, max_value=2030, key="multi_start_y"
+    )
+    _multi_end_m = _mc3.selectbox(
+        "Конец (месяц)",
+        range(1, 13),
+        format_func=lambda m: MONTHS_RU[m - 1],
+        key="multi_end_m",
+    )
+    _multi_end_y = _mc4.number_input("Год конца", min_value=2024, max_value=2030, key="multi_end_y")
+
 _val_errors, _val_warnings = _validate_config(edited_df)
 for _verr in _val_errors:
     st.error(_verr)

@@ -109,3 +109,22 @@ class VariantResult(BaseModel):
 class WhatIfResponse(BaseModel):
     baseline: ScenarioResult
     variants: list[VariantResult]
+
+
+class MultiMonthRequest(BaseModel):
+    config: dict[str, Any]
+    start_month: int
+    start_year: int
+    end_month: int
+    end_year: int
+
+    @field_validator("start_month", "end_month")
+    @classmethod
+    def valid_month(cls, v: int) -> int:
+        if not 1 <= v <= 12:
+            raise ValueError("Месяц должен быть от 1 до 12")
+        return v
+
+
+class MultiMonthResponse(BaseModel):
+    schedules: list[dict[str, Any]]
