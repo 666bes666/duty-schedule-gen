@@ -24,6 +24,7 @@ from duty_schedule.ui.builders import (
     _edit_df_to_schedule,
     _schedule_to_edit_df,
     _validate_config,
+    _validate_edited_schedule,
 )
 from duty_schedule.ui.config_io import (
     _df_to_yaml,
@@ -925,6 +926,34 @@ if st.session_state.get("last_result"):
             hide_index=True,
             key="schedule_editor",
         )
+
+        _edit_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
+        _edit_violations = _validate_edited_schedule(_edit_schedule)
+        if _edit_violations:
+            with st.expander(f"Нарушения ({len(_edit_violations)})", expanded=True):
+                for _v in _edit_violations:
+                    st.warning(_v)
+        else:
+            st.success("Нарушений не обнаружено")
+
+        if st.button("Пересчитать статистику", key="edit_recalc"):
+            _edit_assign = build_assignments(_edit_schedule)
+            _edit_stats = compute_stats(
+                _edit_schedule, _edit_assign, _prod_days, short_days=_short_days
+            )
+            _edit_rows = []
+            for _es in _edit_stats:
+                _edit_rows.append(
+                    {
+                        "Сотрудник": _es.name,
+                        "Раб.дней": _es.total_working,
+                        "Норма": _es.target,
+                        "Δ": _es.total_working - _es.target,
+                        "Часы": _es.total_hours,
+                        "Часы с надб.": _es.cost_hours,
+                    }
+                )
+            st.dataframe(pd.DataFrame(_edit_rows), use_container_width=True, hide_index=True)
 
     _known_names = {e.name for e in _schedule.config.employees}
     _unknown_in_edit: set[str] = set()
