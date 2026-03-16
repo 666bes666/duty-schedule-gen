@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("pytest_benchmark")
+
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.scheduler import generate_schedule
 

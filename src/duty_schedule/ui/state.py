@@ -42,7 +42,9 @@ def _init_state() -> None:
 
 
 def _bump_table() -> None:
-    st.session_state["table_version"] += 1
+    old_ver = st.session_state["table_version"]
+    st.session_state.pop(f"_gopt_{old_ver}", None)
+    st.session_state["table_version"] = old_ver + 1
 
 
 def _get_emp_dates(name: str) -> dict[str, Any]:
