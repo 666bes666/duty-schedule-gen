@@ -31,6 +31,31 @@ class EmployeeStats:
     cost_hours: float = 0.0
 
 
+def diff_schedules(
+    a: Schedule,
+    b: Schedule,
+) -> list[dict[str, str]]:
+    assign_a = build_assignments(a)
+    assign_b = build_assignments(b)
+    all_names = sorted(set(assign_a) | set(assign_b))
+    all_dates = sorted({d.date for d in a.days} | {d.date for d in b.days})
+    diffs: list[dict[str, str]] = []
+    for d in all_dates:
+        for name in all_names:
+            old = assign_a.get(name, {}).get(d, "day_off")
+            new = assign_b.get(name, {}).get(d, "day_off")
+            if old != new:
+                diffs.append(
+                    {
+                        "date": d.isoformat(),
+                        "employee": name,
+                        "old_shift": old,
+                        "new_shift": new,
+                    }
+                )
+    return diffs
+
+
 def build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
     result: dict[str, dict[date, str]] = {}
     for day in schedule.days:

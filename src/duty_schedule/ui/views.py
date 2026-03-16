@@ -9,7 +9,7 @@ import streamlit as st
 
 from duty_schedule.export.ics import generate_employee_ics_bytes
 from duty_schedule.models import City, Schedule, ScheduleType
-from duty_schedule.stats import EmployeeStats
+from duty_schedule.stats import EmployeeStats, diff_schedules
 from duty_schedule.ui.mappings import (
     _CAL_SHIFT_COLORS,
     _SHIFT_PALETTE,
@@ -476,6 +476,71 @@ def _render_changelog(schedule: Schedule) -> None:
         st.caption(f"Всего записей: {len(rows)}")
     else:
         st.info("Нет записей для выбранного фильтра.")
+
+
+SHIFT_LABEL_MAP = {
+    "morning": "Утро",
+    "evening": "Вечер",
+    "night": "Ночь",
+    "workday": "Рабочий",
+    "day_off": "Выходной",
+    "vacation": "Отпуск",
+}
+
+
+def _render_schedule_diff(schedule: Schedule) -> None:
+    history: list[dict] = st.session_state.get("schedule_history", [])
+    if len(history) < 2:
+        st.info("Сравнение доступно после двух или более генераций.")
+        return
+
+    labels = [h["label"] for h in history]
+    c1, c2 = st.columns(2)
+    idx_a = c1.selectbox(
+        "Расписание A",
+        range(len(labels)),
+        format_func=lambda i: labels[i],
+        index=len(labels) - 2,
+        key="diff_a",
+    )
+    idx_b = c2.selectbox(
+        "Расписание B",
+        range(len(labels)),
+        format_func=lambda i: labels[i],
+        index=len(labels) - 1,
+        key="diff_b",
+    )
+
+    sched_a = history[idx_a]["schedule"]
+    sched_b = history[idx_b]["schedule"]
+
+    diffs = diff_schedules(sched_a, sched_b)
+    if not diffs:
+        st.success("Расписания идентичны.")
+        return
+
+    rows = []
+    for d in diffs:
+        rows.append(
+            {
+                "Дата": d["date"],
+                "Сотрудник": d["employee"],
+                "Было": SHIFT_LABEL_MAP.get(d["old_shift"], d["old_shift"]),
+                "Стало": SHIFT_LABEL_MAP.get(d["new_shift"], d["new_shift"]),
+            }
+        )
+
+    st.caption(f"Изменений: {len(rows)}")
+
+    emp_filter = st.selectbox(
+        "Фильтр по сотруднику",
+        ["Все"] + sorted({r["Сотрудник"] for r in rows}),
+        key="diff_emp_filter",
+    )
+    if emp_filter != "Все":
+        rows = [r for r in rows if r["Сотрудник"] == emp_filter]
+
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def render_employee_ics_downloads(schedule: Schedule) -> None:

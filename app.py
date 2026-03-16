@@ -49,6 +49,7 @@ from duty_schedule.ui.views import (
     _render_calendar,
     _render_changelog,
     _render_load_dashboard,
+    _render_schedule_diff,
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
@@ -848,6 +849,12 @@ if st.button("Сгенерировать расписание", type="primary", 
         "short_days": short_days,
     }
 
+    _history: list[dict] = st.session_state["schedule_history"]
+    _gen_label = f"{MONTHS_RU[month - 1]} {year} @ {datetime.now().strftime('%H:%M:%S')}"
+    _history.append({"label": _gen_label, "schedule": schedule})
+    if len(_history) > 5:
+        st.session_state["schedule_history"] = _history[-5:]
+
 if st.session_state.get("last_result"):
     _res = st.session_state["last_result"]
     _schedule = _res["schedule"]
@@ -888,8 +895,8 @@ if st.session_state.get("last_result"):
     _rc8.metric("Макс. серия работы", _max_streak)
     _rc9.metric("Работа в выходные", _weekend_work_total)
 
-    _tab_cal, _tab_dash, _tab_edit, _tab_log = st.tabs(
-        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации"]
+    _tab_cal, _tab_dash, _tab_edit, _tab_log, _tab_diff = st.tabs(
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение"]
     )
 
     with _tab_cal:
@@ -937,6 +944,9 @@ if st.session_state.get("last_result"):
 
     with _tab_log:
         _render_changelog(_schedule)
+
+    with _tab_diff:
+        _render_schedule_diff(_schedule)
 
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 
