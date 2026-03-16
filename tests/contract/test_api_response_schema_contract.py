@@ -43,6 +43,7 @@ EMPLOYEE_STATS_FIELDS = {
     "isolated_off",
     "paired_off",
     "total_hours",
+    "cost_hours",
 }
 SUMMARY_FIELDS = {
     "fairness_score",
@@ -208,8 +209,9 @@ class TestScheduleStatsSchema:
         stat = resp.json()[0]
         assert isinstance(stat["name"], str)
         assert isinstance(stat["city"], str)
-        for field in EMPLOYEE_STATS_FIELDS - {"name", "city"}:
+        for field in EMPLOYEE_STATS_FIELDS - {"name", "city", "cost_hours"}:
             assert isinstance(stat[field], int), f"{field} should be int"
+        assert isinstance(stat["cost_hours"], (int, float)), "cost_hours should be numeric"
 
 
 class TestWhatIfSchema:

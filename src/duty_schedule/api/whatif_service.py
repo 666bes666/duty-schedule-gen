@@ -61,6 +61,7 @@ def _stats_to_schema(s: EmployeeStats) -> EmployeeStatsSchema:
         isolated_off=s.isolated_off,
         paired_off=s.paired_off,
         total_hours=s.total_hours,
+        cost_hours=s.cost_hours,
     )
 
 

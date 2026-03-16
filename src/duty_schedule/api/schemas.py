@@ -37,6 +37,7 @@ class EmployeeStatsSchema(BaseModel):
     isolated_off: int
     paired_off: int
     total_hours: int
+    cost_hours: float = 0.0
 
 
 class ErrorResponse(BaseModel):

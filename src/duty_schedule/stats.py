@@ -28,6 +28,7 @@ class EmployeeStats:
     isolated_off: int
     paired_off: int
     total_hours: int = 0
+    cost_hours: float = 0.0
 
 
 def build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
@@ -110,7 +111,10 @@ def compute_stats(
     sorted_dates = sorted(day.date for day in schedule.days)
     _employees = employees if employees is not None else schedule.config.employees
 
+    from duty_schedule.costs import CostModel, compute_cost_hours
+
     _short = short_days or set()
+    _cost_model = CostModel()
     result = []
     for emp in _employees:
         emp_days = assignments.get(emp.name, {})
@@ -145,6 +149,10 @@ def compute_stats(
             if v in working_keys
         )
 
+        cost_hours = compute_cost_hours(
+            emp.name, schedule, holiday_dates, short_days=_short, model=_cost_model
+        )
+
         result.append(
             EmployeeStats(
                 name=emp.name,
@@ -164,6 +172,7 @@ def compute_stats(
                 isolated_off=isolated_off,
                 paired_off=paired_off,
                 total_hours=total_hours,
+                cost_hours=cost_hours,
             )
         )
     return result
