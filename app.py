@@ -949,14 +949,32 @@ if st.session_state.get("last_result"):
             st.session_state["_xls_hash"] = _xls_hash
     xls_bytes: bytes = st.session_state["_xls_bytes"]
 
-    st.download_button(
-        label="Скачать XLS",
-        data=xls_bytes,
-        file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary",
-        use_container_width=True,
-    )
+    _dl_col1, _dl_col2 = st.columns(2)
+    with _dl_col1:
+        st.download_button(
+            label="Скачать XLS",
+            data=xls_bytes,
+            file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True,
+        )
+    with _dl_col2:
+        _pdf_hash = "pdf_" + _xls_hash
+        if st.session_state.get("_pdf_hash") != _pdf_hash:
+            _sd = _res.get("short_days")
+            from duty_schedule.export.pdf import generate_schedule_pdf
+
+            _pdf_bytes = generate_schedule_pdf(final_schedule, page_size="A3", short_days=_sd)
+            st.session_state["_pdf_bytes"] = _pdf_bytes
+            st.session_state["_pdf_hash"] = _pdf_hash
+        st.download_button(
+            label="Скачать PDF",
+            data=st.session_state["_pdf_bytes"],
+            file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
     st.download_button(
         label=(f"Скачать конфиг для {MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"),
         data=_res["next_yaml"].encode("utf-8"),

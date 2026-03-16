@@ -19,6 +19,7 @@ from duty_schedule.scheduler import generate_schedule
 router = APIRouter(prefix="/export", tags=["export"])
 
 XLS_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PDF_MEDIA_TYPE = "application/pdf"
 
 
 def _content_disposition(filename: str) -> str:
@@ -41,6 +42,24 @@ async def export_xls_endpoint(config: Config) -> StreamingResponse:
     return StreamingResponse(
         io.BytesIO(xls_bytes),
         media_type=XLS_MEDIA_TYPE,
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
+@router.post("/pdf")
+async def export_pdf_endpoint(
+    config: Config,
+    page_size: str = Query(default="A3", pattern="^(A3|A4)$"),
+) -> Response:
+    from duty_schedule.export.pdf import generate_schedule_pdf
+
+    holidays, short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
+    schedule = await asyncio.to_thread(generate_schedule, config, holidays)
+    pdf_bytes = await asyncio.to_thread(generate_schedule_pdf, schedule, page_size, short_days)
+    filename = f"schedule_{config.year}_{config.month:02d}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type=PDF_MEDIA_TYPE,
         headers={"Content-Disposition": _content_disposition(filename)},
     )
 

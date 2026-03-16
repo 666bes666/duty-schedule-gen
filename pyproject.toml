@@ -22,6 +22,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.29",
     "pydantic-settings>=2.0",
+    "weasyprint>=62",
 ]
 
 [project.scripts]
