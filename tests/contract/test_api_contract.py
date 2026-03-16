@@ -1,25 +1,11 @@
 from __future__ import annotations
 
+import re
+
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from duty_schedule.api import create_app
-from duty_schedule.api.settings import ApiSettings, get_settings
-
-
-@pytest.fixture
-def app():
-    application = create_app()
-    application.dependency_overrides[get_settings] = lambda: ApiSettings(auth_enabled=False)
-    return application
-
-
-@pytest_asyncio.fixture
-async def client(app):
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
 
 
 class TestOpenAPIContract:
@@ -42,6 +28,7 @@ class TestOpenAPIContract:
             "/api/v1/holidays/{year}/{month}",
             "/api/v1/export/xls",
             "/api/v1/export/ics",
+            "/api/v1/whatif/compare",
         ]
         for path in expected:
             assert path in paths, f"Missing endpoint: {path}"
@@ -74,3 +61,15 @@ class TestOpenAPIContract:
         assert "APIKeyHeader" in security_schemes
         assert security_schemes["APIKeyHeader"]["type"] == "apiKey"
         assert security_schemes["APIKeyHeader"]["in"] == "header"
+
+    @pytest.mark.asyncio
+    async def test_whatif_accepts_post(self, client) -> None:
+        resp = await client.get("/openapi.json")
+        paths = resp.json()["paths"]
+        assert "post" in paths["/api/v1/whatif/compare"]
+
+    @pytest.mark.asyncio
+    async def test_openapi_version_semver(self, client) -> None:
+        resp = await client.get("/openapi.json")
+        version = resp.json()["info"]["version"]
+        assert re.match(r"^\d+\.\d+\.\d+$", version)
