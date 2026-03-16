@@ -8,11 +8,16 @@ import pytest
 from pydantic import ValidationError
 
 from duty_schedule.models import (
+    CarryOverState,
     City,
     Config,
+    DaySchedule,
     Employee,
+    PinnedAssignment,
     ScheduleType,
+    ShiftType,
     VacationPeriod,
+    collect_config_issues,
 )
 
 
@@ -173,3 +178,140 @@ class TestConfig:
         )
         cfg = Config(month=3, year=2025, employees=emps)
         assert len(cfg.employees) == 7
+
+
+class TestDaySchedule:
+    def test_all_assigned_excludes_day_off(self):
+        ds = DaySchedule(
+            date=date(2025, 3, 1),
+            morning=["A"],
+            evening=["B"],
+            night=["C"],
+            workday=["D"],
+            day_off=["E"],
+        )
+        assigned = ds.all_assigned()
+        assert "A" in assigned
+        assert "D" in assigned
+        assert "E" not in assigned
+
+    def test_is_covered_true(self):
+        ds = DaySchedule(
+            date=date(2025, 3, 1),
+            morning=["A"],
+            evening=["B"],
+            night=["C"],
+        )
+        assert ds.is_covered() is True
+
+    def test_is_covered_false_missing_night(self):
+        ds = DaySchedule(
+            date=date(2025, 3, 1),
+            morning=["A"],
+            evening=["B"],
+        )
+        assert ds.is_covered() is False
+
+    def test_is_covered_false_empty(self):
+        ds = DaySchedule(date=date(2025, 3, 1))
+        assert ds.is_covered() is False
+
+
+class TestCollectConfigIssues:
+    def _make_employees(self, moscow: int = 4, khabarovsk: int = 2) -> list[Employee]:
+        emps = [
+            Employee(name=f"М{i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE)
+            for i in range(moscow)
+        ] + [
+            Employee(name=f"Х{i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
+            for i in range(khabarovsk)
+        ]
+        return emps
+
+    def test_valid_config_no_issues(self):
+        cfg = Config(month=3, year=2025, employees=self._make_employees())
+        errors, warnings = collect_config_issues(cfg)
+        assert errors == []
+        assert warnings == []
+
+    def test_duplicate_names(self):
+        emps = self._make_employees()
+        emps.append(Employee(name="М0", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE))
+        cfg = Config(month=3, year=2025, employees=emps)
+        errors, _ = collect_config_issues(cfg)
+        assert any("М0" in e for e in errors)
+
+    def test_pin_unknown_employee(self):
+        cfg = Config(
+            month=3,
+            year=2025,
+            employees=self._make_employees(),
+            pins=[
+                PinnedAssignment(
+                    date=date(2025, 3, 1),
+                    employee_name="НеСуществует",
+                    shift=ShiftType.MORNING,
+                ),
+            ],
+        )
+        errors, _ = collect_config_issues(cfg)
+        assert any("НеСуществует" in e for e in errors)
+
+    def test_pin_moscow_to_night_error(self):
+        cfg = Config(
+            month=3,
+            year=2025,
+            employees=self._make_employees(),
+            pins=[
+                PinnedAssignment(date=date(2025, 3, 1), employee_name="М0", shift=ShiftType.NIGHT),
+            ],
+        )
+        errors, _ = collect_config_issues(cfg)
+        assert any("ночную" in e for e in errors)
+
+    def test_pin_khabarovsk_to_morning_error(self):
+        cfg = Config(
+            month=3,
+            year=2025,
+            employees=self._make_employees(),
+            pins=[
+                PinnedAssignment(
+                    date=date(2025, 3, 1),
+                    employee_name="Х0",
+                    shift=ShiftType.MORNING,
+                ),
+            ],
+        )
+        errors, _ = collect_config_issues(cfg)
+        assert any("утреннюю" in e for e in errors)
+
+    def test_carry_over_unknown_employee_warning(self):
+        cfg = Config(
+            month=3,
+            year=2025,
+            employees=self._make_employees(),
+            carry_over=[CarryOverState(employee_name="Неизвестный", consecutive_working=3)],
+        )
+        _, warnings = collect_config_issues(cfg)
+        assert any("Неизвестный" in w for w in warnings)
+
+    def test_duplicate_pin_same_day_same_employee(self):
+        cfg = Config(
+            month=3,
+            year=2025,
+            employees=self._make_employees(),
+            pins=[
+                PinnedAssignment(
+                    date=date(2025, 3, 1),
+                    employee_name="М0",
+                    shift=ShiftType.MORNING,
+                ),
+                PinnedAssignment(
+                    date=date(2025, 3, 1),
+                    employee_name="М0",
+                    shift=ShiftType.EVENING,
+                ),
+            ],
+        )
+        errors, _ = collect_config_issues(cfg)
+        assert any("несколько смен" in e for e in errors)

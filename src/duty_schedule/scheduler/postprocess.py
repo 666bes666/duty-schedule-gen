@@ -1366,6 +1366,11 @@ def _balance_evening_shifts(
                             cw += 1
                         else:
                             break
+                    for i in range(idx_d + 1, len(days)):
+                        if min_name in days[i].all_assigned():
+                            cw += 1
+                        else:
+                            break
                     if cw > _max_cw_min:
                         continue
 

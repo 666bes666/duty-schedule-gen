@@ -20,10 +20,11 @@ from duty_schedule.models import (
 
 ICS_SHIFTS = [ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT, ShiftType.WORKDAY]
 
-CITY_TZ = {
+CITY_TZ: dict[City, str] = {
     City.MOSCOW: "Europe/Moscow",
     City.KHABAROVSK: "Asia/Vladivostok",
 }
+DEFAULT_TZ = "Europe/Moscow"
 
 _SHIFT_ICS_COLORS = {
     ShiftType.MORNING: "goldenrod",
@@ -34,7 +35,13 @@ _SHIFT_ICS_COLORS = {
 
 
 def _sanitize_ics_value(value: str) -> str:
-    return value.replace("\n", " ").replace("\r", "").replace(";", "_").replace(",", "_")
+    return (
+        value.replace("\n", " ")
+        .replace("\r", "")
+        .replace(";", "_")
+        .replace(",", "_")
+        .replace("@", "_")
+    )
 
 
 KHABAROVSK_WORKDAY_START = (9, 0)
@@ -89,7 +96,7 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     msk_tz = ZoneInfo(schedule.config.timezone)
-    khb_tz = ZoneInfo(CITY_TZ[City.KHABAROVSK])
+    khb_tz = ZoneInfo(CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ))
     year = schedule.config.year
     month = schedule.config.month
 
@@ -109,7 +116,7 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
                     eh, em = KHABAROVSK_WORKDAY_END
                     dt_start = _make_datetime(day.date, sh, sm, khb_tz)
                     dt_end = _make_datetime(day.date, eh, em, khb_tz)
-                    tz_label = CITY_TZ[City.KHABAROVSK]
+                    tz_label = CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ)
                 else:
                     dt_start, dt_end = _shift_times(shift, day.date, msk_tz)
                     tz_label = schedule.config.timezone
@@ -152,7 +159,7 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
 
 def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes:
     msk_tz = ZoneInfo(schedule.config.timezone)
-    khb_tz = ZoneInfo(CITY_TZ[City.KHABAROVSK])
+    khb_tz = ZoneInfo(CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ))
     year = schedule.config.year
     month = schedule.config.month
 

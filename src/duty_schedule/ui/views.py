@@ -69,8 +69,8 @@ def _render_calendar(schedule: Schedule) -> None:
     cal_df = _schedule_to_calendar_df(schedule)
 
     def _badge(code: str, label: str) -> str:
-        bg = _CAL_SHIFT_COLORS[code]
-        border = _SHIFT_PALETTE[code]
+        bg = _CAL_SHIFT_COLORS.get(code, "#FFFFFF")
+        border = _SHIFT_PALETTE.get(code, "#999999")
         return (
             f'<span style="background:{bg};border:2px solid {border};color:#333;'
             f'padding:1px 8px;border-radius:4px;font-size:0.8em;font-weight:600">'

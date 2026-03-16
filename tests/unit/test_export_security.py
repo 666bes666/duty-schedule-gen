@@ -16,6 +16,10 @@ class TestSanitizeCell:
             ("@SUM(A1)", "'@SUM(A1)"),
             ("Иванов Иван", "Иванов Иван"),
             ("", ""),
+            (" =SUM(A1)", "' =SUM(A1)"),
+            ("\t+cmd", "'\t+cmd"),
+            ("  @data", "'  @data"),
+            ("  -1", "'  -1"),
         ],
     )
     def test_xls_formula_injection_sanitized(self, raw: str, expected: str) -> None:
@@ -32,6 +36,8 @@ class TestSanitizeIcsValue:
             ("Фамилия,Имя", "Фамилия_Имя"),
             ("Обычное имя", "Обычное имя"),
             ("a\n;,\r", "a __"),
+            ("user@domain", "user_domain"),
+            ("test@test.com;a,b", "test_test.com_a_b"),
         ],
     )
     def test_ics_sanitize_value(self, raw: str, expected: str) -> None:

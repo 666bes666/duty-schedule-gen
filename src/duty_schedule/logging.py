@@ -17,10 +17,16 @@ class _LazyStderrFactory:
 
 def setup_logging(level: str = "INFO") -> None:
     """Инициализировать structlog с JSON-выводом."""
+    resolved = getattr(logging, level.upper(), None)
+    if resolved is None:
+        import warnings
+
+        warnings.warn(f"Unknown log level {level!r}, falling back to INFO", stacklevel=2)
+        resolved = logging.INFO
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stderr,
-        level=getattr(logging, level.upper(), logging.INFO),
+        level=resolved,
     )
     structlog.configure(
         processors=[
@@ -30,9 +36,7 @@ def setup_logging(level: str = "INFO") -> None:
             structlog.processors.StackInfoRenderer(),
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, level.upper(), logging.INFO)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(resolved),
         logger_factory=_LazyStderrFactory(),
     )
 

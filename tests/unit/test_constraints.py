@@ -6,7 +6,14 @@ from datetime import date
 
 import pytest
 
-from duty_schedule.models import City, Employee, ScheduleType, ShiftType, VacationPeriod
+from duty_schedule.models import (
+    City,
+    DaySchedule,
+    Employee,
+    ScheduleType,
+    ShiftType,
+    VacationPeriod,
+)
 from duty_schedule.scheduler import (
     EmployeeState,
     ScheduleError,
@@ -16,6 +23,13 @@ from duty_schedule.scheduler import (
     _is_weekend_or_holiday,
     _resting_after_evening,
     _resting_after_night,
+)
+from duty_schedule.scheduler.constraints import (
+    _calc_production_days,
+    _consecutive_shift_count_at,
+    _consecutive_shift_limit_reached,
+    _had_evening_before,
+    _shift_limit_reached,
 )
 
 
@@ -257,3 +271,161 @@ class TestCalcBlockedWorkingDays:
             unavailable_dates=[date(2025, 3, 6), date(2025, 3, 7)],
         )
         assert _calc_blocked_working_days(emp, 2025, 3) == 3
+
+
+class TestShiftLimitReached:
+    def test_morning_limit_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_morning_shifts=5,
+        )
+        state = EmployeeState(morning_count=5)
+        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is True
+
+    def test_morning_limit_not_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_morning_shifts=5,
+        )
+        state = EmployeeState(morning_count=4)
+        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is False
+
+    def test_evening_limit_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_evening_shifts=3,
+        )
+        state = EmployeeState(evening_count=3)
+        assert _shift_limit_reached(emp, state, ShiftType.EVENING) is True
+
+    def test_night_limit_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.KHABAROVSK,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_night_shifts=10,
+        )
+        state = EmployeeState(night_count=10)
+        assert _shift_limit_reached(emp, state, ShiftType.NIGHT) is True
+
+    def test_no_limit_set_returns_false(self):
+        emp = _emp("T")
+        state = EmployeeState(morning_count=100)
+        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is False
+
+
+class TestConsecutiveShiftLimitReached:
+    def test_morning_consecutive_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_consecutive_morning=3,
+        )
+        state = EmployeeState(consecutive_morning=3)
+        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is True
+
+    def test_morning_consecutive_not_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_consecutive_morning=3,
+        )
+        state = EmployeeState(consecutive_morning=2)
+        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is False
+
+    def test_evening_consecutive_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_consecutive_evening=2,
+        )
+        state = EmployeeState(consecutive_evening=2)
+        assert _consecutive_shift_limit_reached(emp, state, ShiftType.EVENING) is True
+
+    def test_workday_consecutive_reached(self):
+        emp = Employee(
+            name="T",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+            max_consecutive_workday=4,
+        )
+        state = EmployeeState(consecutive_workday=4)
+        assert _consecutive_shift_limit_reached(emp, state, ShiftType.WORKDAY) is True
+
+    def test_no_limit_returns_false(self):
+        emp = _emp("T")
+        state = EmployeeState(consecutive_morning=100)
+        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is False
+
+
+class TestCalcProductionDays:
+    def test_march_2025_no_holidays(self):
+        result = _calc_production_days(2025, 3, set())
+        assert result == 21
+
+    def test_march_2025_with_holidays(self):
+        holidays = {date(2025, 3, 3), date(2025, 3, 4)}
+        result = _calc_production_days(2025, 3, holidays)
+        assert result == 19
+
+    def test_weekend_holidays_no_effect(self):
+        sat = date(2025, 3, 1)
+        result_without = _calc_production_days(2025, 3, set())
+        result_with = _calc_production_days(2025, 3, {sat})
+        assert result_without == result_with
+
+    def test_february_2024_leap(self):
+        result = _calc_production_days(2024, 2, set())
+        assert result == 21
+
+
+class TestHadEveningBefore:
+    def test_previous_day_evening(self):
+        days = [
+            DaySchedule(date=date(2025, 3, 1), evening=["A"]),
+            DaySchedule(date=date(2025, 3, 2)),
+        ]
+        assert _had_evening_before("A", 1, days) is True
+
+    def test_previous_day_no_evening(self):
+        days = [
+            DaySchedule(date=date(2025, 3, 1), morning=["A"]),
+            DaySchedule(date=date(2025, 3, 2)),
+        ]
+        assert _had_evening_before("A", 1, days) is False
+
+    def test_first_day_with_carry_over_evening(self):
+        days = [DaySchedule(date=date(2025, 3, 1))]
+        carry = {"A": ShiftType.EVENING}
+        assert _had_evening_before("A", 0, days, carry_over_last_shift=carry) is True
+
+    def test_first_day_no_carry_over(self):
+        days = [DaySchedule(date=date(2025, 3, 1))]
+        assert _had_evening_before("A", 0, days) is False
+
+
+class TestConsecutiveShiftCountAt:
+    def test_single_day(self):
+        days = [DaySchedule(date=date(2025, 3, 1), morning=["A"])]
+        assert _consecutive_shift_count_at("A", 0, days, "morning") == 1
+
+    def test_three_consecutive(self):
+        days = [DaySchedule(date=date(2025, 3, d), evening=["A"]) for d in range(1, 4)]
+        assert _consecutive_shift_count_at("A", 1, days, "evening") == 3
+
+    def test_break_in_sequence(self):
+        days = [
+            DaySchedule(date=date(2025, 3, 1), morning=["A"]),
+            DaySchedule(date=date(2025, 3, 2), evening=["A"]),
+            DaySchedule(date=date(2025, 3, 3), morning=["A"]),
+        ]
+        assert _consecutive_shift_count_at("A", 0, days, "morning") == 1
