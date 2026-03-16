@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from duty_schedule.api.schemas import EmployeeStatsSchema
 from duty_schedule.calendar import fetch_holidays
@@ -10,6 +10,7 @@ from duty_schedule.models import Config, Schedule
 from duty_schedule.scheduler import generate_schedule
 from duty_schedule.scheduler.constraints import _calc_production_days
 from duty_schedule.stats import build_assignments, compute_stats
+from duty_schedule.validation import validate_pre_generation
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -17,6 +18,9 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 @router.post("/generate", response_model=Schedule)
 async def generate(config: Config) -> Schedule:
     holidays, _short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
+    pre_errors, _pre_warnings = validate_pre_generation(config, holidays)
+    if pre_errors:
+        raise HTTPException(status_code=422, detail=pre_errors)
     schedule = await asyncio.to_thread(generate_schedule, config, holidays)
     return schedule
 

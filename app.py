@@ -801,6 +801,18 @@ if st.button("Сгенерировать расписание", type="primary", 
                 "Праздничные дни не учтены — только суббота/воскресенье."
             )
 
+    from duty_schedule.validation import validate_pre_generation
+
+    pre_errors, pre_warnings = validate_pre_generation(config, holidays)
+    if pre_errors:
+        for msg in pre_errors:
+            st.error(msg)
+        for msg in pre_warnings:
+            st.warning(msg)
+        st.stop()
+    for msg in pre_warnings:
+        st.warning(msg)
+
     with st.spinner("Генерируем расписание…"):
         try:
             schedule = generate_schedule(config, holidays)
