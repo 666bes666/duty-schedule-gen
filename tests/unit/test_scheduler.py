@@ -40,7 +40,7 @@ class TestGenerateSchedule:
         config = Config(month=3, year=2025, seed=99, employees=_base_employees())
         s1 = generate_schedule(config, set())
         s2 = generate_schedule(config, set())
-        for d1, d2 in zip(s1.days, s2.days, strict=False):
+        for d1, d2 in zip(s1.days, s2.days, strict=True):
             assert d1.morning == d2.morning
             assert d1.evening == d2.evening
             assert d1.night == d2.night

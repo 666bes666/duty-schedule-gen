@@ -19,7 +19,11 @@ jobs:
         id: version
         run: |
           CURRENT=$(grep -Po '(?<=^version = ")[^"]+' pyproject.toml)
-          PREVIOUS=$(git show HEAD~1:pyproject.toml | grep -Po '(?<=^version = ")[^"]+' || echo "")
+          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            PREVIOUS=$(git show HEAD~1:pyproject.toml | grep -Po '(?<=^version = ")[^"]+' || echo "")
+          else
+            PREVIOUS=""
+          fi
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
           if [ "$CURRENT" != "$PREVIOUS" ]; then

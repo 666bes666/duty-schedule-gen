@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
@@ -10,6 +9,8 @@ import streamlit as st
 
 from duty_schedule.calendar import CalendarError, compute_short_days, fetch_holidays
 from duty_schedule.export.xls import export_xls
+from pydantic import ValidationError
+
 from duty_schedule.models import (
     CarryOverState,
     Config,
@@ -732,14 +733,16 @@ if st.button("Сгенерировать расписание", type="primary", 
             continue
         try:
             pins.append(PinnedAssignment(date=pin_date, employee_name=emp_name, shift=shift))
-        except Exception:
-            st.warning(f"Пин ({emp_name} / {raw_date}): некорректные данные")
+        except (ValueError, ValidationError) as exc:
+            st.warning(f"Пин ({emp_name} / {raw_date}): {exc}")
 
     carry_over_raw: list[dict] = st.session_state.get("carry_over", [])
     carry_over_objs: list[CarryOverState] = []
     for co in carry_over_raw:
-        with contextlib.suppress(Exception):
+        try:
             carry_over_objs.append(CarryOverState(**co))
+        except (ValueError, ValidationError) as exc:
+            st.warning(f"Carry-over: ошибка валидации — {exc}")
 
     emp_names = {e.name for e in employees}
     matched = [co for co in carry_over_objs if co.employee_name in emp_names]
@@ -765,8 +768,8 @@ if st.button("Сгенерировать расписание", type="primary", 
             pins=pins,
             carry_over=carry_over_objs,
         )
-    except Exception:
-        st.error("Ошибка конфигурации. Проверьте введённые данные.")
+    except (ValueError, ValidationError) as exc:
+        st.error(f"Ошибка конфигурации: {exc}")
         st.stop()
 
     cfg_errors, cfg_warnings = collect_config_issues(config)

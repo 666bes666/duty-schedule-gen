@@ -63,7 +63,7 @@ SHIFT_LABELS = {
 
 
 def _sanitize_cell(value: str) -> str:
-    if value and value[0] in ("=", "+", "-", "@"):
+    if value and value.lstrip()[:1] in ("=", "+", "-", "@"):
         return "'" + value
     return value
 

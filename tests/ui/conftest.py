@@ -41,7 +41,12 @@ def streamlit_url() -> Generator[str, None, None]:
         time.sleep(1)
     else:
         proc.terminate()
-        pytest.fail("Streamlit did not start within 30 seconds")
+        stdout, stderr = proc.communicate(timeout=5)
+        pytest.fail(
+            f"Streamlit did not start within 30 seconds\n"
+            f"stdout: {stdout.decode(errors='replace')}\n"
+            f"stderr: {stderr.decode(errors='replace')}"
+        )
 
     yield base_url
 
