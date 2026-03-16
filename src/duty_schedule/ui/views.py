@@ -440,6 +440,42 @@ def _render_load_dashboard(
     _render_weekend_holiday_chart(_stats)
 
 
+def _render_changelog(schedule: Schedule) -> None:
+    from duty_schedule.scheduler.changelog import ChangeLog
+
+    cl: ChangeLog | None = schedule.metadata.get("changelog")
+    if not cl or not cl.entries:
+        st.info("Лог оптимизации пуст — постобработка не внесла изменений.")
+        return
+
+    emp_names = sorted({e.employee for e in cl.entries})
+    selected = st.selectbox(
+        "Фильтр по сотруднику",
+        ["Все"] + emp_names,
+        key="changelog_filter",
+    )
+
+    entries = cl.entries if selected == "Все" else cl.filter_by_employee(selected)
+
+    rows = []
+    for e in entries:
+        rows.append(
+            {
+                "Этап": e.stage,
+                "Действие": e.action,
+                "Сотрудник": e.employee,
+                "Дата": e.day.isoformat(),
+                "Детали": e.detail,
+            }
+        )
+
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.caption(f"Всего записей: {len(rows)}")
+    else:
+        st.info("Нет записей для выбранного фильтра.")
+
+
 def render_employee_ics_downloads(schedule: Schedule) -> None:
     year = schedule.config.year
     month = schedule.config.month

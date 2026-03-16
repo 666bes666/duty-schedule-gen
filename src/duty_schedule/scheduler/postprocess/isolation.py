@@ -9,6 +9,7 @@ from duty_schedule.models import (
     ScheduleType,
     ShiftType,
 )
+from duty_schedule.scheduler.changelog import ChangeLog
 from duty_schedule.scheduler.constraints import (
     _duty_only,
     _had_evening_before,
@@ -34,6 +35,7 @@ def _minimize_isolated_off(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     def is_off(name: str, d: DaySchedule) -> bool:
         return name in d.day_off or name in d.vacation
@@ -242,6 +244,7 @@ def _break_evening_isolated_pattern(
     employees: list[Employee],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     def is_off(name: str, idx: int) -> bool:
         if idx < 0 or idx >= len(days):
@@ -330,6 +333,7 @@ def _equalize_isolated_off(
     holidays: set[date],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     flex_duty = [
         e

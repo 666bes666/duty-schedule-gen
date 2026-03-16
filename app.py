@@ -47,6 +47,7 @@ from duty_schedule.ui.state import (
 )
 from duty_schedule.ui.views import (
     _render_calendar,
+    _render_changelog,
     _render_load_dashboard,
     render_employee_ics_downloads,
 )
@@ -875,7 +876,9 @@ if st.session_state.get("last_result"):
     _rc8.metric("Макс. серия работы", _max_streak)
     _rc9.metric("Работа в выходные", _weekend_work_total)
 
-    _tab_cal, _tab_dash, _tab_edit = st.tabs(["Календарь", "Нагрузка", "Редактирование"])
+    _tab_cal, _tab_dash, _tab_edit, _tab_log = st.tabs(
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации"]
+    )
 
     with _tab_cal:
         _render_calendar(_schedule)
@@ -919,6 +922,9 @@ if st.session_state.get("last_result"):
             f"Неизвестные имена в расписании: {', '.join(sorted(_unknown_in_edit))}. "
             "Проверьте правильность написания."
         )
+
+    with _tab_log:
+        _render_changelog(_schedule)
 
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 

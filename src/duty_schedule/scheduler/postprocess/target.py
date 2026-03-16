@@ -11,6 +11,7 @@ from duty_schedule.models import (
     ScheduleType,
     ShiftType,
 )
+from duty_schedule.scheduler.changelog import ChangeLog
 from duty_schedule.scheduler.constraints import (
     _duty_only,
     _had_evening_before,
@@ -34,6 +35,7 @@ def _target_adjustment_pass(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     moscow_duty_names = {
         e.name for e in employees if e.on_duty and e.city == City.MOSCOW and not _duty_only(e)
@@ -100,6 +102,14 @@ def _target_adjustment_pass(
                     day.day_off.append(emp.name)
                     state.total_working -= 1
                     excess -= 1
+                    if changelog:
+                        changelog.add(
+                            "target_adjust",
+                            "remove_workday",
+                            emp.name,
+                            day.date,
+                            f"workday → day_off (excess={excess})",
+                        )
             if excess > 0:
                 for i in range(len(days) - 1, -1, -1):
                     if excess == 0:
@@ -114,6 +124,14 @@ def _target_adjustment_pass(
                         day.day_off.append(emp.name)
                         state.total_working -= 1
                         excess -= 1
+                        if changelog:
+                            changelog.add(
+                                "target_adjust",
+                                "remove_workday",
+                                emp.name,
+                                day.date,
+                                f"workday → day_off fallback (excess={excess})",
+                            )
                     if excess > 0:
                         logger.warning(
                             "Не удалось убрать избыток рабочих дней",
@@ -175,6 +193,14 @@ def _target_adjustment_pass(
                 day.workday.append(emp.name)
                 state.total_working += 1
                 deficit -= 1
+                if changelog:
+                    changelog.add(
+                        "target_adjust",
+                        "add_workday",
+                        emp.name,
+                        day.date,
+                        f"day_off → workday (deficit={deficit})",
+                    )
             if deficit > 0:
                 logger.warning(
                     "Не удалось закрыть недостачу рабочих дней",
@@ -192,6 +218,7 @@ def _trim_long_off_blocks(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     carry_over_last_shift: dict[str, ShiftType] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     def is_off_day(name: str, d: DaySchedule) -> bool:
         return name in d.day_off or name in d.vacation

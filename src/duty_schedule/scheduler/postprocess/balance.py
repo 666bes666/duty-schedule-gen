@@ -9,6 +9,7 @@ from duty_schedule.models import (
     Employee,
     ScheduleType,
 )
+from duty_schedule.scheduler.changelog import ChangeLog
 from duty_schedule.scheduler.constraints import (
     _consecutive_shift_count_at,
     _duty_only,
@@ -25,6 +26,7 @@ def _balance_weekend_work(
     employees: list[Employee],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     day_by_date = {d.date: d for d in days}
     day_idx_map = {d.date: i for i, d in enumerate(days)}
@@ -136,6 +138,14 @@ def _balance_weekend_work(
                 day.day_off.append(max_name)
                 day.day_off.remove(min_name)
                 getattr(day, max_attr).append(min_name)
+                if changelog:
+                    changelog.add(
+                        "balance_weekend",
+                        "swap",
+                        max_name,
+                        day.date,
+                        f"{max_attr} → day_off, {min_name} day_off → {max_attr}",
+                    )
                 swapped = True
                 break
 
@@ -150,6 +160,7 @@ def _balance_duty_shifts(
     employees: list[Employee],
     holidays: set[date],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     for city in [City.MOSCOW, City.KHABAROVSK]:
         duty_emps = [e for e in employees if e.city == city and e.on_duty and not _duty_only(e)]
@@ -236,6 +247,14 @@ def _balance_duty_shifts(
                 day.workday.append(max_name)
                 day.workday.remove(min_name)
                 getattr(day, max_attr).append(min_name)
+                if changelog:
+                    changelog.add(
+                        "balance_duty",
+                        "swap",
+                        max_name,
+                        day.date,
+                        f"{max_attr} → workday, {min_name} workday → {max_attr}",
+                    )
                 swapped = True
                 break
 
@@ -249,6 +268,7 @@ def _balance_evening_shifts(
     days: list[DaySchedule],
     employees: list[Employee],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+    changelog: ChangeLog | None = None,
 ) -> list[DaySchedule]:
     eligible = [
         e
@@ -327,6 +347,14 @@ def _balance_evening_shifts(
                 day.morning.remove(min_name)
                 day.evening.append(min_name)
                 day.morning.append(max_name)
+                if changelog:
+                    changelog.add(
+                        "balance_evening",
+                        "swap",
+                        max_name,
+                        day.date,
+                        f"evening → morning, {min_name} morning → evening",
+                    )
                 swapped = True
                 break
 
@@ -364,6 +392,14 @@ def _balance_evening_shifts(
                     day.workday.remove(min_name)
                     day.evening.append(min_name)
                     day.workday.append(max_name)
+                    if changelog:
+                        changelog.add(
+                            "balance_evening",
+                            "swap",
+                            max_name,
+                            day.date,
+                            f"evening → workday, {min_name} workday → evening",
+                        )
                     swapped = True
                     break
 
@@ -472,6 +508,15 @@ def _balance_evening_shifts(
                     comp_day.day_off.remove(max_name)
                     comp_day.day_off.append(min_name)
                     getattr(comp_day, comp_shift).append(max_name)
+                    if changelog:
+                        changelog.add(
+                            "balance_evening",
+                            "swap",
+                            max_name,
+                            day.date,
+                            f"evening → day_off, {min_name} day_off → evening "
+                            f"(comp: {comp_day.date})",
+                        )
                     swapped = True
                     break
 
