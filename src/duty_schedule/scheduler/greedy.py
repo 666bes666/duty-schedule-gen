@@ -273,6 +273,11 @@ def _build_day(
                 and states[e.name].consecutive_working >= MIN_WORK_BETWEEN_OFFS - 1
                 and states[e.name].needs_more_work(remaining_days)
             ]
+            if _evening_well_into_run:
+                _min_ev = min(states[e.name].evening_count for e in _evening_well_into_run)
+                _evening_well_into_run = [
+                    e for e in _evening_well_into_run if states[e.name].evening_count <= _min_ev + 2
+                ]
             _evening_select_pool = (
                 _evening_well_into_run if _evening_well_into_run else evening_pick_pool
             )
