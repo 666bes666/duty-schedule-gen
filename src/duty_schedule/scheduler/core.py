@@ -97,7 +97,16 @@ def generate_schedule(
     config: Config,
     holidays: set[date],
 ) -> Schedule:
+    if config.solver == "cpsat":
+        from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
+
+        try:
+            return solve_schedule(config, holidays)
+        except SolverUnavailableError:
+            logger.warning("CP-SAT недоступен, fallback на greedy")
+
     from duty_schedule.calendar import get_all_days
+    from duty_schedule.scheduler.changelog import ChangeLog
     from duty_schedule.scheduler.constraints import (
         _calc_blocked_working_days,
         _calc_production_days,
@@ -205,12 +214,16 @@ def generate_schedule(
 
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
-    days = _balance_weekend_work(days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw)
+    changelog = ChangeLog()
+
+    days = _balance_weekend_work(
+        days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw, changelog=changelog
+    )
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
-    days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on)
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
+    days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on, changelog=changelog)
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
     days = _target_adjustment_pass(
         days,
         employees,
@@ -219,6 +232,7 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
     days = _trim_long_off_blocks(
         days,
@@ -227,6 +241,7 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
@@ -238,6 +253,7 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
     days = _minimize_isolated_off(
         days,
@@ -246,9 +262,10 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
     days = _break_evening_isolated_pattern(
-        days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw
+        days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw, changelog=changelog
     )
     days = _minimize_isolated_off(
         days,
@@ -257,9 +274,15 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
     days = _equalize_isolated_off(
-        days, employees, holidays, pinned_on=pinned_on, carry_over_cw=initial_cw
+        days,
+        employees,
+        holidays,
+        pinned_on=pinned_on,
+        carry_over_cw=initial_cw,
+        changelog=changelog,
     )
     days = _minimize_isolated_off(
         days,
@@ -268,8 +291,9 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
@@ -281,6 +305,7 @@ def generate_schedule(
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
+        changelog=changelog,
     )
 
     for emp in employees:
@@ -309,7 +334,7 @@ def generate_schedule(
                     f"осталось {removable} снимаемых WORKDAY"
                 )
 
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on)
+    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
@@ -375,5 +400,6 @@ def generate_schedule(
             "production_working_days": production_days,
             "working_days_per_employee": working_days_report,
             "carry_over": final_carry_over,
+            "changelog": changelog,
         },
     )

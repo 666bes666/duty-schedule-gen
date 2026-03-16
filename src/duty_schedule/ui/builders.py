@@ -172,6 +172,61 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
     return Schedule.model_construct(config=schedule.config, days=new_days, metadata=meta)
 
 
+def _validate_edited_schedule(schedule: Schedule) -> list[str]:
+    violations: list[str] = []
+    emp_map = {e.name: e for e in schedule.config.employees}
+    days = schedule.days
+
+    for i, day in enumerate(days):
+        if not day.morning:
+            violations.append(f"{day.date}: нет назначений на утреннюю смену")
+        if not day.evening:
+            violations.append(f"{day.date}: нет назначений на вечернюю смену")
+        if not day.night:
+            violations.append(f"{day.date}: нет назначений на ночную смену")
+
+        for name in day.evening:
+            if i + 1 < len(days):
+                next_day = days[i + 1]
+                if name in next_day.morning or name in next_day.workday:
+                    violations.append(
+                        f"{day.date}: {name} работает вечер, "
+                        f"а на {next_day.date} назначен на утро/день"
+                    )
+
+        for name in day.night:
+            emp = emp_map.get(name)
+            if emp and emp.city == City.MOSCOW:
+                violations.append(f"{day.date}: {name} (Москва) назначен на ночную смену")
+
+        for name in day.morning + day.evening:
+            emp = emp_map.get(name)
+            if emp and emp.city == City.KHABAROVSK:
+                violations.append(f"{day.date}: {name} (Хабаровск) назначен на утро/вечер")
+
+    for emp in schedule.config.employees:
+        streak = 0
+        max_cw = emp.max_consecutive_working or 5
+        for day in days:
+            working = (
+                emp.name in day.morning
+                or emp.name in day.evening
+                or emp.name in day.night
+                or emp.name in day.workday
+            )
+            if working:
+                streak += 1
+                if streak > max_cw:
+                    violations.append(
+                        f"{emp.name}: серия работы {streak} дней подряд "
+                        f"(макс. {max_cw}) на {day.date}"
+                    )
+            else:
+                streak = 0
+
+    return violations
+
+
 def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []

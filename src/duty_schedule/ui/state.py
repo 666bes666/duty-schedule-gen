@@ -39,6 +39,8 @@ def _init_state() -> None:
         st.session_state["_pins_for_download"] = pd.DataFrame([_EMPTY_PIN_ROW])
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
+    if "schedule_history" not in st.session_state:
+        st.session_state["schedule_history"] = []
 
 
 def _bump_table() -> None:

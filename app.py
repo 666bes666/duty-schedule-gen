@@ -24,6 +24,7 @@ from duty_schedule.ui.builders import (
     _edit_df_to_schedule,
     _schedule_to_edit_df,
     _validate_config,
+    _validate_edited_schedule,
 )
 from duty_schedule.ui.config_io import (
     _df_to_yaml,
@@ -47,7 +48,10 @@ from duty_schedule.ui.state import (
 )
 from duty_schedule.ui.views import (
     _render_calendar,
+    _render_changelog,
     _render_load_dashboard,
+    _render_schedule_diff,
+    _render_whatif_panel,
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
@@ -692,7 +696,35 @@ with _setup_tab3:
         help="При одинаковом seed и тех же данных всегда получается одинаковый график.",
     )
 
+    _solver_choice = st.radio(
+        "Алгоритм",
+        ["greedy", "cpsat"],
+        key="cfg_solver",
+        horizontal=True,
+        help="greedy — жадный с постобработкой; cpsat — CP-SAT solver (OR-Tools, если установлен)",
+    )
+
 st.divider()
+
+_multi_mode = st.toggle("Мультимесячное планирование", value=False, key="multi_mode")
+if _multi_mode:
+    _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+    _multi_start_m = _mc1.selectbox(
+        "Начало (месяц)",
+        range(1, 13),
+        format_func=lambda m: MONTHS_RU[m - 1],
+        key="multi_start_m",
+    )
+    _multi_start_y = _mc2.number_input(
+        "Год начала", min_value=2024, max_value=2030, key="multi_start_y"
+    )
+    _multi_end_m = _mc3.selectbox(
+        "Конец (месяц)",
+        range(1, 13),
+        format_func=lambda m: MONTHS_RU[m - 1],
+        key="multi_end_m",
+    )
+    _multi_end_y = _mc4.number_input("Год конца", min_value=2024, max_value=2030, key="multi_end_y")
 
 _val_errors, _val_warnings = _validate_config(edited_df)
 for _verr in _val_errors:
@@ -759,6 +791,7 @@ if st.button("Сгенерировать расписание", type="primary", 
         )
     carry_over_objs = matched
 
+    _solver_val = st.session_state.get("cfg_solver", "greedy")
     try:
         config = Config(
             month=month,
@@ -767,6 +800,7 @@ if st.button("Сгенерировать расписание", type="primary", 
             employees=employees,
             pins=pins,
             carry_over=carry_over_objs,
+            solver=_solver_val,
         )
     except (ValueError, ValidationError) as exc:
         st.error(f"Ошибка конфигурации: {exc}")
@@ -799,6 +833,18 @@ if st.button("Сгенерировать расписание", type="primary", 
                 "Не удалось загрузить производственный календарь. "
                 "Праздничные дни не учтены — только суббота/воскресенье."
             )
+
+    from duty_schedule.validation import validate_pre_generation
+
+    pre_errors, pre_warnings = validate_pre_generation(config, holidays)
+    if pre_errors:
+        for msg in pre_errors:
+            st.error(msg)
+        for msg in pre_warnings:
+            st.warning(msg)
+        st.stop()
+    for msg in pre_warnings:
+        st.warning(msg)
 
     with st.spinner("Генерируем расписание…"):
         try:
@@ -833,7 +879,14 @@ if st.button("Сгенерировать расписание", type="primary", 
         "gen_year": year,
         "emp_df_snap": edited_df.copy(),
         "short_days": short_days,
+        "holidays": holidays,
     }
+
+    _history: list[dict] = st.session_state["schedule_history"]
+    _gen_label = f"{MONTHS_RU[month - 1]} {year} @ {datetime.now().strftime('%H:%M:%S')}"
+    _history.append({"label": _gen_label, "schedule": schedule})
+    if len(_history) > 5:
+        st.session_state["schedule_history"] = _history[-5:]
 
 if st.session_state.get("last_result"):
     _res = st.session_state["last_result"]
@@ -875,7 +928,9 @@ if st.session_state.get("last_result"):
     _rc8.metric("Макс. серия работы", _max_streak)
     _rc9.metric("Работа в выходные", _weekend_work_total)
 
-    _tab_cal, _tab_dash, _tab_edit = st.tabs(["Календарь", "Нагрузка", "Редактирование"])
+    _tab_cal, _tab_dash, _tab_edit, _tab_log, _tab_diff, _tab_whatif = st.tabs(
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"]
+    )
 
     with _tab_cal:
         _render_calendar(_schedule)
@@ -904,6 +959,34 @@ if st.session_state.get("last_result"):
             key="schedule_editor",
         )
 
+        _edit_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
+        _edit_violations = _validate_edited_schedule(_edit_schedule)
+        if _edit_violations:
+            with st.expander(f"Нарушения ({len(_edit_violations)})", expanded=True):
+                for _v in _edit_violations:
+                    st.warning(_v)
+        else:
+            st.success("Нарушений не обнаружено")
+
+        if st.button("Пересчитать статистику", key="edit_recalc"):
+            _edit_assign = build_assignments(_edit_schedule)
+            _edit_stats = compute_stats(
+                _edit_schedule, _edit_assign, _prod_days, short_days=_short_days
+            )
+            _edit_rows = []
+            for _es in _edit_stats:
+                _edit_rows.append(
+                    {
+                        "Сотрудник": _es.name,
+                        "Раб.дней": _es.total_working,
+                        "Норма": _es.target,
+                        "Δ": _es.total_working - _es.target,
+                        "Часы": _es.total_hours,
+                        "Часы с надб.": _es.cost_hours,
+                    }
+                )
+            st.dataframe(pd.DataFrame(_edit_rows), use_container_width=True, hide_index=True)
+
     _known_names = {e.name for e in _schedule.config.employees}
     _unknown_in_edit: set[str] = set()
     for _, _erow in edited_schedule_df.iterrows():
@@ -920,6 +1003,19 @@ if st.session_state.get("last_result"):
             "Проверьте правильность написания."
         )
 
+    with _tab_log:
+        _render_changelog(_schedule)
+
+    with _tab_diff:
+        _render_schedule_diff(_schedule)
+
+    with _tab_whatif:
+        _render_whatif_panel(
+            _schedule,
+            _res.get("holidays", set()),
+            _res.get("short_days") or set(),
+        )
+
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 
     _xls_hash = _XLS_VERSION + str(pd.util.hash_pandas_object(edited_schedule_df).sum())
@@ -931,14 +1027,32 @@ if st.session_state.get("last_result"):
             st.session_state["_xls_hash"] = _xls_hash
     xls_bytes: bytes = st.session_state["_xls_bytes"]
 
-    st.download_button(
-        label="Скачать XLS",
-        data=xls_bytes,
-        file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="primary",
-        use_container_width=True,
-    )
+    _dl_col1, _dl_col2 = st.columns(2)
+    with _dl_col1:
+        st.download_button(
+            label="Скачать XLS",
+            data=xls_bytes,
+            file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True,
+        )
+    with _dl_col2:
+        _pdf_hash = "pdf_" + _xls_hash
+        if st.session_state.get("_pdf_hash") != _pdf_hash:
+            _sd = _res.get("short_days")
+            from duty_schedule.export.pdf import generate_schedule_pdf
+
+            _pdf_bytes = generate_schedule_pdf(final_schedule, page_size="A3", short_days=_sd)
+            st.session_state["_pdf_bytes"] = _pdf_bytes
+            st.session_state["_pdf_hash"] = _pdf_hash
+        st.download_button(
+            label="Скачать PDF",
+            data=st.session_state["_pdf_bytes"],
+            file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
     st.download_button(
         label=(f"Скачать конфиг для {MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"),
         data=_res["next_yaml"].encode("utf-8"),
