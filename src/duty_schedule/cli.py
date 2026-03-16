@@ -127,6 +127,44 @@ def generate(
     _print_summary(schedule)
 
 
+@app.command(name="generate-range")
+def generate_range(
+    config_file: Annotated[Path, typer.Argument(help="Путь к YAML-файлу конфигурации")],
+    start: Annotated[str, typer.Option("--start", help="Начало диапазона MM.YYYY")],
+    end: Annotated[str, typer.Option("--end", help="Конец диапазона MM.YYYY")],
+    output_dir: Annotated[
+        Path, typer.Option("--output-dir", "-o", help="Директория для результатов")
+    ] = Path("output"),
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Подробный вывод")] = False,
+) -> None:
+    setup_logging("DEBUG" if verbose else "INFO")
+    console.print(f"[bold cyan]Duty Schedule Generator v{__version__}[/bold cyan]")
+
+    config = _load_config(config_file)
+
+    try:
+        sm, sy = int(start.split(".")[0]), int(start.split(".")[1])
+        em, ey = int(end.split(".")[0]), int(end.split(".")[1])
+    except (ValueError, IndexError) as exc:
+        raise typer.BadParameter(f"Формат даты: MM.YYYY (получено: {start}, {end})") from exc
+
+    from duty_schedule.scheduler.multimonth import generate_multimonth
+
+    with console.status(f"Генерация расписаний {start} — {end}..."):
+        try:
+            schedules = generate_multimonth(config, sm, sy, em, ey)
+        except Exception as exc:
+            console.print(f"[bold red]✗ Ошибка:[/bold red] {exc}")
+            raise typer.Exit(1) from exc
+
+    for sched in schedules:
+        m, y = sched.config.month, sched.config.year
+        xls_path = export_xls(sched, output_dir)
+        console.print(f"✓ {m:02d}.{y}: [green]{xls_path}[/green] ({len(sched.days)} дней)")
+
+    console.print(f"[bold green]Готово: {len(schedules)} месяцев[/bold green]")
+
+
 @app.command()
 def validate(
     config_file: Annotated[Path, typer.Argument(help="Путь к YAML-файлу конфигурации")],
