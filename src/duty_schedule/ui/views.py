@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -139,6 +141,207 @@ def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
     return pd.DataFrame(rows, index=[s.name for s in stats_list])
 
 
+def _render_balance_metrics(stats_list: list[EmployeeStats]) -> None:
+    deltas = np.array([s.total_working - s.target for s in stats_list], dtype=float)
+    weekends = np.array([s.weekend_work for s in stats_list], dtype=float)
+    nights = np.array([s.night for s in stats_list if s.night > 0 or s.morning > 0], dtype=float)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Разброс нагрузки (σ)", f"{np.std(deltas):.2f}")
+    c2.metric("Разброс выходных (σ)", f"{np.std(weekends):.2f}")
+    if len(nights) >= 2:
+        c3.metric("Разброс ночных (σ)", f"{np.std(nights):.2f}")
+    else:
+        c3.metric("Разброс ночных (σ)", "—")
+
+
+def _render_shift_structure_chart(stats_list: list[EmployeeStats]) -> None:
+    rows = []
+    for s in stats_list:
+        for shift, count in [("Утро", s.morning), ("Вечер", s.evening), ("Ночь", s.night)]:
+            if count > 0:
+                rows.append({"Сотрудник": s.name, "Смена": shift, "Кол-во": count})
+    if not rows:
+        return
+
+    st.subheader("Структура дежурных смен")
+    df = pd.DataFrame(rows)
+
+    show_pct = st.toggle("Показать долю (%)", value=False, key="shift_struct_toggle")
+
+    _col_palette = alt.Scale(
+        domain=["Утро", "Вечер", "Ночь"],
+        range=[_SHIFT_PALETTE["У"], _SHIFT_PALETTE["В"], _SHIFT_PALETTE["Н"]],
+    )
+
+    sort_order = [s.name for s in stats_list]
+
+    if show_pct:
+        chart = (
+            alt.Chart(df)
+            .mark_bar()
+            .encode(
+                y=alt.Y("Сотрудник:N", sort=sort_order, title=None),
+                x=alt.X("Кол-во:Q", stack="normalize", title="Доля", axis=alt.Axis(format="%")),
+                color=alt.Color("Смена:N", scale=_col_palette, title="Смена"),
+                tooltip=["Сотрудник", "Смена", "Кол-во"],
+            )
+        )
+    else:
+        chart = (
+            alt.Chart(df)
+            .mark_bar()
+            .encode(
+                y=alt.Y("Сотрудник:N", sort=sort_order, title=None),
+                x=alt.X("Кол-во:Q", stack="zero", title="Смен"),
+                color=alt.Color("Смена:N", scale=_col_palette, title="Смена"),
+                tooltip=["Сотрудник", "Смена", "Кол-во"],
+            )
+        )
+
+    text = chart.mark_text(dx=0, color="white", fontSize=11, fontWeight="bold").encode(
+        text="Кол-во:Q",
+    )
+
+    st.altair_chart(chart + text, use_container_width=True)
+
+
+def _render_norm_vs_fact_chart(stats_list: list[EmployeeStats]) -> None:
+    rows = []
+    for s in stats_list:
+        rows.append({"Сотрудник": s.name, "Тип": "Норма", "Дней": s.target})
+        rows.append({"Сотрудник": s.name, "Тип": "Факт", "Дней": s.total_working})
+
+    if not rows:
+        return
+
+    st.subheader("Норма vs Факт")
+    df = pd.DataFrame(rows)
+
+    sort_order = [s.name for s in sorted(stats_list, key=lambda x: x.total_working - x.target)]
+
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("Сотрудник:N", sort=sort_order, title=None),
+            x=alt.X("Дней:Q", title="Рабочих дней"),
+            color=alt.Color(
+                "Тип:N",
+                scale=alt.Scale(domain=["Норма", "Факт"], range=["#90A4AE", "#009688"]),
+                title="Тип",
+            ),
+            yOffset="Тип:N",
+            tooltip=["Сотрудник", "Тип", "Дней"],
+        )
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _render_coverage_chart(schedule: Schedule) -> None:
+    rows = []
+    for d in schedule.days:
+        day_label = f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}"
+        is_weekend = d.date.weekday() >= 5
+        for shift, names in [
+            ("Утро", d.morning),
+            ("Вечер", d.evening),
+            ("Ночь", d.night),
+            ("Рабочий", d.workday),
+        ]:
+            rows.append(
+                {
+                    "День": day_label,
+                    "Дата": d.date.isoformat(),
+                    "Смена": shift,
+                    "Кол-во": len(names),
+                    "Выходной": is_weekend or d.is_holiday,
+                }
+            )
+
+    if not rows:
+        return
+
+    st.subheader("Покрытие по дням")
+    df = pd.DataFrame(rows)
+
+    _palette = alt.Scale(
+        domain=["Утро", "Вечер", "Ночь", "Рабочий"],
+        range=[
+            _SHIFT_PALETTE["У"],
+            _SHIFT_PALETTE["В"],
+            _SHIFT_PALETTE["Н"],
+            _SHIFT_PALETTE["Р"],
+        ],
+    )
+
+    sort_order = df["День"].unique().tolist()
+
+    weekend_df = df[df["Выходной"]].groupby("День", sort=False).first().reset_index()
+    weekend_bg = (
+        alt.Chart(weekend_df)
+        .mark_bar(color="#90A4AE", opacity=0.12)
+        .encode(
+            x=alt.X("День:N", sort=sort_order),
+            y=alt.value(0),
+            y2=alt.value(300),
+        )
+    )
+
+    bars = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("День:N", sort=sort_order, title=None),
+            y=alt.Y("Кол-во:Q", stack="zero", title="Человек"),
+            color=alt.Color("Смена:N", scale=_palette, title="Смена"),
+            tooltip=["День", "Смена", "Кол-во"],
+        )
+    )
+
+    rule = (
+        alt.Chart(pd.DataFrame({"y": [3]}))
+        .mark_rule(strokeDash=[6, 4], color="#E53935", strokeWidth=2)
+        .encode(y="y:Q")
+    )
+
+    st.altair_chart(weekend_bg + bars + rule, use_container_width=True)
+
+
+def _render_weekend_holiday_chart(stats_list: list[EmployeeStats]) -> None:
+    rows = []
+    for s in stats_list:
+        if s.weekend_work > 0:
+            rows.append({"Сотрудник": s.name, "Тип": "Выходные", "Дней": s.weekend_work})
+        if s.holiday_work > 0:
+            rows.append({"Сотрудник": s.name, "Тип": "Праздники", "Дней": s.holiday_work})
+
+    if not rows:
+        return
+
+    st.subheader("Нагрузка в выходные и праздники")
+    df = pd.DataFrame(rows)
+
+    sort_order = [s.name for s in sorted(stats_list, key=lambda x: x.weekend_work + x.holiday_work)]
+
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("Сотрудник:N", sort=sort_order, title=None),
+            x=alt.X("Дней:Q", stack="zero", title="Дней"),
+            color=alt.Color(
+                "Тип:N",
+                scale=alt.Scale(domain=["Выходные", "Праздники"], range=["#FFC107", "#E53935"]),
+                title="Тип",
+            ),
+            tooltip=["Сотрудник", "Тип", "Дней"],
+        )
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
 def _render_load_dashboard(
     schedule: Schedule,
     employees_df: pd.DataFrame,
@@ -200,9 +403,9 @@ def _render_load_dashboard(
         except (ValueError, TypeError):
             return ""
         if v > 1:
-            return "color: #C0392B; font-weight: bold;"
+            return "background-color: #F8D7DA; color: #842029; font-weight: bold;"
         if v < -1:
-            return "color: #2471A3; font-weight: bold;"
+            return "background-color: #CFE2FF; color: #084298; font-weight: bold;"
         return ""
 
     def _streak_style(val: Any) -> str:
@@ -211,7 +414,7 @@ def _render_load_dashboard(
         except (ValueError, TypeError):
             return ""
         if v > 5:
-            return "color: #C0392B; font-weight: bold;"
+            return "background-color: #F8D7DA; color: #842029; font-weight: bold;"
         return ""
 
     def _isolated_style(val: Any) -> str:
@@ -220,7 +423,7 @@ def _render_load_dashboard(
         except (ValueError, TypeError):
             return ""
         if v > 0:
-            return "background-color: #FFF3CD;"
+            return "background-color: #FFF3CD; color: #664D03; font-weight: bold;"
         return ""
 
     styled = (
@@ -228,46 +431,13 @@ def _render_load_dashboard(
         .map(_streak_style, subset=["Макс.серия"])
         .map(_isolated_style, subset=["Изол.вых."])
     )
-    try:
-        import matplotlib  # noqa: F401
-
-        styled = styled.background_gradient(subset=["Всего смен"], cmap="Blues")
-    except ImportError:
-        pass
     st.dataframe(styled, use_container_width=True)
 
-    shift_df = pd.DataFrame(
-        {
-            "Утро": [s.morning for s in _stats],
-            "Вечер": [s.evening for s in _stats],
-            "Ночь": [s.night for s in _stats],
-        },
-        index=[s.name for s in _stats],
-    )
-    if shift_df.sum().sum() > 0:
-        st.subheader("Структура дежурных смен")
-        _col_palette = {
-            "Утро": _SHIFT_PALETTE["У"],
-            "Вечер": _SHIFT_PALETTE["В"],
-            "Ночь": _SHIFT_PALETTE["Н"],
-        }
-        st.bar_chart(
-            shift_df,
-            color=[_col_palette[c] for c in ["Утро", "Вечер", "Ночь"]],
-            use_container_width=True,
-        )
-
-    cov_rows = [
-        {
-            "День": f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}",
-            "Работают": len(d.morning) + len(d.evening) + len(d.night) + len(d.workday),
-        }
-        for d in schedule.days
-    ]
-    if cov_rows:
-        cov_df = pd.DataFrame(cov_rows).set_index("День")
-        st.subheader("Покрытие по дням")
-        st.area_chart(cov_df, use_container_width=True, color=_SHIFT_PALETTE["В"])
+    _render_balance_metrics(_stats)
+    _render_shift_structure_chart(_stats)
+    _render_norm_vs_fact_chart(_stats)
+    _render_coverage_chart(schedule)
+    _render_weekend_holiday_chart(_stats)
 
 
 def render_employee_ics_downloads(schedule: Schedule) -> None:
