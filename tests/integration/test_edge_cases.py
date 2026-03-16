@@ -383,8 +383,9 @@ class TestEveningBalance:
             _emp("Хабаровск 2", City.KHABAROVSK),
         ]
 
-    def test_evening_shifts_balanced(self):
-        config = Config(month=4, year=2026, seed=42, employees=self._real_team())
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_evening_shifts_balanced(self, seed):
+        config = Config(month=4, year=2026, seed=seed, employees=self._real_team())
         schedule = generate_schedule(config, set())
 
         full_time_names = {"Абашина", "Ищенко", "Ужахов"}
