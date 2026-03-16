@@ -25,6 +25,9 @@ dependencies = [
     "weasyprint>=62",
 ]
 
+[project.optional-dependencies]
+solver = ["ortools>=9.10"]
+
 [project.scripts]
 duty-schedule = "duty_schedule.cli:app"
 duty-schedule-api = "duty_schedule.api:run"

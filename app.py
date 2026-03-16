@@ -696,6 +696,14 @@ with _setup_tab3:
         help="При одинаковом seed и тех же данных всегда получается одинаковый график.",
     )
 
+    _solver_choice = st.radio(
+        "Алгоритм",
+        ["greedy", "cpsat"],
+        key="cfg_solver",
+        horizontal=True,
+        help="greedy — жадный с постобработкой; cpsat — CP-SAT solver (OR-Tools, если установлен)",
+    )
+
 st.divider()
 
 _multi_mode = st.toggle("Мультимесячное планирование", value=False, key="multi_mode")
@@ -783,6 +791,7 @@ if st.button("Сгенерировать расписание", type="primary", 
         )
     carry_over_objs = matched
 
+    _solver_val = st.session_state.get("cfg_solver", "greedy")
     try:
         config = Config(
             month=month,
@@ -791,6 +800,7 @@ if st.button("Сгенерировать расписание", type="primary", 
             employees=employees,
             pins=pins,
             carry_over=carry_over_objs,
+            solver=_solver_val,
         )
     except (ValueError, ValidationError) as exc:
         st.error(f"Ошибка конфигурации: {exc}")

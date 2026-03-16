@@ -97,6 +97,14 @@ def generate_schedule(
     config: Config,
     holidays: set[date],
 ) -> Schedule:
+    if config.solver == "cpsat":
+        from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
+
+        try:
+            return solve_schedule(config, holidays)
+        except SolverUnavailableError:
+            logger.warning("CP-SAT недоступен, fallback на greedy")
+
     from duty_schedule.calendar import get_all_days
     from duty_schedule.scheduler.changelog import ChangeLog
     from duty_schedule.scheduler.constraints import (

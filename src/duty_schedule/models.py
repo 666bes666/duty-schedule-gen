@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, model_validator
 
@@ -173,6 +173,7 @@ class Config(BaseModel):
     employees: list[Employee]
     pins: list[PinnedAssignment] = []
     carry_over: list[CarryOverState] = []
+    solver: Literal["greedy", "cpsat"] = "greedy"
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:

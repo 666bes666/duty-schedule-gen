@@ -15,9 +15,7 @@ from duty_schedule.stats import diff_schedules
 
 def _make_employees() -> list[Employee]:
     return [
-        Employee(
-            name=f"M{i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE, on_duty=True
-        )
+        Employee(name=f"M{i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE, on_duty=True)
         for i in range(1, 5)
     ] + [
         Employee(
