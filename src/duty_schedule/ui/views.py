@@ -543,6 +543,123 @@ def _render_schedule_diff(schedule: Schedule) -> None:
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
+def _render_whatif_panel(
+    schedule: Schedule,
+    holidays: set,
+    short_days: set,
+) -> None:
+    from duty_schedule.api.whatif_service import (
+        apply_patch,
+        compute_deltas,
+        generate_scenario,
+    )
+    from duty_schedule.scheduler.core import ScheduleError
+
+    config = schedule.config
+
+    st.caption("Создайте до 5 вариантов с изменёнными параметрами и сравните результат с текущим.")
+
+    if "whatif_variants" not in st.session_state:
+        st.session_state["whatif_variants"] = [{"name": "Вариант 1", "patch": {}}]
+
+    variants: list[dict] = st.session_state["whatif_variants"]
+
+    _param_options = ["seed", "month", "year"]
+
+    for idx, var in enumerate(variants):
+        with st.expander(var.get("name", f"Вариант {idx + 1}"), expanded=True):
+            var["name"] = st.text_input(
+                "Название", value=var.get("name", f"Вариант {idx + 1}"), key=f"wi_name_{idx}"
+            )
+            _param = st.selectbox(
+                "Параметр",
+                _param_options,
+                key=f"wi_param_{idx}",
+            )
+            _val = st.number_input("Значение", value=99, key=f"wi_val_{idx}")
+            var["patch"] = {_param: int(_val)}
+
+    _c1, _c2 = st.columns(2)
+    if _c1.button("+ Добавить вариант", disabled=len(variants) >= 5, key="wi_add"):
+        variants.append({"name": f"Вариант {len(variants) + 1}", "patch": {}})
+        st.rerun()
+    if _c2.button("Удалить последний", disabled=len(variants) <= 1, key="wi_remove"):
+        variants.pop()
+        st.rerun()
+
+    if st.button("Симулировать", type="primary", key="wi_run"):
+        try:
+            baseline_stats, baseline_summary, _ = generate_scenario(config, holidays, short_days)
+        except (ScheduleError, Exception) as exc:
+            st.error(f"Ошибка baseline: {exc}")
+            return
+
+        baseline_targets = {s.name: s.target for s in baseline_stats}
+
+        for var in variants:
+            name = var.get("name", "?")
+            patch = var.get("patch", {})
+            if not patch:
+                st.warning(f"{name}: пустой патч")
+                continue
+
+            try:
+                variant_config = apply_patch(config, patch)
+                v_stats, v_summary, _ = generate_scenario(variant_config, holidays, short_days)
+            except Exception as exc:
+                st.error(f"{name}: {exc}")
+                continue
+
+            variant_targets = {s.name: s.target for s in v_stats}
+            deltas = compute_deltas(baseline_stats, v_stats, baseline_targets, variant_targets)
+
+            st.subheader(name)
+
+            sc1, sc2, sc3 = st.columns(3)
+            sc1.metric(
+                "Fairness",
+                f"{v_summary.fairness_score:.4f}",
+                delta=f"{v_summary.fairness_score - baseline_summary.fairness_score:.4f}",
+                delta_color="inverse",
+            )
+            sc2.metric(
+                "Покрытие (пробелы)",
+                v_summary.coverage_gaps,
+                delta=v_summary.coverage_gaps - baseline_summary.coverage_gaps,
+                delta_color="inverse",
+            )
+            sc3.metric(
+                "Изол. выходных",
+                v_summary.isolated_off_total,
+                delta=v_summary.isolated_off_total - baseline_summary.isolated_off_total,
+                delta_color="inverse",
+            )
+
+            if deltas:
+                delta_rows = []
+                for d in deltas:
+                    for metric_name, m in d.metrics.items():
+                        if m.delta != 0:
+                            delta_rows.append(
+                                {
+                                    "Сотрудник": d.name,
+                                    "Метрика": metric_name,
+                                    "Было": m.baseline,
+                                    "Стало": m.variant,
+                                    "Δ": m.delta,
+                                    "Оценка": m.direction,
+                                }
+                            )
+                if delta_rows:
+                    st.dataframe(
+                        pd.DataFrame(delta_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Различий в метриках нет")
+
+
 def render_employee_ics_downloads(schedule: Schedule) -> None:
     year = schedule.config.year
     month = schedule.config.month

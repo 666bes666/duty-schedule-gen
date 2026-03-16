@@ -51,6 +51,7 @@ from duty_schedule.ui.views import (
     _render_changelog,
     _render_load_dashboard,
     _render_schedule_diff,
+    _render_whatif_panel,
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
@@ -848,6 +849,7 @@ if st.button("Сгенерировать расписание", type="primary", 
         "gen_year": year,
         "emp_df_snap": edited_df.copy(),
         "short_days": short_days,
+        "holidays": holidays,
     }
 
     _history: list[dict] = st.session_state["schedule_history"]
@@ -896,8 +898,8 @@ if st.session_state.get("last_result"):
     _rc8.metric("Макс. серия работы", _max_streak)
     _rc9.metric("Работа в выходные", _weekend_work_total)
 
-    _tab_cal, _tab_dash, _tab_edit, _tab_log, _tab_diff = st.tabs(
-        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение"]
+    _tab_cal, _tab_dash, _tab_edit, _tab_log, _tab_diff, _tab_whatif = st.tabs(
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"]
     )
 
     with _tab_cal:
@@ -976,6 +978,13 @@ if st.session_state.get("last_result"):
 
     with _tab_diff:
         _render_schedule_diff(_schedule)
+
+    with _tab_whatif:
+        _render_whatif_panel(
+            _schedule,
+            _res.get("holidays", set()),
+            _res.get("short_days") or set(),
+        )
 
     final_schedule = _edit_df_to_schedule(edited_schedule_df, _schedule)
 
