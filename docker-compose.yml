@@ -10,6 +10,7 @@ services:
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - DUTY_LOG_LEVEL=DEBUG
 
   staging:
     build: .
@@ -31,3 +32,4 @@ services:
       - DUTY_API_AUTH_ENABLED=false
       - DUTY_API_KEYS=
       - DUTY_API_RATE_LIMIT=60/minute
+      - DUTY_LOG_LEVEL=INFO

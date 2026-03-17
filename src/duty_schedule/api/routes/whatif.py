@@ -7,8 +7,11 @@ from fastapi import APIRouter, HTTPException
 from duty_schedule.api.schemas import WhatIfRequest, WhatIfResponse
 from duty_schedule.api.whatif_service import run_whatif
 from duty_schedule.calendar import fetch_holidays
+from duty_schedule.logging import get_logger
 from duty_schedule.models import Config
 from duty_schedule.scheduler.core import ScheduleError
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/whatif", tags=["whatif"])
 
@@ -18,6 +21,7 @@ async def compare_scenarios(request: WhatIfRequest) -> WhatIfResponse:
     try:
         baseline_config = Config.model_validate(request.baseline)
     except Exception as exc:
+        logger.warning("whatif_invalid_baseline", error=str(exc))
         raise HTTPException(status_code=400, detail=f"Невалидный baseline: {exc}") from exc
 
     holidays, short_days = await asyncio.to_thread(
@@ -31,6 +35,7 @@ async def compare_scenarios(request: WhatIfRequest) -> WhatIfResponse:
             run_whatif, baseline_config, variant_patches, holidays, short_days
         )
     except ScheduleError as exc:
+        logger.warning("whatif_schedule_error", error=str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return result

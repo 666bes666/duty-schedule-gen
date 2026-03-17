@@ -15,10 +15,13 @@ from duty_schedule.api.schemas import (
     VariantResult,
     WhatIfResponse,
 )
+from duty_schedule.logging import get_logger
 from duty_schedule.models import Config, Schedule
 from duty_schedule.scheduler.constraints import _calc_production_days
 from duty_schedule.scheduler.core import ScheduleError, generate_schedule
 from duty_schedule.stats import EmployeeStats, build_assignments, compute_stats
+
+logger = get_logger(__name__)
 
 NEUTRAL_METRICS = {
     "morning",
@@ -211,11 +214,13 @@ def run_whatif(
         try:
             variant_config = apply_patch(baseline_config, patch)
         except (ValidationError, ValueError) as exc:
+            logger.warning("whatif_variant_patch_error", variant=name, error=str(exc))
             return VariantResult(name=name, status="error", error=str(exc))
 
         try:
             v_stats, v_summary, _ = generate_scenario(variant_config, holidays, short_days)
         except (ScheduleError, Exception) as exc:
+            logger.warning("whatif_variant_generation_error", variant=name, error=str(exc))
             return VariantResult(name=name, status="error", error=str(exc))
 
         variant_targets = {s.name: s.target for s in v_stats}

@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 import httpx
 
-from duty_schedule.logging import get_logger
+from duty_schedule.logging import get_logger, log_duration
 
 logger = get_logger(__name__)
 
@@ -43,12 +43,16 @@ class CalendarError(Exception):
 
 def fetch_holidays(year: int, month: int) -> tuple[set[date], set[date]]:
     try:
-        resp = httpx.get(
-            ISDAYOFF_URL,
-            params={"year": year, "month": month, "cc": "ru"},
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
+        with log_duration(
+            logger, "holidays_api_call", level="debug", year=year, month=month
+        ) as bag:
+            resp = httpx.get(
+                ISDAYOFF_URL,
+                params={"year": year, "month": month, "cc": "ru"},
+                timeout=TIMEOUT,
+            )
+            resp.raise_for_status()
+            bag["status_code"] = resp.status_code
     except httpx.HTTPError as exc:
         raise CalendarError(f"Не удалось получить производственный календарь: {exc}") from exc
 
@@ -70,7 +74,7 @@ def fetch_holidays(year: int, month: int) -> tuple[set[date], set[date]]:
             short_days.add(date(year, month, day_idx))
 
     logger.info(
-        "Праздники загружены",
+        "holidays_loaded",
         year=year,
         month=month,
         holidays_count=len(holidays),
@@ -92,7 +96,7 @@ def parse_manual_holidays(holidays_str: str, year: int, month: int) -> tuple[set
                 f"Неверный формат даты праздника: {raw!r} (ожидается YYYY-MM-DD)"
             ) from None
         if d.year != year or d.month != month:
-            logger.warning("Праздник вне указанного месяца пропущен", date=raw)
+            logger.warning("holiday_outside_month_skipped", date=raw)
             continue
         holidays.add(d)
     return holidays, compute_short_days(year, month, holidays)
