@@ -10,14 +10,20 @@ NEVER push directly to main (except hotfixes).
 ### Delivery:
 1. Commit directly to `dev`
 2. Run local checks before push
-3. PR dev -> test (ci-test must be green)
-4. PR test -> main (ci-main must be green)
-5. Update version -> tag -> release
+3. **Push to GitHub immediately** — never keep commits only local
+4. PR dev -> test (ci-test must be green)
+5. PR test -> main (ci-main must be green)
+6. Update version -> tag -> release
 
 ### Hotfix:
 1. Branch from main
 2. PR directly to main
 3. Cherry-pick into dev and test
+
+### Release Policy:
+- **Always push to GitHub immediately** after committing. Do not accumulate local-only commits.
+- **Merge PRs via GitHub** (gh pr merge), not locally. This ensures CI checks run and branch protection is respected.
+- After merging a hotfix PR into main, cherry-pick into dev and test, then push both.
 
 ## Before Every Push
 

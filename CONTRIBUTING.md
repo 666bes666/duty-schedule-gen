@@ -45,6 +45,12 @@ feature/xyz ──PR──> dev ──PR──> test ──PR──> main
 2. PR напрямую в `main` — проходит полную регрессию ci-main.yml
 3. После мержа — cherry-pick в `dev` и `test`
 
+### Политика пуша
+
+- **Всегда пушить в GitHub сразу** после коммита. Не накапливать локальные коммиты.
+- **Мержить PR через GitHub** (`gh pr merge`), а не локально. Это гарантирует прохождение CI и соблюдение branch protection.
+- После мержа hotfix PR в `main` — cherry-pick в `dev` и `test`, затем push обоих.
+
 ## Стиль кода
 
 - Python 3.12+
