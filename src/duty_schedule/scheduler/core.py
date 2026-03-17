@@ -17,7 +17,7 @@ from duty_schedule.models import (
     ShiftType,
 )
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 class ScheduleError(Exception):

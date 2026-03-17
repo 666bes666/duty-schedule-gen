@@ -3,13 +3,13 @@ from __future__ import annotations
 import secrets
 from typing import Annotated
 
-import structlog
 from fastapi import Depends, Request
 from fastapi.security import APIKeyHeader
 
 from duty_schedule.api.settings import ApiSettings, get_settings
+from duty_schedule.logging import get_logger
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
