@@ -1038,20 +1038,29 @@ if st.session_state.get("last_result"):
         )
     with _dl_col2:
         _pdf_hash = "pdf_" + _xls_hash
+        _pdf_error = st.session_state.get("_pdf_error", False)
         if st.session_state.get("_pdf_hash") != _pdf_hash:
-            _sd = _res.get("short_days")
-            from duty_schedule.export.pdf import generate_schedule_pdf
+            _pdf_error = False
+            try:
+                _sd = _res.get("short_days")
+                from duty_schedule.export.pdf import generate_schedule_pdf
 
-            _pdf_bytes = generate_schedule_pdf(final_schedule, page_size="A3", short_days=_sd)
-            st.session_state["_pdf_bytes"] = _pdf_bytes
+                _pdf_bytes = generate_schedule_pdf(final_schedule, page_size="A3", short_days=_sd)
+                st.session_state["_pdf_bytes"] = _pdf_bytes
+            except (RuntimeError, OSError):
+                _pdf_error = True
             st.session_state["_pdf_hash"] = _pdf_hash
-        st.download_button(
-            label="Скачать PDF",
-            data=st.session_state["_pdf_bytes"],
-            file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+            st.session_state["_pdf_error"] = _pdf_error
+        if _pdf_error:
+            st.warning("PDF недоступен: отсутствуют системные библиотеки WeasyPrint")
+        else:
+            st.download_button(
+                label="Скачать PDF",
+                data=st.session_state["_pdf_bytes"],
+                file_name=f"schedule_{_res['gen_year']}_{_res['gen_month']:02d}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
     st.download_button(
         label=(f"Скачать конфиг для {MONTHS_RU[_res['next_month'] - 1]} {_res['next_year']}"),
         data=_res["next_yaml"].encode("utf-8"),
