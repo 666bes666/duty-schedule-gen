@@ -21,12 +21,13 @@
 | Слой | Технология |
 |---|---|
 | UI | Streamlit (app.py) |
-| Алгоритм | Python 3.12+, чистый алгоритм (без внешних солверов) |
+| REST API | FastAPI + Uvicorn (api_main.py) |
+| Алгоритм | Python 3.12+, greedy с backtracking + CP-SAT solver (Google OR-Tools, опционально) |
 | Модели данных | Pydantic v2 |
 | CLI | Typer |
-| Экспорт | openpyxl (XLS), icalendar (ICS) |
+| Экспорт | openpyxl (XLS), icalendar (ICS), WeasyPrint (PDF) |
 | HTTP-клиент | httpx |
-| Логирование | structlog |
+| Логирование | structlog (JSON, настраиваемый уровень через `DUTY_LOG_LEVEL`) |
 | Менеджер пакетов | uv |
 | Тесты | pytest |
 

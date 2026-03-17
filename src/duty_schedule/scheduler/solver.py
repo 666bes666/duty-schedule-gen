@@ -209,6 +209,13 @@ def solve_schedule(
 
     model.minimize(sum(objective_terms))
 
+    proto = model.Proto()
+    logger.debug(
+        "solver_model_built",
+        num_variables=len(proto.variables),
+        num_constraints=len(proto.constraints),
+    )
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = timeout
     status = solver.solve(model)
@@ -221,10 +228,14 @@ def solve_schedule(
             f"CP-SAT solver не нашёл решения (статус: {solver.status_name(status)})"
         )
 
+    wall_time_s = round(solver.wall_time, 3)
+    timed_out = status == cp_model.FEASIBLE and wall_time_s >= timeout * 0.95
     logger.info(
         "solver_finished",
         status=solver.status_name(status),
         objective=solver.objective_value,
+        wall_time_s=wall_time_s,
+        timed_out=timed_out,
     )
 
     days: list[DaySchedule] = []
