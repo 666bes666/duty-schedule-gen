@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from pydantic import ValidationError
 
 from duty_schedule.calendar import CalendarError, compute_short_days, fetch_holidays
 from duty_schedule.export.xls import export_xls
-from pydantic import ValidationError
-
 from duty_schedule.models import (
     CarryOverState,
     Config,
