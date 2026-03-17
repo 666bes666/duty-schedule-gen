@@ -44,6 +44,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "hypothesis>=6.0",
+    "pre-commit>=3.7",
 ]
 ci-security = [
     "bandit>=1.7",

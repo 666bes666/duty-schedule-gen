@@ -6,6 +6,7 @@
 git clone https://github.com/666bes666/duty-schedule-gen.git
 cd duty-schedule-gen
 uv sync --dev
+uv run pre-commit install
 ```
 
 Для работы с CP-SAT solver:
