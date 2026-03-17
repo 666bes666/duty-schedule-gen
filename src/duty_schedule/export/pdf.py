@@ -270,7 +270,10 @@ def generate_schedule_pdf(
 
     html_str = f"<!DOCTYPE html><html><head><style>{css}</style></head><body>{body}</body></html>"
 
-    from weasyprint import HTML
+    try:
+        from weasyprint import HTML
+    except OSError:
+        raise RuntimeError("weasyprint unavailable: system libraries missing") from None
 
     buf = BytesIO()
     HTML(string=html_str).write_pdf(buf)
