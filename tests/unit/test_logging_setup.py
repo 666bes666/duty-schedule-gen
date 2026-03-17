@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ast
 import logging
+import re
 import warnings
+from pathlib import Path
 
 import duty_schedule.logging as log_mod
 from duty_schedule.logging import _filter_sensitive, get_logger, setup_logging
@@ -61,3 +64,49 @@ class TestEnvConfig:
         setup_logging(force=True)
         setup_logging()
         setup_logging()
+
+
+_EVENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
+_LOG_METHODS = frozenset({"debug", "info", "warning", "error", "critical", "exception"})
+
+
+def _extract_event_names() -> list[tuple[str, int, str]]:
+    src_root = Path(__file__).resolve().parents[2] / "src" / "duty_schedule"
+    results: list[tuple[str, int, str]] = []
+    for py_file in src_root.rglob("*.py"):
+        tree = ast.parse(py_file.read_text(), filename=str(py_file))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not (
+                isinstance(func, ast.Attribute)
+                and func.attr in _LOG_METHODS
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "logger"
+            ):
+                continue
+            if not node.args:
+                continue
+            first_arg = node.args[0]
+            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                rel = py_file.relative_to(src_root)
+                results.append((str(rel), first_arg.end_lineno or 0, first_arg.value))
+    return results
+
+
+class TestEventNameConventions:
+    def test_no_cyrillic_in_event_names(self):
+        violations = []
+        for file, line, event in _extract_event_names():
+            if _CYRILLIC_RE.search(event):
+                violations.append(f"{file}:{line} -> {event!r}")
+        assert violations == [], "Cyrillic found in event names:\n" + "\n".join(violations)
+
+    def test_event_names_snake_case(self):
+        violations = []
+        for file, line, event in _extract_event_names():
+            if not _EVENT_NAME_RE.match(event):
+                violations.append(f"{file}:{line} -> {event!r}")
+        assert violations == [], "Non-snake_case event names:\n" + "\n".join(violations)

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import sys
-from collections.abc import MutableMapping
+import time
+from collections.abc import Generator, MutableMapping
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
@@ -84,3 +86,16 @@ def setup_logging(level: str = "INFO", *, force: bool = False) -> None:
 
 def get_logger(name: str) -> structlog.BoundLogger:
     return structlog.get_logger(name)  # type: ignore[no-any-return]
+
+
+@contextlib.contextmanager
+def log_duration(
+    logger: structlog.BoundLogger, event: str, level: str = "info", **extra: Any
+) -> Generator[dict[str, Any], None, None]:
+    bag: dict[str, Any] = {}
+    t0 = time.monotonic()
+    try:
+        yield bag
+    finally:
+        elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
+        getattr(logger, level)(event, duration_ms=elapsed_ms, **extra, **bag)

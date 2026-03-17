@@ -4,6 +4,7 @@ import copy
 import random
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Any
 
 from duty_schedule.constants import (
     MAX_BACKTRACK_ATTEMPTS,
@@ -103,7 +104,7 @@ def generate_schedule(
         try:
             return solve_schedule(config, holidays)
         except SolverUnavailableError:
-            logger.warning("CP-SAT недоступен, fallback на greedy")
+            logger.warning("cpsat_unavailable_greedy_fallback")
 
     from duty_schedule.calendar import get_all_days
     from duty_schedule.scheduler.changelog import ChangeLog
@@ -134,7 +135,15 @@ def generate_schedule(
     pinned_on: set[tuple[date, str]] = {(p.date, p.employee_name) for p in config.pins}
 
     production_days = _calc_production_days(config.year, config.month, holidays)
-    logger.info("Норма рабочих дней", production_days=production_days)
+    logger.info("production_days_calculated", production_days=production_days)
+    logger.debug(
+        "scheduler_config",
+        solver=config.solver,
+        seed=config.seed,
+        employees=len(employees),
+        max_backtrack_attempts=MAX_BACKTRACK_ATTEMPTS,
+        max_backtrack_days=MAX_BACKTRACK_DAYS,
+    )
 
     states: dict[str, EmployeeState] = {}
     for emp in employees:
@@ -196,7 +205,13 @@ def generate_schedule(
             day_idx += 1
 
         except ScheduleError as exc:
-            logger.warning("Ошибка назначения смены, откат", day=str(day), reason=str(exc))
+            logger.warning(
+                "shift_assignment_backtrack",
+                day=str(day),
+                reason=str(exc),
+                backtrack_number=total_backtracks + 1,
+                steps_back=min(MAX_BACKTRACK_DAYS, len(backtrack_stack)),
+            )
             total_backtracks += 1
 
             if total_backtracks > MAX_BACKTRACK_ATTEMPTS or len(backtrack_stack) < 1:
@@ -221,15 +236,48 @@ def generate_schedule(
 
     changelog = ChangeLog()
 
-    days = _balance_weekend_work(
-        days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw, changelog=changelog
+    def _pp(stage: str, func: Any, *args: Any, **kwargs: Any) -> Any:
+        pre = len(changelog.entries)
+        result = func(*args, **kwargs)
+        logger.debug(
+            "postprocess_stage_done",
+            stage=stage,
+            changes=len(changelog.entries) - pre,
+        )
+        return result
+
+    days = _pp(
+        "balance_weekend_work",
+        _balance_weekend_work,
+        days,
+        employees,
+        pinned_on=pinned_on,
+        carry_over_cw=initial_cw,
+        changelog=changelog,
     )
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
-    days = _balance_duty_shifts(days, employees, holidays, pinned_on=pinned_on, changelog=changelog)
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
-    days = _target_adjustment_pass(
+    days = _pp(
+        "balance_duty_shifts",
+        _balance_duty_shifts,
+        days,
+        employees,
+        holidays,
+        pinned_on=pinned_on,
+        changelog=changelog,
+    )
+    days = _pp(
+        "balance_evening_1",
+        _balance_evening_shifts,
+        days,
+        employees,
+        pinned_on=pinned_on,
+        changelog=changelog,
+    )
+    days = _pp(
+        "target_adjustment_1",
+        _target_adjustment_pass,
         days,
         employees,
         states,
@@ -239,7 +287,9 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
-    days = _trim_long_off_blocks(
+    days = _pp(
+        "trim_long_off_blocks",
+        _trim_long_off_blocks,
         days,
         employees,
         holidays,
@@ -250,7 +300,9 @@ def generate_schedule(
     )
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _target_adjustment_pass(
+    days = _pp(
+        "target_adjustment_2",
+        _target_adjustment_pass,
         days,
         employees,
         states,
@@ -260,7 +312,9 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
-    days = _minimize_isolated_off(
+    days = _pp(
+        "minimize_isolated_off_1",
+        _minimize_isolated_off,
         days,
         employees,
         holidays,
@@ -269,10 +323,18 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
-    days = _break_evening_isolated_pattern(
-        days, employees, pinned_on=pinned_on, carry_over_cw=initial_cw, changelog=changelog
+    days = _pp(
+        "break_evening_isolated_pattern",
+        _break_evening_isolated_pattern,
+        days,
+        employees,
+        pinned_on=pinned_on,
+        carry_over_cw=initial_cw,
+        changelog=changelog,
     )
-    days = _minimize_isolated_off(
+    days = _pp(
+        "minimize_isolated_off_2",
+        _minimize_isolated_off,
         days,
         employees,
         holidays,
@@ -281,7 +343,9 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
-    days = _equalize_isolated_off(
+    days = _pp(
+        "equalize_isolated_off",
+        _equalize_isolated_off,
         days,
         employees,
         holidays,
@@ -289,7 +353,9 @@ def generate_schedule(
         carry_over_cw=initial_cw,
         changelog=changelog,
     )
-    days = _minimize_isolated_off(
+    days = _pp(
+        "minimize_isolated_off_3",
+        _minimize_isolated_off,
         days,
         employees,
         holidays,
@@ -298,11 +364,20 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
+    days = _pp(
+        "balance_evening_2",
+        _balance_evening_shifts,
+        days,
+        employees,
+        pinned_on=pinned_on,
+        changelog=changelog,
+    )
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _target_adjustment_pass(
+    days = _pp(
+        "target_adjustment_3",
+        _target_adjustment_pass,
         days,
         employees,
         states,
@@ -348,7 +423,7 @@ def generate_schedule(
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
     if ev_counts:
         max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
-        logger.info("Баланс вечерних смен", max=max_ev, min=min_ev, diff=max_ev - min_ev)
+        logger.info("evening_shift_balance", max=max_ev, min=min_ev, diff=max_ev - min_ev)
 
     for i in range(len(days) - 1):
         for emp_name in days[i].evening:
@@ -370,7 +445,7 @@ def generate_schedule(
         emp.name: states[emp.name].total_working for emp in employees
     }
     logger.info(
-        "Расписание сгенерировано",
+        "schedule_generated",
         days=len(days),
         nights=total_nights,
         mornings=total_mornings,
