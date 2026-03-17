@@ -212,7 +212,7 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
     try:
         return fetch_holidays(config.year, config.month)
     except CalendarError as exc:
-        logger.warning("API производственного календаря недоступен", error=str(exc))
+        logger.warning("production_calendar_api_unavailable", error=str(exc))
         console.print(f"[yellow]⚠ {exc}[/yellow]")
 
         if holidays_arg:

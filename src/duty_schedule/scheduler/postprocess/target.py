@@ -134,7 +134,7 @@ def _target_adjustment_pass(
                             )
                     if excess > 0:
                         logger.warning(
-                            "Не удалось убрать избыток рабочих дней",
+                            "excess_workdays_not_removed",
                             employee=emp.name,
                             excess=excess,
                         )
@@ -203,7 +203,7 @@ def _target_adjustment_pass(
                     )
             if deficit > 0:
                 logger.warning(
-                    "Не удалось закрыть недостачу рабочих дней",
+                    "deficit_workdays_not_filled",
                     employee=emp.name,
                     deficit=deficit,
                 )
