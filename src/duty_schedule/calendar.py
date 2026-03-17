@@ -9,7 +9,7 @@ import httpx
 
 from duty_schedule.logging import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 ISDAYOFF_URL = "https://isdayoff.ru/api/getdata"
 TIMEOUT = 5.0
