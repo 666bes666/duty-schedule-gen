@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 from datetime import date
 
+from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
     Config,
@@ -10,6 +11,8 @@ from duty_schedule.models import (
     Schedule,
     ScheduleType,
 )
+
+logger = get_logger(__name__)
 
 try:
     from ortools.sat.python import cp_model
@@ -44,6 +47,8 @@ def solve_schedule(
     khab_duty = [e for e in employees if e.city == City.KHABAROVSK and e.on_duty]
 
     shifts = ["morning", "evening", "night", "workday", "day_off", "vacation"]
+
+    logger.info("solver_start", employees=len(employees), days=ndays, timeout=timeout)
 
     model = cp_model.CpModel()
 
@@ -211,9 +216,16 @@ def solve_schedule(
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         from duty_schedule.scheduler.core import ScheduleError
 
+        logger.error("solver_no_solution", status=solver.status_name(status))
         raise ScheduleError(
             f"CP-SAT solver не нашёл решения (статус: {solver.status_name(status)})"
         )
+
+    logger.info(
+        "solver_finished",
+        status=solver.status_name(status),
+        objective=solver.objective_value,
+    )
 
     days: list[DaySchedule] = []
     for d_idx, d in enumerate(dates):

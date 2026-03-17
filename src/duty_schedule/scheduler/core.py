@@ -200,6 +200,11 @@ def generate_schedule(
             total_backtracks += 1
 
             if total_backtracks > MAX_BACKTRACK_ATTEMPTS or len(backtrack_stack) < 1:
+                logger.error(
+                    "schedule_build_failed",
+                    total_backtracks=total_backtracks,
+                    last_day=str(day),
+                )
                 raise ScheduleError(
                     f"Расписание не может быть построено: {exc}\n"
                     f"Откатов всего: {total_backtracks}. Проверьте параметры сотрудников."

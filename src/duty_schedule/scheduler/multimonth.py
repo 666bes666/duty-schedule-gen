@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from duty_schedule.calendar import fetch_holidays
+from duty_schedule.logging import get_logger
 from duty_schedule.models import CarryOverState, Config, Schedule
 from duty_schedule.scheduler.core import generate_schedule
+
+logger = get_logger(__name__)
 
 
 def _next_month(year: int, month: int) -> tuple[int, int]:
@@ -18,6 +21,11 @@ def generate_multimonth(
     end_month: int,
     end_year: int,
 ) -> list[Schedule]:
+    logger.info(
+        "multimonth_start",
+        start=f"{start_month:02d}.{start_year}",
+        end=f"{end_month:02d}.{end_year}",
+    )
     schedules: list[Schedule] = []
     current_year, current_month = start_year, start_month
     carry_over: list[CarryOverState] = list(base_config.carry_over)
@@ -34,6 +42,7 @@ def generate_multimonth(
         holidays, _short_days = fetch_holidays(current_year, current_month)
         schedule = generate_schedule(month_config, holidays)
         schedules.append(schedule)
+        logger.info("multimonth_month_done", month=current_month, year=current_year)
 
         raw_carry = schedule.metadata.get("carry_over", [])
         carry_over = []
