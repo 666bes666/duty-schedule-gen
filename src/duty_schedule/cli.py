@@ -25,7 +25,7 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 def _load_config(config_path: Path) -> Config:

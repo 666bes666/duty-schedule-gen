@@ -24,7 +24,7 @@ from duty_schedule.scheduler.core import EmployeeState
 
 from .helpers import _streak_around
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 def _target_adjustment_pass(

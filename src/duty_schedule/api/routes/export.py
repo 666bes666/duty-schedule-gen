@@ -13,8 +13,11 @@ from fastapi.responses import Response, StreamingResponse
 from duty_schedule.calendar import fetch_holidays
 from duty_schedule.export.ics import generate_employee_ics_bytes
 from duty_schedule.export.xls import export_xls
+from duty_schedule.logging import get_logger
 from duty_schedule.models import Config
 from duty_schedule.scheduler import generate_schedule
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -29,6 +32,7 @@ def _content_disposition(filename: str) -> str:
 
 @router.post("/xls")
 async def export_xls_endpoint(config: Config) -> StreamingResponse:
+    logger.info("export_start", format="xls")
     holidays, short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
     schedule = await asyncio.to_thread(generate_schedule, config, holidays)
 
@@ -51,6 +55,7 @@ async def export_pdf_endpoint(
     config: Config,
     page_size: str = Query(default="A3", pattern="^(A3|A4)$"),
 ) -> Response:
+    logger.info("export_start", format="pdf")
     from duty_schedule.export.pdf import generate_schedule_pdf
 
     holidays, short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
@@ -69,6 +74,7 @@ async def export_ics_endpoint(
     config: Config,
     employee_name: str | None = Query(default=None),
 ) -> Response:
+    logger.info("export_start", format="ics")
     holidays, _short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
     schedule = await asyncio.to_thread(generate_schedule, config, holidays)
 

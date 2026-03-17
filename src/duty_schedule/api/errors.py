@@ -6,7 +6,10 @@ from fastapi.responses import JSONResponse
 from duty_schedule.api.auth import AuthInvalidError, AuthMissingError
 from duty_schedule.api.ratelimit import RateLimitExceeded
 from duty_schedule.calendar import CalendarError
+from duty_schedule.logging import get_logger
 from duty_schedule.scheduler.core import ScheduleError
+
+logger = get_logger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -48,6 +51,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_internal_error(request: Request, exc: Exception) -> JSONResponse:
+        logger.error("unhandled_exception", path=str(request.url.path), error=str(exc))
         return JSONResponse(
             status_code=500,
             content={"error": "internal_error", "detail": str(exc)},

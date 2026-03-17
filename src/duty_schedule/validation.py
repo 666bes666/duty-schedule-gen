@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
+from duty_schedule.logging import get_logger
 from duty_schedule.models import City, Config, ShiftType
+
+logger = get_logger(__name__)
 
 
 def validate_pre_generation(
@@ -87,5 +90,8 @@ def validate_pre_generation(
                 f"{day.isoformat()}: доступных дежурных ({len(available_duty)}) "
                 f"может не хватить для {required_shifts} обязательных смен"
             )
+
+    if errors:
+        logger.warning("validation_errors_found", count=len(errors))
 
     return errors, warnings
