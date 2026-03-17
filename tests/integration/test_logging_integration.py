@@ -8,8 +8,6 @@ from duty_schedule.logging import setup_logging
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.scheduler.core import generate_schedule
 
-setup_logging("DEBUG", force=True)
-
 
 def _make_config() -> Config:
     moscow = [
@@ -41,6 +39,7 @@ def _make_config() -> Config:
 
 class TestLoggingSmoke:
     def test_key_events_present(self):
+        setup_logging("DEBUG", force=True)
         config = _make_config()
         holidays = {date(2025, 6, 12)}
 

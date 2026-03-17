@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import pytest
 import structlog
 from structlog.testing import capture_logs
 
 from duty_schedule.logging import log_duration, setup_logging
 
-setup_logging("DEBUG", force=True)
+
+@pytest.fixture(autouse=True)
+def _ensure_debug_logging():
+    setup_logging("DEBUG", force=True)
 
 
 class TestLogDuration:
