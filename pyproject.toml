@@ -44,6 +44,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "hypothesis>=6.0",
+    "pre-commit>=3.7",
 ]
 ci-security = [
     "bandit>=1.7",
@@ -90,6 +91,25 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+module = [
+    "openpyxl",
+    "openpyxl.*",
+    "icalendar",
+    "icalendar.*",
+    "weasyprint",
+    "weasyprint.*",
+    "streamlit",
+    "streamlit.*",
+    "altair",
+    "altair.*",
+    "pandas",
+    "pandas.*",
+    "ortools",
+    "ortools.*",
+]
 ignore_missing_imports = true
 
 [tool.bandit]
