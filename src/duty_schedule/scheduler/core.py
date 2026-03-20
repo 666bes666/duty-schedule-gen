@@ -148,7 +148,7 @@ def generate_schedule(
     states: dict[str, EmployeeState] = {}
     for emp in employees:
         vac_days = _calc_blocked_working_days(emp, config.year, config.month)
-        target = round(production_days * emp.workload_pct / 100)
+        target = production_days
         states[emp.name] = EmployeeState(
             target_working_days=target,
             vacation_days=vac_days,

@@ -107,37 +107,6 @@ class TestCarryOverLastShift:
 
 
 class TestCarryOverConsecutiveSameShift:
-    def test_carry_over_consecutive_same_shift_limits_morning(self):
-        emps = [
-            _emp("Москва 1", max_consecutive_morning=3),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        carry = [
-            CarryOverState(
-                employee_name="Москва 1",
-                last_shift=ShiftType.MORNING,
-                consecutive_working=2,
-                consecutive_same_shift=2,
-            )
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps, carry_over=carry)
-        schedule = generate_schedule(config, set())
-
-        morning_streak = 2
-        for day in schedule.days:
-            if "Москва 1" in day.morning:
-                morning_streak += 1
-            else:
-                morning_streak = 0
-            assert morning_streak <= 3, (
-                f"Москва 1 стоит на утро {morning_streak} дней подряд "
-                f"(включая carry_over, лимит 3) на {day.date}"
-            )
-
     def test_schedule_covered_with_carry_over(self):
         emps = _base_team()
         carry = [

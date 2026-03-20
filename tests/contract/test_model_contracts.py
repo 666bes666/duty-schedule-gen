@@ -35,14 +35,9 @@ class TestEmployeeSerializationRoundtrip:
             evening_only=False,
             vacations=[VacationPeriod(start=date(2025, 3, 1), end=date(2025, 3, 5))],
             unavailable_dates=[date(2025, 3, 15)],
-            max_morning_shifts=10,
-            max_evening_shifts=8,
-            max_night_shifts=5,
             preferred_shift=ShiftType.NIGHT,
-            workload_pct=80,
             days_off_weekly=[5, 6],
             max_consecutive_working=5,
-            group="alpha",
         )
         data = emp.model_dump()
         restored = Employee.model_validate(data)

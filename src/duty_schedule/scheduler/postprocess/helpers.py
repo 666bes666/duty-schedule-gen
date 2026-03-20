@@ -165,19 +165,6 @@ def _try_duty_shift_swap(
         ):
             continue
 
-        if (
-            duty_shift_type == "morning"
-            and partner.max_morning_shifts is not None
-            and sum(1 for d in days if partner.name in d.morning) >= partner.max_morning_shifts
-        ):
-            continue
-        if (
-            duty_shift_type == "evening"
-            and partner.max_evening_shifts is not None
-            and sum(1 for d in days if partner.name in d.evening) >= partner.max_evening_shifts
-        ):
-            continue
-
         _consec_limit = getattr(partner, f"max_consecutive_{duty_shift_type}", None)
         if _consec_limit is not None and (
             _consecutive_shift_count_at(partner.name, extend_idx, days, duty_shift_type)

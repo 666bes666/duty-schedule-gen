@@ -48,8 +48,6 @@ def config_strategy(draw: st.DrawFn) -> Config:
             morning_only = flag == "morning_only"
             evening_only = flag == "evening_only"
 
-        workload_pct = draw(st.integers(min_value=50, max_value=100))
-
         has_vacation = draw(st.booleans()) if i >= 2 else False
         vacations: list[VacationPeriod] = []
         if has_vacation:
@@ -71,7 +69,6 @@ def config_strategy(draw: st.DrawFn) -> Config:
                 on_duty=on_duty,
                 morning_only=morning_only,
                 evening_only=evening_only,
-                workload_pct=workload_pct,
                 vacations=vacations,
             )
         )
@@ -81,7 +78,6 @@ def config_strategy(draw: st.DrawFn) -> Config:
 
     for i in range(khab_count):
         on_duty = True if i < 2 else draw(st.booleans())
-        workload_pct = draw(st.integers(min_value=70, max_value=100))
 
         vacations = []
         if i == khab_vacation_idx and khab_count >= 3:
@@ -101,7 +97,6 @@ def config_strategy(draw: st.DrawFn) -> Config:
                 city=City.KHABAROVSK,
                 schedule_type=ScheduleType.FLEXIBLE,
                 on_duty=on_duty,
-                workload_pct=workload_pct,
                 vacations=vacations,
             )
         )

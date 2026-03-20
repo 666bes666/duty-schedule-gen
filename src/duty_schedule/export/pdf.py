@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+import os
+import sys
 from datetime import date
 from io import BytesIO
+
+if sys.platform == "darwin":
+    for _brew_lib in ("/opt/homebrew/lib", "/usr/local/lib"):
+        if os.path.isdir(_brew_lib):
+            _existing = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+            if _brew_lib not in _existing:
+                os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+                    f"{_brew_lib}:{_existing}" if _existing else _brew_lib
+                )
+            break
 
 from duty_schedule.constants import MONTHS_RU, SHIFT_COLORS_CELL, SHIFT_COLORS_HEADER
 from duty_schedule.models import City, Employee, Schedule, ScheduleType

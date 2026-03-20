@@ -47,13 +47,6 @@ def _build_employees(
         pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
         preferred_shift = _RU_TO_SHIFT.get(pref_shift_ru) if pref_shift_ru else None
 
-        workload_raw = row.get("Загрузка%", 100)
-        try:
-            workload_pct = int(str(workload_raw).strip()) if str(workload_raw).strip() else 100
-            workload_pct = max(1, min(100, workload_pct))
-        except (ValueError, TypeError):
-            workload_pct = 100
-
         days_off_weekly: list[int] = cfg.get("days_off_weekly", [])
 
         def _parse_limit(val: Any) -> int | None:
@@ -63,14 +56,7 @@ def _build_employees(
             except (ValueError, TypeError):
                 return None
 
-        max_morning = _parse_limit(row.get("Макс. утренних"))
-        max_evening = _parse_limit(row.get("Макс. вечерних"))
-        max_night = _parse_limit(row.get("Макс. ночных"))
         max_cw = _parse_limit(row.get("Макс. подряд"))
-        max_consec_morning = _parse_limit(row.get("Подряд: утро"))
-        max_consec_evening = _parse_limit(row.get("Подряд: вечер"))
-        max_consec_workday = _parse_limit(row.get("Подряд: день"))
-        group = str(row.get("Группа", "")).strip() or None
 
         try:
             employees.append(
@@ -85,16 +71,8 @@ def _build_employees(
                     vacations=vacations,
                     unavailable_dates=unavailable,
                     preferred_shift=preferred_shift,
-                    workload_pct=workload_pct,
                     days_off_weekly=days_off_weekly,
-                    max_morning_shifts=max_morning,
-                    max_evening_shifts=max_evening,
-                    max_night_shifts=max_night,
                     max_consecutive_working=max_cw,
-                    max_consecutive_morning=max_consec_morning,
-                    max_consecutive_evening=max_consec_evening,
-                    max_consecutive_workday=max_consec_workday,
-                    group=group,
                 )
             )
         except Exception as e:

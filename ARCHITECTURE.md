@@ -112,17 +112,12 @@ City:         MOSCOW | KHABAROVSK
 | `evening_only` | bool | Работает только вечерние смены |
 | `vacations` | list[VacationPeriod] | Периоды отпуска |
 | `unavailable_dates` | list[date] | Конкретные даты недоступности |
-| `max_morning_shifts` | int? | Лимит утренних смен в месяц |
-| `max_evening_shifts` | int? | Лимит вечерних смен в месяц |
-| `max_night_shifts` | int? | Лимит ночных смен в месяц |
 | `preferred_shift` | ShiftType? | Мягкое предпочтение типа смены |
-| `workload_pct` | int (1–100) | Доля ставки (100 = полная) |
 | `days_off_weekly` | list[int] | Постоянные выходные дни недели (0=Пн) |
 | `max_consecutive_working` | int? | Персональный лимит рабочих дней подряд |
 | `max_consecutive_morning` | int? | Лимит утренних смен подряд (None = без ограничений) |
 | `max_consecutive_evening` | int? | Лимит вечерних смен подряд (None = без ограничений) |
 | `max_consecutive_workday` | int? | Лимит рабочих дней (WORKDAY) подряд (None = без ограничений) |
-| `group` | str? | Группа: двое из одной группы не назначаются на одну смену |
 
 ### 4.3 Config
 
@@ -198,7 +193,7 @@ EmployeeState(
     consecutive_off=0,      # дней выходных подряд
     last_shift=None,        # последняя смена
     total_working=0,        # всего рабочих дней в месяце
-    target_working_days=0,  # норма (из произв. календаря * workload_pct)
+    target_working_days=0,  # норма (из произв. календаря)
     vacation_days=0,        # дней отпуска в рабочие дни
     night/morning/evening/workday_count,  # счётчики смен
     consecutive_morning=0,  # утренних смен подряд
@@ -452,7 +447,7 @@ generate:
 
 ### Нагрузка
 
-- Каждый сотрудник должен отработать ровно `round(production_days * workload_pct / 100)` рабочих дней
+- Каждый сотрудник должен отработать ровно `production_days` рабочих дней
 - `production_days` = число рабочих дней в месяце по производственному календарю РФ
 - Дни отпуска вычитаются из нормы
 - Норма рабочих дней — жёсткий инвариант. После всей постобработки выполняется двухэтапный финальный enforcement:
@@ -462,7 +457,6 @@ generate:
 
 ### Группы
 
-Сотрудники с одинаковым `group` не назначаются на одну дежурную смену в один день.
 
 ---
 
@@ -616,7 +610,7 @@ uv run pytest tests/ -q
 | Категория | Директория | Что тестируется |
 |---|---|---|
 | Юнит-тесты | `unit/` | `_can_work`, `_is_weekend_or_holiday`, `_resting_after_evening`, ограничения |
-| Интеграционные | `integration/` | Покрытие смен, отсутствие дублей, carry_over, XLS/ICS экспорт, пины, отпуска, `workload_pct`, `always_on_duty`, `group` |
+| Интеграционные | `integration/` | Покрытие смен, отсутствие дублей, carry_over, XLS/ICS экспорт, пины, отпуска, `always_on_duty` |
 | Контрактные | `contract/` | Валидация YAML-конфигурации, сериализация моделей |
 | End-to-end | `e2e/` | CLI workflow: validate, generate, version |
 | Performance | `performance/` | Бенчмарки генерации (pytest-benchmark) |

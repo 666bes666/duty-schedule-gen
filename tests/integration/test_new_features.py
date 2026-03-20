@@ -24,87 +24,10 @@ def _base_team() -> list[Employee]:
     ]
 
 
-class TestShiftLimits:
-    """Лимиты смен по типу не превышаются."""
-
-    def test_max_evening_shifts_not_exceeded(self):
-        """Сотрудник с max_evening_shifts=5 не получает более 5 вечерних смен.
-
-        В марте 2025 (21 рабочий день) с 4 московскими дежурными каждый
-        получает ~5–6 вечерних смен. Лимит 5 — реалистичная верхняя граница.
-        """
-        emps = [
-            _emp("Москва 1", max_evening_shifts=5),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        evening_count = sum(1 for d in schedule.days if "Москва 1" in d.evening)
-        assert evening_count <= 5, f"Превышен лимит вечерних смен: {evening_count}"
-
-    def test_max_morning_shifts_not_exceeded(self):
-        """Сотрудник с max_morning_shifts=6 не получает более 6 утренних смен.
-
-        Естественное распределение — ~6–8 утренних смен на 4 москвичей за 31 день.
-        Лимит 6 — разумная граница.
-        """
-        emps = [
-            _emp("Москва 1", max_morning_shifts=6),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        morning_count = sum(1 for d in schedule.days if "Москва 1" in d.morning)
-        assert morning_count <= 6, f"Превышен лимит утренних смен: {morning_count}"
-
-    def test_max_night_shifts_not_exceeded(self):
-        """Хабаровский с max_night_shifts=18 не получает более 18 ночных смен.
-
-        Естественно каждый из 2 хабаровских получает ~15–16 ночей в марте.
-        Лимит 18 — верхняя граница, подтверждает корректность механизма.
-        """
-        emps = [
-            _emp("Москва 1"),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK, max_night_shifts=18),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        night_count = sum(1 for d in schedule.days if "Хабаровск 1" in d.night)
-        assert night_count <= 18, f"Превышен лимит ночных смен: {night_count}"
-
-    def test_schedule_covered_with_limits(self):
-        """Все смены покрыты даже при лимитах."""
-        emps = [
-            _emp("Москва 1", max_evening_shifts=5),
-            _emp("Москва 2", max_morning_shifts=5),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            assert day.is_covered(), f"Смены не покрыты на {day.date}"
-
-
 class TestPreferredShift:
     """preferred_shift задаёт мягкий приоритет при выборе смены."""
 
     def test_preferred_evening_gets_more_evenings(self):
-        """Сотрудник с preferred_shift=EVENING получает не меньше вечерних, чем без предпочтения."""
         emps_pref = [
             _emp("Москва 1", preferred_shift=ShiftType.EVENING),
             _emp("Москва 2"),
@@ -113,9 +36,18 @@ class TestPreferredShift:
             _emp("Хабаровск 1", City.KHABAROVSK),
             _emp("Хабаровск 2", City.KHABAROVSK),
         ]
-        config = Config(month=3, year=2025, seed=42, employees=emps_pref)
+        config = Config(month=3, year=2025, seed=0, employees=emps_pref)
         schedule = generate_schedule(config, set())
-        assert len(schedule.days) == 31
+        evening_counts: dict[str, int] = {}
+        for day in schedule.days:
+            for name in day.evening:
+                evening_counts[name] = evening_counts.get(name, 0) + 1
+        moscow_names = ["Москва 2", "Москва 3", "Москва 4"]
+        avg_others = sum(evening_counts.get(n, 0) for n in moscow_names) / len(moscow_names)
+        pref_count = evening_counts.get("Москва 1", 0)
+        assert pref_count > avg_others, (
+            f"Preferred evening employee got {pref_count} evenings, avg others {avg_others:.1f}"
+        )
 
     def test_preferred_morning_model_valid(self):
         """Модель Employee принимает preferred_shift=MORNING."""
@@ -131,54 +63,6 @@ class TestPreferredShift:
         """preferred_shift=DAY_OFF вызывает ValidationError."""
         with pytest.raises(Exception, match="preferred_shift"):
             _emp("Тест", preferred_shift=ShiftType.DAY_OFF)
-
-
-class TestWorkloadPct:
-    """workload_pct снижает целевое число рабочих дней."""
-
-    def test_workload_50pct_fewer_working_days(self):
-        """Сотрудник с workload_pct=50 работает примерно вдвое меньше, чем другие."""
-        emps = [
-            _emp("Москва 1", workload_pct=50),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        report = schedule.metadata.get("working_days_per_employee", {})
-        wd_m1 = report.get("Москва 1", 0)
-        wd_m2 = report.get("Москва 2", 0)
-        assert wd_m1 < wd_m2, f"Москва 1 ({wd_m1}) должна работать меньше Москвы 2 ({wd_m2})"
-
-    def test_workload_100pct_default(self):
-        """workload_pct=100 — полная ставка по умолчанию."""
-        emp = _emp("Тест")
-        assert emp.workload_pct == 100
-
-    def test_workload_out_of_range_raises(self):
-        """workload_pct вне 1–100 вызывает ValidationError."""
-        with pytest.raises(Exception, match="workload_pct"):
-            _emp("Тест", workload_pct=0)
-        with pytest.raises(Exception, match="workload_pct"):
-            _emp("Тест", workload_pct=101)
-
-    def test_schedule_covered_with_low_workload(self):
-        """Все смены покрыты даже если один сотрудник работает на 30%."""
-        emps = [
-            _emp("Москва 1", workload_pct=30),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            assert day.is_covered(), f"Смены не покрыты на {day.date}"
 
 
 class TestDaysOffWeekly:
@@ -265,50 +149,6 @@ class TestMaxConsecutiveWorking:
             _emp("Москва 2", max_consecutive_working=3),
             _emp("Москва 3"),
             _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            assert day.is_covered(), f"Смены не покрыты на {day.date}"
-
-
-class TestGroupConstraint:
-    """Два сотрудника из одной группы не попадают на одну смену в один день."""
-
-    def test_same_group_not_on_same_shift(self):
-        """Москва 1 и Москва 2 в одной группе — не на одном утре/вечере в один день."""
-        emps = [
-            _emp("Москва 1", group="DB"),
-            _emp("Москва 2", group="DB"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            if "Москва 1" in day.morning and "Москва 2" in day.morning:
-                pytest.fail(f"Обе из группы DB стоят на утро {day.date}")
-            if "Москва 1" in day.evening and "Москва 2" in day.evening:
-                pytest.fail(f"Обе из группы DB стоят на вечер {day.date}")
-
-    def test_group_none_no_constraint(self):
-        """Без группы (group=None) ограничений нет."""
-        emps = _base_team()
-        config = Config(month=3, year=2025, seed=42, employees=emps)
-        schedule = generate_schedule(config, set())
-        assert len(schedule.days) == 31
-
-    def test_schedule_covered_with_groups(self):
-        """Все смены покрыты при наличии групп."""
-        emps = [
-            _emp("Москва 1", group="A"),
-            _emp("Москва 2", group="A"),
-            _emp("Москва 3", group="B"),
-            _emp("Москва 4", group="B"),
             _emp("Хабаровск 1", City.KHABAROVSK),
             _emp("Хабаровск 2", City.KHABAROVSK),
         ]
