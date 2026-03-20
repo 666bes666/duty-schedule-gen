@@ -119,7 +119,6 @@ def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
     for s in stats_list:
         rows.append(
             {
-                "Загр.%": round(s.target / max(s.target, 1) * 100) if s.target > 0 else 100,
                 "Утро": s.morning,
                 "Вечер": s.evening,
                 "Ночь": s.night,
@@ -361,24 +360,11 @@ def _render_load_dashboard(
         st.info("Нет данных для отображения.")
         return
 
-    workload_map = {
-        str(r["Имя"]).strip(): int(r.get("Загрузка%") or 100)
-        for _, r in employees_df.iterrows()
-        if str(r["Имя"]).strip()
-    }
-    for s in _stats:
-        pct = workload_map.get(s.name, 100)
-        if pct != 100:
-            pass
-
     _render_red_flags(_stats)
 
     show_df = _stats_to_dataframe(_stats)
-    for s in _stats:
-        show_df.loc[s.name, "Загр.%"] = workload_map.get(s.name, 100)
 
     display_cols = [
-        "Загр.%",
         "Утро",
         "Вечер",
         "Ночь",

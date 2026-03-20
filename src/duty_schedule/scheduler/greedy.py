@@ -13,7 +13,6 @@ from duty_schedule.models import (
 )
 from duty_schedule.scheduler.constraints import (
     _can_work,
-    _consecutive_shift_limit_reached,
     _duty_only,
     _is_weekend_or_holiday,
     _max_co,
@@ -93,8 +92,6 @@ def _build_day(
     moscow_duty = [e for e in employees if e.city == City.MOSCOW and e.on_duty]
     khabarovsk_duty = [e for e in employees if e.city == City.KHABAROVSK and e.on_duty]
     non_duty = [e for e in employees if not e.on_duty]
-    emp_by_name = {e.name: e for e in employees}
-
     assigned: dict[str, ShiftType] = dict(pins_today or {})
 
     for _aod_emp in moscow_duty:
@@ -114,8 +111,6 @@ def _build_day(
             continue
         _aod_shift = ShiftType.MORNING if _aod_emp.morning_only else ShiftType.EVENING
         if _shift_limit_reached(_aod_emp, states[_aod_emp.name], _aod_shift):
-            continue
-        if _consecutive_shift_limit_reached(_aod_emp, states[_aod_emp.name], _aod_shift):
             continue
         if _aod_shift == ShiftType.MORNING and _resting_after_evening(states[_aod_emp.name]):
             continue
@@ -159,29 +154,17 @@ def _build_day(
     _morning_pinned = any(s == ShiftType.MORNING for s in assigned.values())
     _evening_pinned = any(s == ShiftType.EVENING for s in assigned.values())
 
-    morning_groups_taken: set[str] = {
-        g
-        for name, s in assigned.items()
-        if s == ShiftType.MORNING
-        and name in emp_by_name
-        and (g := emp_by_name[name].group) is not None
-    }
-
     morning_eligible = [
         e
         for e in moscow_available
         if e.can_work_morning()
         and not _resting_after_evening(states[e.name])
         and not _shift_limit_reached(e, states[e.name], ShiftType.MORNING)
-        and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.MORNING)
-        and (not e.group or e.group not in morning_groups_taken)
     ]
     evening_eligible = [
         e
         for e in moscow_available
-        if e.can_work_evening()
-        and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
-        and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
+        if e.can_work_evening() and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
     ]
 
     if not _morning_pinned:
@@ -197,14 +180,12 @@ def _build_day(
                 if e not in morning_eligible
                 and e.can_work_evening()
                 and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
-                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
             ]
             evening_capable_inside = [
                 e
                 for e in morning_eligible
                 if e.can_work_evening()
                 and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
-                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
             ]
             if not evening_capable_outside and len(evening_capable_inside) <= 1:
                 _morning_select_pool = morning_only_pool
@@ -217,34 +198,19 @@ def _build_day(
         )
         for emp in morning_pick:
             assigned[emp.name] = ShiftType.MORNING
-            if emp.group:
-                morning_groups_taken.add(emp.group)
     else:
         morning_pick = []
 
     if not _evening_pinned:
-        evening_groups_taken: set[str] = {
-            g
-            for name, s in assigned.items()
-            if s == ShiftType.EVENING
-            and name in emp_by_name
-            and (g := emp_by_name[name].group) is not None
-        }
         evening_pick_pool = [
             e
             for e in moscow_available
             if e.can_work_evening()
             and e not in morning_pick
             and not _shift_limit_reached(e, states[e.name], ShiftType.EVENING)
-            and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.EVENING)
-            and (not e.group or e.group not in evening_groups_taken)
         ]
         if not evening_pick_pool:
-            evening_pick_pool = [
-                e
-                for e in evening_eligible
-                if e not in morning_pick and (not e.group or e.group not in evening_groups_taken)
-            ]
+            evening_pick_pool = [e for e in evening_eligible if e not in morning_pick]
         if pins_tomorrow:
             _pinned_non_evening = {
                 name
@@ -303,7 +269,6 @@ def _build_day(
                 and not (
                     e.schedule_type == ScheduleType.FLEXIBLE and states[e.name].consecutive_off == 1
                 )
-                and not _consecutive_shift_limit_reached(e, states[e.name], ShiftType.WORKDAY)
             ]
             if not extra:
                 break

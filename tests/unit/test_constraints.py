@@ -27,9 +27,7 @@ from duty_schedule.scheduler import (
 from duty_schedule.scheduler.constraints import (
     _calc_production_days,
     _consecutive_shift_count_at,
-    _consecutive_shift_limit_reached,
     _had_evening_before,
-    _shift_limit_reached,
 )
 
 
@@ -271,100 +269,6 @@ class TestCalcBlockedWorkingDays:
             unavailable_dates=[date(2025, 3, 6), date(2025, 3, 7)],
         )
         assert _calc_blocked_working_days(emp, 2025, 3) == 3
-
-
-class TestShiftLimitReached:
-    def test_morning_limit_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_morning_shifts=5,
-        )
-        state = EmployeeState(morning_count=5)
-        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is True
-
-    def test_morning_limit_not_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_morning_shifts=5,
-        )
-        state = EmployeeState(morning_count=4)
-        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is False
-
-    def test_evening_limit_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_evening_shifts=3,
-        )
-        state = EmployeeState(evening_count=3)
-        assert _shift_limit_reached(emp, state, ShiftType.EVENING) is True
-
-    def test_night_limit_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.KHABAROVSK,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_night_shifts=10,
-        )
-        state = EmployeeState(night_count=10)
-        assert _shift_limit_reached(emp, state, ShiftType.NIGHT) is True
-
-    def test_no_limit_set_returns_false(self):
-        emp = _emp("T")
-        state = EmployeeState(morning_count=100)
-        assert _shift_limit_reached(emp, state, ShiftType.MORNING) is False
-
-
-class TestConsecutiveShiftLimitReached:
-    def test_morning_consecutive_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_consecutive_morning=3,
-        )
-        state = EmployeeState(consecutive_morning=3)
-        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is True
-
-    def test_morning_consecutive_not_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_consecutive_morning=3,
-        )
-        state = EmployeeState(consecutive_morning=2)
-        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is False
-
-    def test_evening_consecutive_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_consecutive_evening=2,
-        )
-        state = EmployeeState(consecutive_evening=2)
-        assert _consecutive_shift_limit_reached(emp, state, ShiftType.EVENING) is True
-
-    def test_workday_consecutive_reached(self):
-        emp = Employee(
-            name="T",
-            city=City.MOSCOW,
-            schedule_type=ScheduleType.FLEXIBLE,
-            max_consecutive_workday=4,
-        )
-        state = EmployeeState(consecutive_workday=4)
-        assert _consecutive_shift_limit_reached(emp, state, ShiftType.WORKDAY) is True
-
-    def test_no_limit_returns_false(self):
-        emp = _emp("T")
-        state = EmployeeState(consecutive_morning=100)
-        assert _consecutive_shift_limit_reached(emp, state, ShiftType.MORNING) is False
 
 
 class TestCalcProductionDays:

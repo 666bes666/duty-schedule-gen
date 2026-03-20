@@ -183,7 +183,7 @@ def compute_stats(
                 name=emp.name,
                 city=city,
                 total_working=total_working,
-                target=round(production_days * emp.workload_pct / 100),
+                target=production_days,
                 morning=morning,
                 evening=evening,
                 night=night,

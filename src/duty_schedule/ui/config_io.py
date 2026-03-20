@@ -75,13 +75,6 @@ def _df_to_yaml(
         pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
         pref_shift = _RU_TO_SHIFT.get(pref_shift_ru)
 
-        workload_raw = row.get("Загрузка%", 100)
-        try:
-            workload_pct = int(str(workload_raw).strip()) if str(workload_raw).strip() else 100
-            workload_pct = max(1, min(100, workload_pct))
-        except (ValueError, TypeError):
-            workload_pct = 100
-
         days_off_weekly: list[int] = _emp_cfg.get("days_off_weekly", [])
 
         def _parse_limit(val: Any) -> int | None:
@@ -91,14 +84,7 @@ def _df_to_yaml(
             except (ValueError, TypeError):
                 return None
 
-        max_morning = _parse_limit(row.get("Макс. утренних"))
-        max_evening = _parse_limit(row.get("Макс. вечерних"))
-        max_night = _parse_limit(row.get("Макс. ночных"))
         max_cw = _parse_limit(row.get("Макс. подряд"))
-        max_consec_morning = _parse_limit(row.get("Подряд: утро"))
-        max_consec_evening = _parse_limit(row.get("Подряд: вечер"))
-        max_consec_workday = _parse_limit(row.get("Подряд: день"))
-        group = str(row.get("Группа", "")).strip() or None
 
         emp: dict = {
             "name": name,
@@ -115,26 +101,10 @@ def _df_to_yaml(
             emp["unavailable_dates"] = unavail_yaml
         if pref_shift is not None:
             emp["preferred_shift"] = str(pref_shift)
-        if workload_pct != 100:
-            emp["workload_pct"] = workload_pct
         if days_off_weekly:
             emp["days_off_weekly"] = days_off_weekly
-        if max_morning is not None:
-            emp["max_morning_shifts"] = max_morning
-        if max_evening is not None:
-            emp["max_evening_shifts"] = max_evening
-        if max_night is not None:
-            emp["max_night_shifts"] = max_night
         if max_cw is not None:
             emp["max_consecutive_working"] = max_cw
-        if max_consec_morning is not None:
-            emp["max_consecutive_morning"] = max_consec_morning
-        if max_consec_evening is not None:
-            emp["max_consecutive_evening"] = max_consec_evening
-        if max_consec_workday is not None:
-            emp["max_consecutive_workday"] = max_consec_workday
-        if group is not None:
-            emp["group"] = group
         employees.append(emp)
 
     config_dict: dict = {
@@ -237,15 +207,7 @@ def _yaml_to_df(
                 "Только утро": bool(emp.get("morning_only", False)),
                 "Только вечер": bool(emp.get("evening_only", False)),
                 "Предпочт. смена": pref_shift_ru,
-                "Загрузка%": int(emp.get("workload_pct", 100)),
-                "Макс. утренних": emp.get("max_morning_shifts"),
-                "Макс. вечерних": emp.get("max_evening_shifts"),
-                "Макс. ночных": emp.get("max_night_shifts"),
                 "Макс. подряд": emp.get("max_consecutive_working"),
-                "Подряд: утро": emp.get("max_consecutive_morning"),
-                "Подряд: вечер": emp.get("max_consecutive_evening"),
-                "Подряд: день": emp.get("max_consecutive_workday"),
-                "Группа": emp.get("group", "") or "",
             }
         )
 

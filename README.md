@@ -221,7 +221,6 @@ employees:
     on_duty: true
     morning_only: false
     evening_only: false
-    workload_pct: 100
     max_consecutive_working: 5
     vacations:
       - start: "2025-03-10"
@@ -243,15 +242,10 @@ pins:
 | `on_duty` | Участвует в ротации смен (утро/вечер/ночь) | `true` |
 | `morning_only` | Только утренние смены | `false` |
 | `evening_only` | Только вечерние смены | `false` |
-| `workload_pct` | Процент нагрузки от нормы (1–100) | `100` |
 | `max_consecutive_working` | Максимум рабочих дней подряд | `5` |
-| `max_morning_shifts` | Лимит утренних смен за месяц | нет лимита |
-| `max_evening_shifts` | Лимит вечерних смен за месяц | нет лимита |
-| `max_night_shifts` | Лимит ночных смен за месяц | нет лимита |
 | `vacations` | Список периодов отпуска | `[]` |
 | `unavailable_dates` | Список дат недоступности | `[]` |
 | `days_off_weekly` | Постоянные выходные дни недели (0=Пн, 6=Вс) | `[]` |
-| `group` | Группа — не более одного из группы на смене | — |
 | `team_lead` | Признак тимлида | `false` |
 | `preferred_shift` | Предпочтительная смена | — |
 

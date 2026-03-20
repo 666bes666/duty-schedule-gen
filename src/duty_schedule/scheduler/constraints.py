@@ -57,22 +57,6 @@ def _duty_only(emp: Employee) -> bool:
 
 
 def _shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) -> bool:
-    if shift == ShiftType.MORNING and emp.max_morning_shifts is not None:
-        return state.morning_count >= emp.max_morning_shifts
-    if shift == ShiftType.EVENING and emp.max_evening_shifts is not None:
-        return state.evening_count >= emp.max_evening_shifts
-    if shift == ShiftType.NIGHT and emp.max_night_shifts is not None:
-        return state.night_count >= emp.max_night_shifts
-    return False
-
-
-def _consecutive_shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) -> bool:
-    if shift == ShiftType.MORNING and emp.max_consecutive_morning is not None:
-        return state.consecutive_morning >= emp.max_consecutive_morning
-    if shift == ShiftType.EVENING and emp.max_consecutive_evening is not None:
-        return state.consecutive_evening >= emp.max_consecutive_evening
-    if shift == ShiftType.WORKDAY and emp.max_consecutive_workday is not None:
-        return state.consecutive_workday >= emp.max_consecutive_workday
     return False
 
 

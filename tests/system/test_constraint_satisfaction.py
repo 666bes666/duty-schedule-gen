@@ -72,40 +72,6 @@ class TestConstraintSatisfaction:
         for day in schedule.days:
             assert "Вечерний" not in day.morning
 
-    def test_groups_not_on_same_shift(self):
-        employees = (
-            [
-                Employee(
-                    name="Г1_А",
-                    city=City.MOSCOW,
-                    schedule_type=ScheduleType.FLEXIBLE,
-                    group="alpha",
-                ),
-                Employee(
-                    name="Г1_Б",
-                    city=City.MOSCOW,
-                    schedule_type=ScheduleType.FLEXIBLE,
-                    group="alpha",
-                ),
-            ]
-            + [
-                Employee(name=f"М{i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE)
-                for i in range(3)
-            ]
-            + [
-                Employee(name=f"Х{i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
-                for i in range(2)
-            ]
-        )
-        config = self._make_config(employees)
-        schedule = generate_schedule(config, set())
-        for day in schedule.days:
-            for shift_list in [day.morning, day.evening]:
-                group_members = [n for n in shift_list if n in ("Г1_А", "Г1_Б")]
-                assert len(group_members) <= 1, (
-                    f"Group alpha members {group_members} on same shift on {day.date}"
-                )
-
     def test_52_employees_no_weekend_duty(self):
         employees = (
             [

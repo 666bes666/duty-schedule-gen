@@ -72,17 +72,9 @@ class Employee(BaseModel):
     evening_only: bool = False
     vacations: list[VacationPeriod] = []
     unavailable_dates: list[date] = []
-    max_morning_shifts: int | None = None
-    max_evening_shifts: int | None = None
-    max_night_shifts: int | None = None
     preferred_shift: ShiftType | None = None
-    workload_pct: int = 100
     days_off_weekly: list[int] = []
     max_consecutive_working: int | None = None
-    max_consecutive_morning: int | None = None
-    max_consecutive_evening: int | None = None
-    max_consecutive_workday: int | None = None
-    group: str | None = None
 
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
@@ -101,8 +93,6 @@ class Employee(BaseModel):
                 f"Сотрудник {self.name!r}: always_on_duty требует"
                 " указания morning_only или evening_only"
             )
-        if not 1 <= self.workload_pct <= 100:
-            raise ValueError(f"Сотрудник {self.name!r}: workload_pct должен быть в диапазоне 1–100")
         if self.preferred_shift in (ShiftType.VACATION, ShiftType.DAY_OFF):
             raise ValueError(
                 f"Сотрудник {self.name!r}: preferred_shift не может быть vacation или day_off"

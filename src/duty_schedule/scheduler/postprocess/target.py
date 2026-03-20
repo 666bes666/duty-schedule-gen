@@ -75,7 +75,6 @@ def _target_adjustment_pass(
                         emp.schedule_type == ScheduleType.FLEXIBLE
                         and emp.on_duty
                         and not _duty_only(emp)
-                        and emp.workload_pct == 100
                     ):
                         _left_len = 0
                         for _li in range(i - 1, -1, -1):
