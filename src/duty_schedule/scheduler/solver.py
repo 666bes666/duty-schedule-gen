@@ -149,38 +149,12 @@ def solve_schedule(
             if e_idx_pin is not None:
                 model.add(x[(d_idx_pin, e_idx_pin, pin.shift.value)] == 1)
 
-    for e_idx, emp in enumerate(employees):
-        if emp.max_morning_shifts is not None:
-            model.add(
-                sum(x[(d, e_idx, "morning")] for d in range(len(dates))) <= emp.max_morning_shifts
-            )
-        if emp.max_evening_shifts is not None:
-            model.add(
-                sum(x[(d, e_idx, "evening")] for d in range(len(dates))) <= emp.max_evening_shifts
-            )
-        if emp.max_night_shifts is not None:
-            model.add(
-                sum(x[(d, e_idx, "night")] for d in range(len(dates))) <= emp.max_night_shifts
-            )
-
-    groups: dict[str, list[int]] = {}
-    for e_idx, emp in enumerate(employees):
-        if emp.group:
-            groups.setdefault(emp.group, []).append(e_idx)
-
-    for _group_name, members in groups.items():
-        if len(members) < 2:
-            continue
-        for d_idx in range(len(dates)):
-            for s in ["morning", "evening", "night"]:
-                model.add(sum(x[(d_idx, m, s)] for m in members) <= 1)
-
     production_days = sum(1 for d in dates if d.weekday() < 5 and d not in holidays)
 
     objective_terms = []
 
-    for e_idx, emp in enumerate(employees):
-        target = round(production_days * emp.workload_pct / 100)
+    for e_idx, _emp in enumerate(employees):
+        target = production_days
         work_total = sum(
             x[(d, e_idx, s)]
             for d in range(len(dates))
@@ -206,6 +180,17 @@ def solve_schedule(
             model.add(next_work >= 1).only_enforce_if(isolated)
             model.add(is_off == 0).only_enforce_if(isolated.negated())
             objective_terms.append(isolated * 5)
+
+    for e_idx, emp in enumerate(employees):
+        if emp.preferred_shift is None:
+            continue
+        pref = emp.preferred_shift.value
+        if pref not in ("morning", "evening", "night"):
+            continue
+        for d_idx in range(len(dates)):
+            for s in ("morning", "evening", "night"):
+                if s != pref:
+                    objective_terms.append(x[(d_idx, e_idx, s)] * 3)
 
     model.minimize(sum(objective_terms))
 

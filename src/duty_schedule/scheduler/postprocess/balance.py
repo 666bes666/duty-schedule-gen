@@ -80,19 +80,6 @@ def _balance_weekend_work(
                 if max_attr == "evening" and not min_emp.can_work_evening():
                     continue
 
-                if max_attr == "morning" and min_emp.max_morning_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.morning)
-                    if cur >= min_emp.max_morning_shifts:
-                        continue
-                if max_attr == "evening" and min_emp.max_evening_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.evening)
-                    if cur >= min_emp.max_evening_shifts:
-                        continue
-                if max_attr == "night" and min_emp.max_night_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.night)
-                    if cur >= min_emp.max_night_shifts:
-                        continue
-
                 prev = day_by_date.get(day.date - timedelta(days=1))
                 if max_attr == "morning" and prev and min_name in prev.evening:
                     continue
@@ -206,19 +193,6 @@ def _balance_duty_shifts(
                 if max_attr == "evening" and not min_emp.can_work_evening():
                     continue
 
-                if max_attr == "morning" and min_emp.max_morning_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.morning)
-                    if cur >= min_emp.max_morning_shifts:
-                        continue
-                if max_attr == "evening" and min_emp.max_evening_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.evening)
-                    if cur >= min_emp.max_evening_shifts:
-                        continue
-                if max_attr == "night" and min_emp.max_night_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.night)
-                    if cur >= min_emp.max_night_shifts:
-                        continue
-
                 prev = day_by_date.get(day.date - timedelta(days=1))
                 if prev and max_name in prev.evening:
                     continue
@@ -315,33 +289,8 @@ def _balance_evening_shifts(
                 if nxt and (min_name in nxt.morning or min_name in nxt.workday):
                     continue
 
-                max_emp = emp_by_name[max_name]
-                if max_emp.max_morning_shifts is not None:
-                    cur = sum(1 for d in days if max_name in d.morning)
-                    if cur >= max_emp.max_morning_shifts:
-                        continue
-
                 min_emp = emp_by_name[min_name]
-                if min_emp.max_evening_shifts is not None:
-                    cur = sum(1 for d in days if min_name in d.evening)
-                    if cur >= min_emp.max_evening_shifts:
-                        continue
-
-                idx = day_idx_map[day.date]
-
-                if (
-                    max_emp.max_consecutive_morning is not None
-                    and _consecutive_shift_count_at(max_name, idx, days, "morning")
-                    >= max_emp.max_consecutive_morning
-                ):
-                    continue
-
-                if (
-                    min_emp.max_consecutive_evening is not None
-                    and _consecutive_shift_count_at(min_name, idx, days, "evening")
-                    >= min_emp.max_consecutive_evening
-                ):
-                    continue
+                max_emp = emp_by_name[max_name]
 
                 day.evening.remove(max_name)
                 day.morning.remove(min_name)
@@ -374,19 +323,6 @@ def _balance_evening_shifts(
                         continue
 
                     min_emp = emp_by_name[min_name]
-                    if min_emp.max_evening_shifts is not None:
-                        cur = sum(1 for d in days if min_name in d.evening)
-                        if cur >= min_emp.max_evening_shifts:
-                            continue
-
-                    idx = day_idx_map[day.date]
-
-                    if (
-                        min_emp.max_consecutive_evening is not None
-                        and _consecutive_shift_count_at(min_name, idx, days, "evening")
-                        >= min_emp.max_consecutive_evening
-                    ):
-                        continue
 
                     day.evening.remove(max_name)
                     day.workday.remove(min_name)
@@ -419,18 +355,7 @@ def _balance_evening_shifts(
                     if nxt and (min_name in nxt.morning or min_name in nxt.workday):
                         continue
 
-                    if min_emp.max_evening_shifts is not None:
-                        cur = sum(1 for d in days if min_name in d.evening)
-                        if cur >= min_emp.max_evening_shifts:
-                            continue
-
                     idx_d = day_idx_map[day.date]
-                    if (
-                        min_emp.max_consecutive_evening is not None
-                        and _consecutive_shift_count_at(min_name, idx_d, days, "evening")
-                        >= min_emp.max_consecutive_evening
-                    ):
-                        continue
 
                     _max_cw_min = min_emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
                     cw = 1
@@ -483,16 +408,6 @@ def _balance_evening_shifts(
                             comp_shift = "workday"
                             break
                         if min_name in cd.morning and not max_emp.evening_only:
-                            if max_emp.max_morning_shifts is not None:
-                                cur_mo = sum(1 for d2 in days if max_name in d2.morning)
-                                if cur_mo >= max_emp.max_morning_shifts:
-                                    continue
-                            if (
-                                max_emp.max_consecutive_morning is not None
-                                and _consecutive_shift_count_at(max_name, idx_cd, days, "morning")
-                                >= max_emp.max_consecutive_morning
-                            ):
-                                continue
                             comp_day = cd
                             comp_shift = "morning"
                             break

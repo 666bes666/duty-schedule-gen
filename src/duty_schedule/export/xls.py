@@ -194,7 +194,6 @@ def _build_helper_sheet(
     for i, emp in enumerate(employees):
         row = 6 + i
         ws.cell(row=row, column=1, value=_sanitize_cell(emp.name))
-        ws.cell(row=row, column=2, value=emp.workload_pct)
 
 
 def _build_schedule_sheet(
@@ -396,7 +395,6 @@ def _build_stats_sheet(
         ws.row_dimensions[row_idx].height = 20
         i = row_idx - 4
         sched_row = 3 + i
-        helper_row = 6 + i
 
         nc = ws.cell(row=row_idx, column=1, value=_sanitize_cell(st.name))
         nc.fill = _fill(COLORS["name"])
@@ -416,7 +414,7 @@ def _build_stats_sheet(
         f_working = f"={_countif_working(SCHED_SHEET, dr)}"
         _stat_cell(ws, row_idx, 3, f_working, COLORS["name"])
 
-        f_norm = f"=ROUND('{HELPER_SHEET}'!$B$5*'{HELPER_SHEET}'!$B${helper_row}/100,0)"
+        f_norm = f"='{HELPER_SHEET}'!$B$5"
         _stat_cell(ws, row_idx, 4, f_norm, COLORS["name"])
 
         f_delta = f"=C{row_idx}-D{row_idx}"

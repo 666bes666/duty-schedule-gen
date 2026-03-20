@@ -227,21 +227,10 @@ with _setup_tab1:
         "Добавляйте строки кнопкой **+** снизу. Удалить строку — галочка слева + **Delete**."
     )
 
-    _gopt_key = f"_gopt_{st.session_state['table_version']}"
-    if _gopt_key not in st.session_state:
-        st.session_state[_gopt_key] = [""] + sorted(
-            {
-                str(r["Имя"]).strip()
-                for _, r in st.session_state["employees_df"].iterrows()
-                if str(r["Имя"]).strip()
-            }
-        )
-    _group_options: list[str] = st.session_state[_gopt_key]
-
     _sort_cols = st.columns([3, 1, 1])
     _sort_by = _sort_cols[0].selectbox(
         "Сортировать по столбцу",
-        options=["—", "По умолчанию", "Имя", "Город", "График", "Дежурный", "Загрузка%"],
+        options=["—", "По умолчанию", "Имя", "Город", "График", "Дежурный"],
         key="sort_by_col",
         label_visibility="collapsed",
     )
@@ -323,41 +312,11 @@ with _setup_tab1:
                 options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
                 help="Предпочтительная смена (мягкий приоритет)",
             ),
-            "Загрузка%": st.column_config.NumberColumn(
-                "Загр.%",
-                min_value=1,
-                max_value=100,
-                step=1,
-                help="Норма нагрузки: 100 = полная ставка, 50 = полставки",
-            ),
-            "Макс. утренних": st.column_config.NumberColumn(
-                "↑Утр",
-                min_value=1,
-                step=1,
-                help="Макс. утренних смен в месяц (пусто = без ограничений)",
-            ),
-            "Макс. вечерних": st.column_config.NumberColumn(
-                "↑Веч",
-                min_value=1,
-                step=1,
-                help="Макс. вечерних смен в месяц (пусто = без ограничений)",
-            ),
-            "Макс. ночных": st.column_config.NumberColumn(
-                "↑Ноч",
-                min_value=1,
-                step=1,
-                help="Макс. ночных смен в месяц (пусто = без ограничений)",
-            ),
             "Макс. подряд": st.column_config.NumberColumn(
                 "↑Подряд",
                 min_value=1,
                 step=1,
                 help="Макс. рабочих дней подряд (пусто = 5)",
-            ),
-            "Группа": st.column_config.SelectboxColumn(
-                "Группа",
-                options=_group_options,
-                help="Сотрудников одной группы не ставят вместе на одну смену",
             ),
         },
         column_order=[
@@ -370,12 +329,7 @@ with _setup_tab1:
             "Только утро",
             "Только вечер",
             "Предпочт. смена",
-            "Загрузка%",
-            "Макс. утренних",
-            "Макс. вечерних",
-            "Макс. ночных",
             "Макс. подряд",
-            "Группа",
         ],
         disabled=["№"],
         num_rows="dynamic",
@@ -430,12 +384,7 @@ with _setup_tab1:
             "Только утро",
             "Только вечер",
             "Предпочт. смена",
-            "Загрузка%",
-            "Макс. утренних",
-            "Макс. вечерних",
-            "Макс. ночных",
             "Макс. подряд",
-            "Группа",
         ]
         _bulk_col = st.selectbox(
             "Столбец",
@@ -455,19 +404,8 @@ with _setup_tab1:
                 ["", "Утро", "Вечер", "Ночь", "Рабочий день"],
                 key="bulk_val",
             )
-        elif _bulk_col == "Загрузка%":
-            _bulk_value = st.number_input(
-                "Значение",
-                min_value=1,
-                max_value=100,
-                value=100,
-                step=1,
-                key="bulk_val",
-            )
-        elif _bulk_col in ("Макс. утренних", "Макс. вечерних", "Макс. ночных", "Макс. подряд"):
+        elif _bulk_col == "Макс. подряд":
             _bulk_value = st.number_input("Значение", min_value=1, value=6, step=1, key="bulk_val")
-        elif _bulk_col == "Группа":
-            _bulk_value = st.text_input("Значение", key="bulk_val")
 
         if st.button("Применить", key="bulk_apply", disabled=not _bulk_selected):
             _bulk_df = edited_df.copy()
@@ -476,62 +414,6 @@ with _setup_tab1:
             st.session_state["employees_df"] = _bulk_df
             _bump_table()
             st.rerun()
-
-    with st.expander("Лимит однотипных смен подряд"):
-        st.caption(
-            "Ограничить число одинаковых дежурных смен подряд. "
-            "Применяется ко всем дежурным с гибким графиком."
-        )
-        _consec_mask = (
-            edited_df["Имя"].astype(str).str.strip().ne("")
-            & edited_df["Дежурный"].fillna(True).astype(bool)
-            & (edited_df["График"].astype(str) == "Гибкий")
-        )
-        if not _consec_mask.any():
-            st.info("Нет дежурных с гибким графиком.")
-        else:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                _unlim_m = st.checkbox("Без лимита", value=True, key="consec_morning_unlim")
-                _raw_m = st.number_input(
-                    "Подряд: утро",
-                    min_value=1,
-                    step=1,
-                    value=3,
-                    disabled=_unlim_m,
-                    key="consec_morning",
-                )
-                _v_m = None if _unlim_m else _raw_m
-            with c2:
-                _unlim_e = st.checkbox("Без лимита", value=True, key="consec_evening_unlim")
-                _raw_e = st.number_input(
-                    "Подряд: вечер",
-                    min_value=1,
-                    step=1,
-                    value=3,
-                    disabled=_unlim_e,
-                    key="consec_evening",
-                )
-                _v_e = None if _unlim_e else _raw_e
-            with c3:
-                _unlim_w = st.checkbox("Без лимита", value=True, key="consec_workday_unlim")
-                _raw_w = st.number_input(
-                    "Подряд: день",
-                    min_value=1,
-                    step=1,
-                    value=3,
-                    disabled=_unlim_w,
-                    key="consec_workday",
-                )
-                _v_w = None if _unlim_w else _raw_w
-            if st.button("Применить ко всем дежурным", key="consec_save"):
-                _upd = edited_df.copy()
-                _upd.loc[_consec_mask, "Подряд: утро"] = _v_m
-                _upd.loc[_consec_mask, "Подряд: вечер"] = _v_e
-                _upd.loc[_consec_mask, "Подряд: день"] = _v_w
-                st.session_state["employees_df"] = _upd
-                _bump_table()
-                st.rerun()
 
 with _setup_tab2:
     _emp_names = [str(r["Имя"]).strip() for _, r in edited_df.iterrows() if str(r["Имя"]).strip()]
@@ -545,11 +427,9 @@ with _setup_tab2:
         _emp_row = edited_df[edited_df["Имя"].astype(str).str.strip() == _sel]
         if not _emp_row.empty:
             _er = _emp_row.iloc[0]
-            _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+            _sc1, _sc2 = st.columns(2)
             _sc1.metric("Город", _er["Город"])
             _sc2.metric("График", _er["График"])
-            _sc3.metric("Загрузка", f"{int(_er.get('Загрузка%') or 100)}%")
-            _sc4.metric("Группа", str(_er.get("Группа", "") or "—"))
             _flags: list[str] = []
             if _er.get("Дежурный"):
                 _flags.append("Дежурный")
@@ -655,11 +535,8 @@ with _setup_tab2:
 | **Только вечер** | Назначается только на вечерние смены (15:00–00:00 МСК) |
 | **5/2** | Не работает в субботу и воскресенье |
 | **Предпочт. смена** | Мягкий приоритет при выборе смены (не гарантирует назначение) |
-| **Загрузка%** | Норма нагрузки: 100 = полная ставка, 50 = полставки |
-| **Макс. утр./веч./ноч.** | Лимит смен данного типа в месяц (пусто = без ограничений) |
 | **Макс. подряд** | Индивидуальный лимит рабочих дней подряд (пусто = 5) |
 | **Подряд: утро/вечер/день** | Настраивается в разделе «Лимит однотипных смен подряд» ниже |
-| **Группа** | Не ставить двух из одной группы на одну смену в один день |
 
 **Минимальный состав:** 4 дежурных в Москве, 2 дежурных в Хабаровске.
         """)
