@@ -62,7 +62,29 @@ jobs:
       - uses: ./.github/actions/setup-python
         with:
           extra-groups: ci-perf
-      - run: uv run pytest tests/performance -q --benchmark-only
+      - name: Restore benchmark baseline
+        id: bench-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .benchmarks/
+          key: benchmark-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            benchmark-${{ runner.os }}-
+      - name: Run benchmarks
+        run: |
+          EXTRA="--benchmark-save=baseline"
+          if [ "${{ steps.bench-cache.outputs.cache-hit }}" = "true" ] && \
+             ls .benchmarks/Linux/*.json 2>/dev/null | head -1 > /dev/null 2>&1; then
+            PREV=$(ls .benchmarks/Linux/*.json | head -1 | xargs basename | sed 's/\.json$//')
+            EXTRA="--benchmark-save=baseline --benchmark-compare=$PREV --benchmark-compare-fail=mean:110%"
+          fi
+          uv run pytest tests/performance -q --benchmark-only $EXTRA
+      - name: Save benchmark baseline
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .benchmarks/
+          key: benchmark-${{ runner.os }}-${{ github.sha }}
 
   streamlit-smoke:
     name: Streamlit Smoke
@@ -71,21 +93,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
       - name: Streamlit healthcheck
-        run: |
-          uv run streamlit run app.py \
-            --server.headless true \
-            --server.port 8501 \
-            --server.enableCORS false \
-            --browser.gatherUsageStats false &
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8501/_stcore/health > /dev/null 2>&1; then
-              echo "Streamlit is healthy"
-              break
-            fi
-            sleep 1
-          done
-          curl -sf http://localhost:8501/_stcore/health
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8501)
-          echo "HTTP status: $STATUS"
-          [ "$STATUS" = "200" ]
-          kill %1 || true
+        uses: ./.github/actions/streamlit-smoke

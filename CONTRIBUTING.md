@@ -225,3 +225,46 @@ docker compose up api       # REST API (порт 8000)
 | `dev` | Да | 0 | lint, unit-tests, smoke | Нет |
 | `test` | Да | 1 | Все ci-test jobs | Нет |
 | `main` | Да | 1 + env approval | Все ci-main jobs | Нет |
+
+Настройка через GitHub Settings → Branches → Branch protection rules:
+- **main/test**: Required status checks, Require PR before merging, Dismiss stale reviews, Restrict force-push.
+
+## Rollback
+
+### Откат тега (релиз не опубликован — удаление draft)
+
+```bash
+gh release delete vX.Y.Z --yes
+git push origin --delete vX.Y.Z
+git tag --delete vX.Y.Z
+```
+
+### Откат опубликованного релиза
+
+```bash
+git revert <merge-commit-sha>
+git push origin dev
+```
+
+Затем провести через `dev → test → main` как обычный PR. После мержа `ci-tag.yml` создаст новый тег с инкрементированной патч-версией.
+
+### Переустановка предыдущего wheel
+
+```bash
+pip install "duty-schedule==X.Y.Z"
+```
+
+Все wheel доступны на странице GitHub Releases. SHA256-контрольные суммы — в `checksums.txt` рядом с артефактами.
+
+### Отмена мержа PR в main
+
+```bash
+gh pr revert <PR-number>
+```
+
+После revert-PR провести через CI как обычно. Cherry-pick в `dev` и `test`:
+
+```bash
+git cherry-pick <revert-commit-sha>
+git push origin dev test
+```
