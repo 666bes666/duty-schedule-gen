@@ -20,7 +20,7 @@ uv sync --dev --extra solver
 Проект использует трёхуровневый pipeline:
 
 ```
-feature/xyz ──PR──> dev ──PR──> test ──PR──> main
+dev ──PR──> test ──PR──> main
 ```
 
 | Ветка | Назначение | CI |
@@ -31,11 +31,10 @@ feature/xyz ──PR──> dev ──PR──> test ──PR──> main
 
 ### Создание фичи
 
-1. Создать ветку от `dev`: `git checkout -b feature/my-feature dev`
-2. Разработка и коммиты
-3. PR в `dev` — проходит lint + unit + smoke
-4. PR из `dev` в `test` — проходит полный набор тестов + security + performance
-5. PR из `test` в `main` — полная регрессия + UI + system тесты
+1. Коммит напрямую в `dev` (без feature-веток)
+2. Push в GitHub сразу после коммита
+3. PR из `dev` в `test` — проходит полный набор тестов + security + performance
+4. PR из `test` в `main` — полная регрессия + UI + system тесты
 
 ### Hotfix
 
