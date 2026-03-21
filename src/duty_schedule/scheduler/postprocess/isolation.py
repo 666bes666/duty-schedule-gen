@@ -384,9 +384,27 @@ def _equalize_isolated_off(
     if len(flex_duty) < 2:
         return days
 
+    cities: set[City] = {e.city for e in flex_duty}
+    for city in sorted(cities):
+        city_emps = [e for e in flex_duty if e.city == city]
+        if len(city_emps) < 2:
+            continue
+        _equalize_isolated_off_group(days, city_emps, pinned_on, carry_over_cw, changelog, strict)
+
+    return days
+
+
+def _equalize_isolated_off_group(
+    days: list[DaySchedule],
+    group: list[Employee],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+    strict: bool,
+) -> None:
     _iterations = len(days) * (3 if strict else 1)
     for _ in range(_iterations):
-        iso_counts = {e.name: _count_isolated_off(e.name, days) for e in flex_duty}
+        iso_counts = {e.name: _count_isolated_off(e.name, days) for e in group}
         max_name = max(iso_counts, key=lambda n: iso_counts[n])
         min_name = min(iso_counts, key=lambda n: iso_counts[n])
         max_val = iso_counts[max_name]
@@ -398,11 +416,8 @@ def _equalize_isolated_off(
         elif max_val - min_val <= 1 or max_val <= 2:
             break
 
-        max_emp = next(e for e in flex_duty if e.name == max_name)
-        min_emp = next(e for e in flex_duty if e.name == min_name)
-
-        if max_emp.city != min_emp.city:
-            break
+        max_emp = next(e for e in group if e.name == max_name)
+        min_emp = next(e for e in group if e.name == min_name)
 
         swapped = False
         for day_a_idx in range(len(days)):
@@ -494,5 +509,3 @@ def _equalize_isolated_off(
 
         if not swapped:
             break
-
-    return days
