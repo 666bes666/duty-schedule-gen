@@ -135,6 +135,8 @@ def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | Non
 
     wb = Workbook()
     ws = wb.active
+    if ws is None:
+        raise RuntimeError("Workbook has no active sheet")
     ws.title = SCHED_SHEET
 
     days = schedule.days
@@ -574,7 +576,7 @@ def _stat_cell(
     ws: Worksheet,
     row: int,
     col: int,
-    value: object,
+    value: str | int | float | bool | None,
     bg: str,
     white: bool = False,
     bold: bool = False,

@@ -68,11 +68,21 @@ Do NOT use Docker for cloud deployment — this is a local-only setup.
 
 | Branch | Workflow | Checks | Time |
 |--------|----------|--------|------|
-| dev | ci-dev.yml | lint, unit+integration tests, smoke | ~20s |
-| test | ci-test.yml | + mypy, 4 platforms, security, performance | ~45s |
+| dev | ci-dev.yml | lint, unit+integration tests, pip-audit, smoke | ~25s |
+| test | ci-test.yml | + mypy, 4 platforms, security (bandit), performance+baseline | ~50s |
 | main | ci-main.yml | + 6 platforms, UI/Playwright, system, e2e, build | ~2min |
 | main (push) | ci-tag.yml | auto-create git tag on version change | ~5s |
-| tag v*.*.* | release.yml | build + GitHub Release | ~1min |
+| tag v*.*.* | release.yml | build → draft release → tests → publish | ~1min |
+
+### Streamlit healthcheck
+
+Используется composite action `.github/actions/streamlit-smoke` (таймаут 60s, PID в `/tmp/streamlit.pid`).
+Параметр `keep-running: true` — оставить процесс живым для последующих Playwright-тестов.
+
+### Performance baseline
+
+Benchmark-результаты кэшируются в `actions/cache` (ключ `benchmark-{os}-{sha}`).
+При наличии предыдущего baseline CI выполняет сравнение и падает при деградации > 10% (mean).
 
 ## Project Structure
 

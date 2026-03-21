@@ -29,9 +29,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run tests before release
-        run: uv run pytest --cov=duty_schedule --cov-fail-under=80 -q
-
       - name: Build wheel and sdist
         run: uv build
 
@@ -48,13 +45,26 @@ jobs:
         env:
           OUTPUT: CHANGES.md
 
-      - name: Create GitHub Release
+      - name: Generate checksums
+        run: sha256sum dist/*.whl dist/*.tar.gz > dist/checksums.txt
+
+      - name: Create draft release
+        id: draft
         uses: softprops/action-gh-release@v2
         with:
           name: "v${{ steps.version.outputs.VERSION }}"
           body_path: CHANGES.md
-          draft: false
+          draft: true
           prerelease: false
           files: |
             dist/*.whl
             dist/*.tar.gz
+            dist/checksums.txt
+
+      - name: Run tests before publish
+        run: uv run pytest --cov=duty_schedule --cov-fail-under=80 -q
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${{ steps.version.outputs.VERSION }}" --draft=false
