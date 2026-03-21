@@ -492,7 +492,14 @@ def generate_schedule(
                     f"осталось {removable} снимаемых WORKDAY"
                 )
 
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
+    days = _pp(
+        "balance_evening_final",
+        _balance_evening_shifts,
+        days,
+        employees,
+        pinned_on=pinned_on,
+        changelog=changelog,
+    )
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))

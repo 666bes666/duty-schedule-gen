@@ -130,6 +130,14 @@ def _minimize_isolated_off(
                             comp_day.day_off.remove(emp.name)
                             comp_day.workday.append(emp.name)
                             if _count_isolated_off(emp.name, days) < count_before:
+                                if changelog:
+                                    changelog.add(
+                                        "minimize_isolated_off",
+                                        "swap_workday",
+                                        emp.name,
+                                        free_day.date,
+                                        f"workday→day_off, comp {comp_day.date} day_off→workday",
+                                    )
                                 improved = True
                                 break
                             free_day.day_off.remove(emp.name)
@@ -149,6 +157,14 @@ def _minimize_isolated_off(
                             carry_over_cw,
                             carry_over_last_shift,
                         )
+                        if improved and changelog:
+                            changelog.add(
+                                "minimize_isolated_off",
+                                "duty_shift_swap",
+                                emp.name,
+                                free_day.date,
+                                f"duty shift swap at idx {extend_idx}",
+                            )
 
                     if improved:
                         break
@@ -192,6 +208,14 @@ def _minimize_isolated_off(
                             days[isolated_idx].workday.append(emp.name)
                             days[nb_i].workday.remove(emp.name)
                             days[nb_i].day_off.append(emp.name)
+                            if changelog:
+                                changelog.add(
+                                    "minimize_isolated_off",
+                                    "move_to_neighbor",
+                                    emp.name,
+                                    days[isolated_idx].date,
+                                    f"day_off → workday, {days[nb_i].date} workday → day_off",
+                                )
                             improved = True
                             improved_any = True
                             break
@@ -225,6 +249,14 @@ def _minimize_isolated_off(
                             comp_day.workday.remove(emp.name)
                             comp_day.day_off.append(emp.name)
                             if _count_isolated_off(emp.name, days) < count_before:
+                                if changelog:
+                                    changelog.add(
+                                        "minimize_isolated_off",
+                                        "swap_flex",
+                                        emp.name,
+                                        days[isolated_idx].date,
+                                        f"day_off → workday, {comp_day.date} workday → day_off",
+                                    )
                                 improved = True
                                 improved_any = True
                                 break
@@ -317,6 +349,14 @@ def _break_evening_isolated_pattern(
 
                 count_a_after = _count_isolated_off(emp_a.name, days)
                 if count_a_after < count_a_before and count_b_after <= 2:
+                    if changelog:
+                        changelog.add(
+                            "break_evening_isolated",
+                            "swap",
+                            emp_a.name,
+                            ev_day.date,
+                            f"evening → {b_source}, {emp_b.name} {b_source} → evening",
+                        )
                     break
 
                 ev_day.evening.remove(emp_b.name)
@@ -428,6 +468,14 @@ def _equalize_isolated_off(
                 new_min = _count_isolated_off(min_name, days)
 
                 if new_max < max_val and new_min <= min_val + (max_val - new_max):
+                    if changelog:
+                        changelog.add(
+                            "equalize_isolated_off",
+                            "swap",
+                            max_name,
+                            days[day_a_idx].date,
+                            f"day_off↔workday with {min_name}, comp {days[day_b_idx].date}",
+                        )
                     swapped = True
                     break
 
