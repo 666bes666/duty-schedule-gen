@@ -1,9 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
-ENV PYTHONUNBUFFERED=1 \
-    UV_SYSTEM_PYTHON=1 \
-    STREAMLIT_SERVER_HEADLESS=true \
-    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+ENV UV_SYSTEM_PYTHON=1
 
 WORKDIR /app
 
@@ -17,6 +14,24 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
 RUN uv sync --frozen --no-dev --extra solver
 
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    UV_SYSTEM_PYTHON=1 \
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
+    libffi-dev libcairo2 && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+
 COPY app.py ./
 COPY config.example.yaml ./
 COPY .streamlit/ .streamlit/
@@ -29,4 +44,4 @@ USER appuser
 
 EXPOSE 8501
 
-CMD ["uv", "run", "streamlit", "run", "app.py"]
+CMD ["/app/.venv/bin/streamlit", "run", "app.py"]

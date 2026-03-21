@@ -60,7 +60,7 @@ def _schedule_to_calendar_df(schedule: Schedule) -> pd.DataFrame:
     return pd.DataFrame(rows).T[col_order]
 
 
-def _style_calendar_cell(val: str) -> str:
+def _style_calendar_cell(val: object) -> str:
     color = _CAL_SHIFT_COLORS.get(str(val), "#FFFFFF")
     return f"background-color: {color}; color: #1a1a1a; text-align: center; font-size: 0.85em;"
 

@@ -66,25 +66,14 @@ jobs:
       - name: Install Playwright browsers
         run: uv run playwright install chromium --with-deps
       - name: Start Streamlit
-        run: |
-          uv run streamlit run app.py \
-            --server.headless true \
-            --server.port 8501 \
-            --server.enableCORS false \
-            --browser.gatherUsageStats false &
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8501/_stcore/health > /dev/null 2>&1; then
-              echo "Streamlit is healthy"
-              break
-            fi
-            sleep 1
-          done
-          curl -sf http://localhost:8501/_stcore/health
+        uses: ./.github/actions/streamlit-smoke
+        with:
+          keep-running: "true"
       - name: Run UI tests
         run: uv run pytest tests/ui -q
       - name: Stop Streamlit
         if: always()
-        run: kill %1 || true
+        run: kill $(cat /tmp/streamlit.pid) 2>/dev/null || true
 
   system-tests:
     name: System Tests
