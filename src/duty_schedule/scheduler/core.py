@@ -532,20 +532,9 @@ def generate_schedule(
         working_days_per_employee=working_days_report,
     )
 
-    final_carry_over = [
-        {
-            "employee_name": emp.name,
-            "last_shift": str(states[emp.name].last_shift) if states[emp.name].last_shift else None,
-            "consecutive_working": states[emp.name].consecutive_working,
-            "consecutive_off": states[emp.name].consecutive_off,
-            "consecutive_same_shift": max(
-                states[emp.name].consecutive_morning,
-                states[emp.name].consecutive_evening,
-                states[emp.name].consecutive_workday,
-            ),
-        }
-        for emp in employees
-    ]
+    from duty_schedule.scheduler.postprocess.carry_over_calc import compute_carry_over
+
+    final_carry_over = compute_carry_over(days, employees)
 
     return Schedule(
         config=config,
