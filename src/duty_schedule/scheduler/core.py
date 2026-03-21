@@ -241,7 +241,8 @@ def generate_schedule(
         changelog=changelog,
     )
 
-    pipeline = build_default_pipeline(config.optimization_priority)
+    duty_count = sum(1 for e in employees if e.on_duty)
+    pipeline = build_default_pipeline(config.optimization_priority, small_team=(duty_count <= 4))
     days = pipeline.run(ctx)
 
     for emp in employees:

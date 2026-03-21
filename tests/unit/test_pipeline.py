@@ -76,6 +76,11 @@ class TestBuildDefaultPipeline:
         iso = build_default_pipeline(OptimizationPriority.ISOLATED_WEEKENDS)
         assert len(iso.stages) > len(base.stages)
 
+    def test_small_team_adds_stages(self):
+        base = build_default_pipeline()
+        small = build_default_pipeline(small_team=True)
+        assert len(small.stages) > len(base.stages)
+
 
 class TestPipelineEquivalence:
     def test_same_seed_produces_valid_schedule(self):

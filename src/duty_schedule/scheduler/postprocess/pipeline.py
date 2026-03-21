@@ -297,6 +297,8 @@ class Pipeline:
 
 def build_default_pipeline(
     priority: OptimizationPriority | None = None,
+    *,
+    small_team: bool = False,
 ) -> Pipeline:
     stages: list[PostProcessStage] = [
         BalanceWeekendWork(),
@@ -317,6 +319,18 @@ def build_default_pipeline(
         RecalcTotalWorking(),
         TargetAdjustment(name="target_adjustment_3"),
     ]
+
+    if small_team:
+        stages.extend(
+            [
+                MinimizeIsolatedOff(name="small_team_iso_1"),
+                MultiEmployeeSwapPass(name="small_team_swap"),
+                EqualizeIsolatedOff(name="small_team_equalize"),
+                BalanceEveningShifts(name="small_team_evening", strict=True),
+                RecalcTotalWorking(),
+                TargetAdjustment(name="small_team_norm_fix"),
+            ]
+        )
 
     if priority == OptimizationPriority.ISOLATED_WEEKENDS:
         for i in range(5):
