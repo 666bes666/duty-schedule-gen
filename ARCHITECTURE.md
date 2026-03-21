@@ -1,6 +1,6 @@
 # Архитектура и логика duty-schedule-gen
 
-> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v2.0.0.
+> Полное описание системы для воспроизведения с нуля. Актуально на момент релиза v3.0.0.
 
 ---
 
@@ -38,6 +38,7 @@
 ```
 duty-schedule-gen/
 ├── app.py                        # Streamlit UI (точка входа веб-приложения)
+├── api_main.py                   # FastAPI (точка входа REST API)
 ├── config.example.yaml           # Пример конфигурации
 ├── src/duty_schedule/
 │   ├── __init__.py
@@ -47,23 +48,43 @@ duty-schedule-gen/
 │   ├── constants.py              # Константы
 │   ├── logging.py                # Настройка structlog
 │   ├── stats.py                  # Статистика расписания
+│   ├── costs.py                  # Модель стоимости смен по ТК РФ
+│   ├── validation.py             # Предгенерационная валидация конфигурации
+│   ├── xls_import.py             # Импорт carry-over из XLS предыдущего месяца
 │   ├── scheduler/                # Ядро: генерация расписания (пакет)
 │   │   ├── __init__.py
 │   │   ├── constraints.py        # Проверки ограничений
-│   │   ├── core.py               # Состояния и вспомогательные функции
-│   │   ├── greedy.py             # Жадный алгоритм с откатом
-│   │   └── postprocess.py        # Постобработочный pipeline
-│   ├── ui/                       # Модули Streamlit UI (пакет)
-│   │   ├── __init__.py
-│   │   ├── builders.py           # Построение UI-компонентов
-│   │   ├── config_io.py          # Импорт/экспорт конфигурации
-│   │   ├── mappings.py           # Маппинги данных для UI
-│   │   ├── state.py              # Управление состоянием сессии
-│   │   └── views.py              # Отображение результатов
-│   ├── xls_import.py                # Импорт carry-over из XLS предыдущего месяца
-│   └── export/
-│       ├── xls.py                # Экспорт в Excel
-│       └── ics.py                # Экспорт в ICS (iCalendar)
+│   │   ├── core.py               # EmployeeState, generate_schedule
+│   │   ├── greedy.py             # Жадный алгоритм (_build_day)
+│   │   ├── changelog.py          # Лог изменений постпроцессинга
+│   │   ├── solver.py             # CP-SAT solver (Google OR-Tools)
+│   │   ├── multimonth.py         # Многомесячная генерация
+│   │   └── postprocess/          # Постпроцессинг (пакет)
+│   │       ├── pipeline.py       # Pipeline, PostProcessStage protocol
+│   │       ├── balance.py        # Балансировка смен и выходных
+│   │       ├── target.py         # Подгонка под норму рабочих дней
+│   │       ├── isolation.py      # Минимизация изолированных выходных
+│   │       ├── carry_over_calc.py # Расчёт carry-over из финального расписания
+│   │       ├── metrics.py        # ScheduleSnapshot и метрики качества
+│   │       ├── validation.py     # Валидация расписания (hard/soft violations)
+│   │       └── helpers.py        # Вспомогательные функции
+│   ├── export/
+│   │   ├── xls.py                # Экспорт в Excel
+│   │   ├── ics.py                # Экспорт в ICS (iCalendar)
+│   │   └── pdf.py                # Экспорт в PDF (WeasyPrint)
+│   ├── api/                      # REST API (FastAPI)
+│   │   ├── routes/               # Эндпоинты (schedule, whatif, holidays, config, export)
+│   │   ├── auth.py               # Аутентификация по API-ключу
+│   │   ├── ratelimit.py          # Rate limiting
+│   │   ├── schemas.py            # Request/Response модели
+│   │   ├── settings.py           # Конфигурация API
+│   │   └── whatif_service.py     # What-if сервис
+│   └── ui/                       # Модули Streamlit UI (пакет)
+│       ├── builders.py           # Построение UI-компонентов
+│       ├── config_io.py          # Импорт/экспорт конфигурации
+│       ├── mappings.py           # Маппинги данных для UI
+│       ├── state.py              # Управление состоянием сессии
+│       └── views.py              # Отображение результатов
 ├── tests/
 │   ├── unit/                     # Юнит-тесты
 │   ├── integration/              # Интеграционные тесты
@@ -73,7 +94,7 @@ duty-schedule-gen/
 │   ├── system/                   # Системные (бизнес-правила, детерминированность)
 │   └── ui/                       # UI тесты (Playwright)
 ├── Dockerfile                    # Docker-образ для локальной разработки
-├── docker-compose.yml            # dev (hot-reload) и staging сервисы
+├── docker-compose.yml            # dev, staging, api сервисы
 ├── .dockerignore                 # Исключения для Docker-контекста
 ├── pyproject.toml                # Зависимости и настройки инструментов
 └── ARCHITECTURE.md               # Этот файл
@@ -86,9 +107,10 @@ duty-schedule-gen/
 ### 4.1 Перечисления
 
 ```python
-ScheduleType: FLEXIBLE | FIVE_TWO
-ShiftType:    MORNING | EVENING | NIGHT | WORKDAY | DAY_OFF | VACATION
-City:         MOSCOW | KHABAROVSK
+ScheduleType:         FLEXIBLE | FIVE_TWO
+ShiftType:            MORNING | EVENING | NIGHT | WORKDAY | DAY_OFF | VACATION
+City:                 MOSCOW | KHABAROVSK
+OptimizationPriority: ISOLATED_WEEKENDS | EVENING_SHIFTS | CONSECUTIVE_DAYS | WEEKEND_DAYS
 ```
 
 **Смены:**
@@ -115,9 +137,6 @@ City:         MOSCOW | KHABAROVSK
 | `preferred_shift` | ShiftType? | Мягкое предпочтение типа смены |
 | `days_off_weekly` | list[int] | Постоянные выходные дни недели (0=Пн) |
 | `max_consecutive_working` | int? | Персональный лимит рабочих дней подряд |
-| `max_consecutive_morning` | int? | Лимит утренних смен подряд (None = без ограничений) |
-| `max_consecutive_evening` | int? | Лимит вечерних смен подряд (None = без ограничений) |
-| `max_consecutive_workday` | int? | Лимит рабочих дней (WORKDAY) подряд (None = без ограничений) |
 
 ### 4.3 Config
 
@@ -125,9 +144,11 @@ City:         MOSCOW | KHABAROVSK
 Config(
     month=3, year=2026, seed=42,
     employees=[...],
-    pins=[PinnedAssignment(...)],   # Зафиксированные назначения
-    carry_over=[CarryOverState(...)], # Перенос состояния с пред. месяца
+    pins=[PinnedAssignment(...)],
+    carry_over=[CarryOverState(...)],
     timezone="Europe/Moscow",
+    solver="greedy",                          # "greedy" или "cpsat"
+    optimization_priority=None,               # OptimizationPriority или None
 )
 ```
 
@@ -154,10 +175,13 @@ DaySchedule(
 ## 5. Алгоритм генерации расписания (`scheduler/`)
 
 Пакет `scheduler/` содержит:
-- `scheduler/constraints.py` — проверки ограничений (`_can_work`, `_resting_after_evening`, `_consecutive_shift_limit_reached` и др.)
-- `scheduler/core.py` — состояния (`EmployeeState`) и вспомогательные функции
-- `scheduler/greedy.py` — жадный алгоритм с откатом (`generate_schedule`, `_build_day`)
-- `scheduler/postprocess.py` — постобработочный pipeline
+- `scheduler/constraints.py` — проверки ограничений (`_can_work`, `_resting_after_evening`, `_shift_limit_reached` и др.)
+- `scheduler/core.py` — `EmployeeState`, `generate_schedule`
+- `scheduler/greedy.py` — жадный алгоритм (`_build_day`)
+- `scheduler/changelog.py` — лог изменений постпроцессинга
+- `scheduler/solver.py` — CP-SAT solver (опциональный, через Google OR-Tools)
+- `scheduler/multimonth.py` — многомесячная генерация с автоматическим carry-over
+- `scheduler/postprocess/` — пакет постпроцессинга (Pipeline + PostProcessStage protocol)
 
 ### 5.1 Ключевые константы
 
@@ -176,7 +200,7 @@ MAX_BACKTRACK_ATTEMPTS       = 10   # Макс. число откатов
 - `_max_cw_postprocess(emp)` — лимит для постобработки: 6 для `FLEXIBLE on_duty` (не duty_only), иначе 6
 - `_max_co(emp)` — макс. выходных подряд (не строгий лимит, 100)
 - `_duty_only(emp)` — True если `on_duty AND (morning_only OR evening_only OR always_on_duty)`: такой сотрудник работает только дежурными сменами, никогда WORKDAY
-- `_consecutive_shift_limit_reached(emp, state, shift)` — True если сотрудник достиг лимита однотипных смен подряд (`max_consecutive_morning/evening/workday`)
+- `_shift_limit_reached(emp, state, shift)` — зарезервирована для будущих лимитов однотипных смен подряд (сейчас всегда False)
 - `_calc_blocked_working_days(emp, year, month)` — число рабочих будних дней, на которые приходится отпуск сотрудника. Учитывает **только отпуск** (`is_on_vacation`), а не `unavailable_dates` — разовая недоступность не снижает норму отработки
 - `_can_work(emp, state, day, holidays)` — может ли сотрудник работать в день: не в отпуске/недоступен, не достиг `_max_cw`, для `FIVE_TWO` — не выходной/праздник
 - `_resting_after_evening(state)` — True если последняя смена была EVENING: следующий день запрещены MORNING и WORKDAY (слишком мало отдыха)
@@ -272,7 +296,7 @@ while day_idx < len(all_days):
 После anti-isolated-off: если сотрудник FLEXIBLE получил DAY_OFF, но `0 < consecutive_working < MIN_WORK_BETWEEN_OFFS = 3` — форсировать WORKDAY. В праздники не применяется.
 
 **Лимиты однотипных смен подряд**
-На всех этапах выбора (утро, вечер, extra WORKDAY, постобработка) проверяется `_consecutive_shift_limit_reached` — если `max_consecutive_morning/evening/workday` задан и счётчик подряд достиг лимита, сотрудник исключается из кандидатов.
+На всех этапах выбора (утро, вечер, extra WORKDAY) проверяется `_shift_limit_reached` — зарезервирована для будущих лимитов (сейчас всегда False).
 
 **Осведомлённость о пинах следующего дня**
 `_build_day` получает `pins_tomorrow`: если сотрудник закреплён на утро/WORKDAY завтра, он не назначается на вечернюю смену сегодня (иначе нарушится правило отдыха).
@@ -281,27 +305,51 @@ while day_idx < len(all_days):
 
 ## 6. Постобработочный pipeline
 
-После жадной генерации выполняется pipeline из 7 функций:
+После жадной генерации выполняется типизированный pipeline через `PostProcessStage` protocol и класс `Pipeline` (`scheduler/postprocess/pipeline.py`).
+
+### 6.0 Архитектура
+
+**`PostProcessStage`** — runtime-checkable protocol с полем `name: str` и методом `run(ctx: PipelineContext) -> list[DaySchedule]`.
+
+**`PipelineContext`** — dataclass с общим состоянием: `days`, `employees`, `holidays`, `pinned_on`, `carry_over_cw`, `carry_over_last_shift`, `states`, `changelog`.
+
+**`Pipeline.run(ctx)`** — выполняет стадии последовательно, для каждой вычисляет `ScheduleSnapshot` до и после, логирует `score`, `iso_off_delta`, `evening_bal_delta`, `duration_ms`.
+
+**`ScheduleSnapshot`** (`metrics.py`) — frozen dataclass с метриками: `evening_balance`, `isolated_off_total`, `isolated_off_max`, `max_streak`, `norm_deviation_total`, `weekend_balance`. Метод `score()` возвращает взвешенную сумму (вечер ×3, iso ×2, норма ×2.5 и т.д.).
+
+**`build_default_pipeline(priority, small_team)`** — конструирует pipeline из ~17–25 стадий в зависимости от параметров.
+
+### Стадии по умолчанию
 
 ```
-generate:
- 1. _balance_weekend_work         — баланс суббот/воскресений
- 2. recalc states
- 3. _balance_duty_shifts          — баланс утренних/вечерних/ночных смен
- 4. _target_adjustment_pass       — подгонка под норму (1-й проход)
- 5. _trim_long_off_blocks         — обрезка блоков 4+ выходных
- 6. recalc states
- 7. _target_adjustment_pass       — подгонка под норму (2-й проход)
- 8. _minimize_isolated_off        — устранение изолированных выходных
- 9. _break_evening_isolated_pattern — своп вечерних смен для устранения паттерна "вечер→отдых→изоляция"
-10. _minimize_isolated_off        — повторный проход после свопов
-11. _equalize_isolated_off        — выравнивание изолированных между сотрудниками
-12. _minimize_isolated_off        — финальный проход
-13. recalc states
-14. _target_adjustment_pass       — подгонка под норму (3-й проход)
-15. Финальный enforcement нормы   — снятие лишних WORKDAY с конца месяца
-16. Проверка evening→morning      — ScheduleError если после вечерней смены стоит утро/WORKDAY
+ 1. BalanceWeekendWork             — баланс суббот/воскресений
+ 2. RecalcTotalWorking             — пересчёт фактических рабочих дней
+ 3. BalanceDutyShifts              — баланс утренних/вечерних/ночных смен
+ 4. BalanceEveningShifts (1)       — выравнивание вечерних смен
+ 5. TargetAdjustment (1)           — подгонка под норму
+ 6. TrimLongOffBlocks              — обрезка блоков 4+ выходных
+ 7. RecalcTotalWorking
+ 8. TargetAdjustment (2)
+ 9. MinimizeIsolatedOff (1)        — устранение изолированных выходных
+10. BreakEveningIsolatedPattern    — своп вечерних при паттерне "вечер→отдых→изоляция"
+11. MinimizeIsolatedOff (2)
+12. EqualizeIsolatedOff            — выравнивание изолированных между сотрудниками
+13. MinimizeIsolatedOff (3)
+14. MultiEmployeeSwapPass          — парные свопы между сотрудниками
+15. BalanceEveningShifts (2)
+16. RecalcTotalWorking
+17. TargetAdjustment (3)
 ```
+
+**Расширения для малых команд** (≤4 дежурных): дополнительные MinimizeIsolatedOff, MultiEmployeeSwapPass, EqualizeIsolatedOff, BalanceEveningShifts (strict), TargetAdjustment.
+
+**Расширения по приоритету** (`OptimizationPriority`):
+- `ISOLATED_WEEKENDS` → 5× MinimizeIsolatedOff + EqualizeIsolatedOff (strict)
+- `EVENING_SHIFTS` → BalanceEveningShifts (strict)
+- `CONSECUTIVE_DAYS` → MinimizeMaxStreak (strict)
+- `WEEKEND_DAYS` → BalanceWeekendWork (strict)
+
+**Финальные стадии** (всегда): TrimExcessWorkdays + BalanceEveningShifts (final).
 
 ### 6.1 `_balance_weekend_work`
 
@@ -376,7 +424,7 @@ generate:
 
 Все постобработочные свопы (`_try_duty_shift_swap`, `_minimize_isolated_off`, `_trim_long_off_blocks`, `_target_adjustment_pass`, `_balance_weekend_work`, `_balance_duty_shifts`) проверяют:
 - `_had_evening_before` — запрет утро/WORKDAY после вечерней смены
-- `_consecutive_shift_limit_reached` — лимит однотипных смен подряд
+- `_shift_limit_reached` — зарезервирована для будущих лимитов
 - Запрет вечерней смены, если завтра у получателя утро/WORKDAY
 
 ### 6.7 `_equalize_isolated_off`
@@ -432,7 +480,7 @@ generate:
 | Макс. выходных подряд | Фактически не ограничено (100) |
 | Мин. рабочих дней между блоками выходных | 3 |
 | После вечерней смены | Запрещены утренняя и WORKDAY на следующий день |
-| Макс. однотипных смен подряд | Настраивается: `max_consecutive_morning/evening/workday` (None = без лимита) |
+| Макс. однотипных смен подряд | Зарезервировано (функция `_shift_limit_reached` — заглушка) |
 
 ### Паттерн выходных для FLEXIBLE дежурных
 
@@ -454,9 +502,6 @@ generate:
   1. Снятие лишних WORKDAY с конца месяца (без дополнительных ограничений)
   2. Проверка: если избыток остался и есть снимаемые WORKDAY — `ScheduleError`
 - Финальная проверка evening→morning: `ScheduleError` если после вечерней смены стоит утренняя или WORKDAY
-
-### Группы
-
 
 ---
 
@@ -493,7 +538,7 @@ generate:
 
 - Таблица сотрудников (редактируемый DataFrame): имя, город, тип графика, флаги, лимиты
 - Массовое редактирование: выбрать сотрудников, столбец, значение — применить ко всем выбранным
-- Лимит однотипных смен подряд: отдельный expander для установки `max_consecutive_morning/evening/workday` всем дежурным с гибким графиком
+- Выбор приоритета оптимизации (OptimizationPriority)
 - Кнопка "Сгенерировать расписание"
 - Отображение расписания в виде таблицы (дни × сотрудники); строки отсортированы по городу → признаку дежурства → типу графика (5/2 → гибкий) → имени
 - Вкладка нагрузки (Altair):

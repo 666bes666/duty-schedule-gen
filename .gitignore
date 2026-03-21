@@ -11,3 +11,5 @@ output/
 *.xlsx
 *.ics
 .env
+.hypothesis/
+frontend/
