@@ -504,27 +504,29 @@ def generate_schedule(
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
+    from duty_schedule.scheduler.postprocess.validation import validate_schedule_or_raise
+
+    soft_violations = validate_schedule_or_raise(
+        days, employees, holidays, pins=config.pins, carry_over_cw=initial_cw
+    )
+    for v in soft_violations:
+        logger.warning(
+            "schedule_soft_violation",
+            employee=v.employee,
+            date=str(v.date),
+            constraint=v.constraint,
+            detail=v.detail,
+        )
+
     duty_employees = [e for e in employees if e.on_duty]
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
     if ev_counts:
         max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
         logger.info("evening_shift_balance", max=max_ev, min=min_ev, diff=max_ev - min_ev)
 
-    for i in range(len(days) - 1):
-        for emp_name in days[i].evening:
-            if emp_name in days[i + 1].morning or emp_name in days[i + 1].workday:
-                raise ScheduleError(
-                    f"Нарушение отдыха: {emp_name} вечер {days[i].date} → "
-                    f"утро/день {days[i + 1].date}"
-                )
-
     total_nights = sum(len(d.night) for d in days)
     total_mornings = sum(len(d.morning) for d in days)
     total_evenings = sum(len(d.evening) for d in days)
-    uncovered = [d.date for d in days if not d.is_covered()]
-
-    if uncovered:
-        raise ScheduleError(f"Не покрыты смены для дней: {[str(d) for d in uncovered]}")
 
     working_days_report: dict[str, int] = {
         emp.name: states[emp.name].total_working for emp in employees

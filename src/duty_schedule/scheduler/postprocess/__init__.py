@@ -21,8 +21,14 @@ from duty_schedule.scheduler.postprocess.target import (
     _target_adjustment_pass,
     _trim_long_off_blocks,
 )
+from duty_schedule.scheduler.postprocess.validation import (
+    ConstraintViolation,
+    validate_schedule,
+    validate_schedule_or_raise,
+)
 
 __all__ = [
+    "ConstraintViolation",
     "_balance_duty_shifts",
     "_balance_evening_shifts",
     "_balance_weekend_work",
@@ -38,4 +44,6 @@ __all__ = [
     "_trim_long_off_blocks",
     "_try_duty_shift_swap",
     "compute_carry_over",
+    "validate_schedule",
+    "validate_schedule_or_raise",
 ]
