@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from statistics import median
 
-from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
+from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
     DaySchedule,
@@ -23,7 +23,9 @@ from duty_schedule.scheduler.constraints import (
     _max_cw_postprocess,
 )
 
-from .helpers import _consec_work_if_added
+from .helpers import _consec_work_if_added, _streak_around, build_day_lookups
+
+logger = get_logger(__name__)
 
 
 def _balance_weekend_work(
@@ -34,8 +36,7 @@ def _balance_weekend_work(
     changelog: ChangeLog | None = None,
     strict: bool = False,
 ) -> list[DaySchedule]:
-    day_by_date = {d.date: d for d in days}
-    day_idx_map = {d.date: i for i, d in enumerate(days)}
+    day_by_date, day_idx_map = build_day_lookups(days)
     weekend_days = [d for d in days if d.date.weekday() >= 5]
     if not weekend_days:
         return days
@@ -113,18 +114,7 @@ def _balance_weekend_work(
                 max_emp = next(e for e in duty_emps if e.name == max_name)
                 if max_emp.schedule_type == ScheduleType.FLEXIBLE:
                     max_idx = day_idx_map[day.date]
-                    _off_streak = 1
-                    for _li in range(max_idx - 1, -1, -1):
-                        if max_name in days[_li].day_off or max_name in days[_li].vacation:
-                            _off_streak += 1
-                        else:
-                            break
-                    for _ri in range(max_idx + 1, len(days)):
-                        if max_name in days[_ri].day_off or max_name in days[_ri].vacation:
-                            _off_streak += 1
-                        else:
-                            break
-                    if _off_streak > _max_co(max_emp):
+                    if _streak_around(max_name, max_idx, days, working=False) > _max_co(max_emp):
                         continue
 
                 getattr(day, max_attr).remove(max_name)
@@ -162,8 +152,7 @@ def _balance_duty_shifts(
 
         duty_attrs = ["morning", "evening"] if city == City.MOSCOW else ["night"]
 
-        day_by_date = {d.date: d for d in days}
-        day_idx_map = {d.date: i for i, d in enumerate(days)}
+        day_by_date, day_idx_map = build_day_lookups(days)
         emp_by_name = {e.name: e for e in duty_emps}
 
         for _ in range(len(days) * len(duty_emps)):
@@ -364,8 +353,7 @@ def _balance_evening_shifts(
     if len(eligible) < 2:
         return days
 
-    day_by_date = {d.date: d for d in days}
-    day_idx_map = {d.date: i for i, d in enumerate(days)}
+    day_by_date, day_idx_map = build_day_lookups(days)
     emp_by_name = {e.name: e for e in eligible}
 
     _threshold = 0 if strict else 1
@@ -467,19 +455,7 @@ def _balance_evening_shifts(
 
                     idx_d = day_idx_map[day.date]
 
-                    _max_cw_min = min_emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
-                    cw = 1
-                    for i in range(idx_d - 1, -1, -1):
-                        if min_name in days[i].all_assigned():
-                            cw += 1
-                        else:
-                            break
-                    for i in range(idx_d + 1, len(days)):
-                        if min_name in days[i].all_assigned():
-                            cw += 1
-                        else:
-                            break
-                    if cw > _max_cw_min:
+                    if _consec_work_if_added(min_name, idx_d, days) > _max_cw_postprocess(min_emp):
                         continue
 
                     comp_day = None
@@ -497,21 +473,9 @@ def _balance_evening_shifts(
                         if prev_cd and max_name in prev_cd.evening:
                             continue
                         idx_cd = day_idx_map[cd.date]
-                        _max_cw_max = (
-                            max_emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
-                        )
-                        cw_max = 1
-                        for i in range(idx_cd - 1, -1, -1):
-                            if max_name in days[i].all_assigned():
-                                cw_max += 1
-                            else:
-                                break
-                        for i in range(idx_cd + 1, len(days)):
-                            if max_name in days[i].all_assigned():
-                                cw_max += 1
-                            else:
-                                break
-                        if cw_max > _max_cw_max:
+                        if _consec_work_if_added(max_name, idx_cd, days) > _max_cw_postprocess(
+                            max_emp
+                        ):
                             continue
                         if min_name in cd.workday:
                             comp_day = cd
@@ -681,6 +645,12 @@ def _minimize_max_streak(
                     comp_day.day_off.append(emp.name)
                     day.day_off.remove(emp.name)
                     day.workday.append(emp.name)
+                    logger.debug(
+                        "streak_swap_reverted",
+                        employee=emp.name,
+                        day=str(day.date),
+                        comp_day=str(comp_day.date),
+                    )
 
                 if improved:
                     break

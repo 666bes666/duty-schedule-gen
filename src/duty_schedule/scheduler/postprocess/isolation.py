@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
     DaySchedule,
@@ -27,6 +28,8 @@ from .helpers import (
     _try_duty_shift_swap,
 )
 
+logger = get_logger(__name__)
+
 
 def _minimize_isolated_off(
     days: list[DaySchedule],
@@ -42,20 +45,6 @@ def _minimize_isolated_off(
 
     def is_working(name: str, d: DaySchedule) -> bool:
         return name in d.morning or name in d.evening or name in d.night or name in d.workday
-
-    def consec_off_if_freed(name: str, freed_idx: int) -> int:
-        length = 1
-        for i in range(freed_idx - 1, -1, -1):
-            if is_off(name, days[i]):
-                length += 1
-            else:
-                break
-        for i in range(freed_idx + 1, len(days)):
-            if is_off(name, days[i]):
-                length += 1
-            else:
-                break
-        return length
 
     for emp in employees:
         if emp.schedule_type != ScheduleType.FLEXIBLE:
@@ -90,7 +79,8 @@ def _minimize_isolated_off(
                             continue
                     if (free_day.date, emp.name) in pinned_on:
                         continue
-                    if consec_off_if_freed(emp.name, extend_idx) > _max_co_postprocess(emp):
+                    off_streak = _streak_around(emp.name, extend_idx, days, working=False)
+                    if off_streak > _max_co_postprocess(emp):
                         continue
 
                     if in_workday:
@@ -502,6 +492,12 @@ def _break_evening_isolated_pattern(
                 (ev_day.morning if b_source == "morning" else ev_day.workday).remove(emp_a.name)
                 ev_day.evening.append(emp_a.name)
                 (ev_day.morning if b_source == "morning" else ev_day.workday).append(emp_b.name)
+                logger.debug(
+                    "evening_isolated_swap_reverted",
+                    employee_a=emp_a.name,
+                    employee_b=emp_b.name,
+                    day=str(ev_day.date),
+                )
 
     return days
 

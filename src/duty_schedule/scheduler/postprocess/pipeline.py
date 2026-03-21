@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
@@ -13,6 +13,7 @@ from duty_schedule.models import (
 )
 from duty_schedule.scheduler.changelog import ChangeLog
 from duty_schedule.scheduler.constraints import _is_working_on_day
+from duty_schedule.scheduler.core import EmployeeState, ScheduleError
 
 logger = get_logger(__name__)
 
@@ -25,7 +26,7 @@ class PipelineContext:
     pinned_on: set[tuple[date, str]]
     carry_over_cw: dict[str, int]
     carry_over_last_shift: dict[str, ShiftType]
-    states: dict[str, Any]
+    states: dict[str, EmployeeState]
     changelog: ChangeLog
 
 
@@ -236,8 +237,6 @@ class TrimExcessWorkdays:
     name: str = "trim_excess_workdays"
 
     def run(self, ctx: PipelineContext) -> list[DaySchedule]:
-        from duty_schedule.scheduler.core import ScheduleError
-
         _recalc_total_working(ctx)
         for emp in ctx.employees:
             actual = sum(1 for d in ctx.days if _is_working_on_day(emp.name, d))
@@ -278,11 +277,30 @@ class Pipeline:
     def run(self, ctx: PipelineContext) -> list[DaySchedule]:
         from .metrics import compute_snapshot
 
+        target_working = {emp.name: ctx.states[emp.name].effective_target for emp in ctx.employees}
         for stage in self.stages:
-            before = compute_snapshot(ctx.days, ctx.employees, ctx.holidays)
+            before = compute_snapshot(
+                ctx.days,
+                ctx.employees,
+                ctx.holidays,
+                target_working=target_working,
+                carry_over_cw=ctx.carry_over_cw,
+            )
             pre_changes = len(ctx.changelog.entries)
-            ctx.days = stage.run(ctx)
-            after = compute_snapshot(ctx.days, ctx.employees, ctx.holidays)
+            try:
+                ctx.days = stage.run(ctx)
+            except ScheduleError:
+                raise
+            except Exception:
+                logger.exception("postprocess_stage_failed", stage=stage.name)
+                continue
+            after = compute_snapshot(
+                ctx.days,
+                ctx.employees,
+                ctx.holidays,
+                target_working=target_working,
+                carry_over_cw=ctx.carry_over_cw,
+            )
             logger.debug(
                 "postprocess_stage_done",
                 stage=stage.name,

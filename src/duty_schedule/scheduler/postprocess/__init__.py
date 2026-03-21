@@ -11,6 +11,7 @@ from duty_schedule.scheduler.postprocess.helpers import (
     _is_isolated_off_at,
     _streak_around,
     _try_duty_shift_swap,
+    build_day_lookups,
 )
 from duty_schedule.scheduler.postprocess.isolation import (
     _break_evening_isolated_pattern,
@@ -46,6 +47,7 @@ __all__ = [
     "_target_adjustment_pass",
     "_trim_long_off_blocks",
     "_try_duty_shift_swap",
+    "build_day_lookups",
     "ScheduleSnapshot",
     "compute_carry_over",
     "compute_snapshot",

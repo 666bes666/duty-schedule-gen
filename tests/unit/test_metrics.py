@@ -79,3 +79,25 @@ class TestComputeSnapshot:
         employees = [_emp("A")]
         snap = compute_snapshot([], employees, set())
         assert snap.score() == 0.0
+
+    def test_carry_over_increases_max_streak(self):
+        days = [
+            _day(1, morning=["A"], evening=["B"], night=["C"]),
+            _day(2, morning=["A"], evening=["B"], night=["C"]),
+        ]
+        employees = [_emp("A"), _emp("B"), _emp("C")]
+        snap_no_co = compute_snapshot(days, employees, set())
+        snap_with_co = compute_snapshot(days, employees, set(), carry_over_cw={"A": 5})
+        assert snap_with_co.max_streak > snap_no_co.max_streak
+
+    def test_target_working_produces_nonzero_deviation(self):
+        days = [
+            _day(1, morning=["A"], evening=["B"], night=["C"]),
+        ]
+        employees = [_emp("A"), _emp("B"), _emp("C")]
+        snap_no_target = compute_snapshot(days, employees, set())
+        snap_with_target = compute_snapshot(
+            days, employees, set(), target_working={"A": 10, "B": 10, "C": 10}
+        )
+        assert snap_no_target.norm_deviation_total == 0
+        assert snap_with_target.norm_deviation_total > 0

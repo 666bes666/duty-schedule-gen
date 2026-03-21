@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from duty_schedule.models import (
     City,
     Config,
@@ -10,7 +12,7 @@ from duty_schedule.models import (
     ScheduleType,
 )
 from duty_schedule.scheduler.changelog import ChangeLog
-from duty_schedule.scheduler.core import EmployeeState, generate_schedule
+from duty_schedule.scheduler.core import EmployeeState, ScheduleError, generate_schedule
 from duty_schedule.scheduler.postprocess.pipeline import (
     BalanceEveningShifts,
     Pipeline,
@@ -80,6 +82,50 @@ class TestBuildDefaultPipeline:
         base = build_default_pipeline()
         small = build_default_pipeline(small_team=True)
         assert len(small.stages) > len(base.stages)
+
+
+class TestPipelineExceptionHandling:
+    def _make_ctx(self) -> PipelineContext:
+        days = [
+            _day(1, morning=["A"], evening=["B"], night=["C"], workday=["D"]),
+            _day(2, morning=["B"], evening=["A"], night=["C"], workday=["D"]),
+        ]
+        employees = [_emp("A"), _emp("B"), _emp("C"), _emp("D")]
+        states = {e.name: EmployeeState(total_working=2) for e in employees}
+        return PipelineContext(
+            days=days,
+            employees=employees,
+            holidays=set(),
+            pinned_on=set(),
+            carry_over_cw={},
+            carry_over_last_shift={},
+            states=states,
+            changelog=ChangeLog(),
+        )
+
+    def test_non_schedule_error_is_caught_and_skipped(self):
+        class FailingStage:
+            name = "failing"
+
+            def run(self, ctx: PipelineContext) -> list[DaySchedule]:
+                raise ValueError("boom")
+
+        ctx = self._make_ctx()
+        pipeline = Pipeline([FailingStage(), RecalcTotalWorking()])
+        result = pipeline.run(ctx)
+        assert len(result) == 2
+
+    def test_schedule_error_propagates(self):
+        class ScheduleErrorStage:
+            name = "schedule_error"
+
+            def run(self, ctx: PipelineContext) -> list[DaySchedule]:
+                raise ScheduleError("norm violation")
+
+        ctx = self._make_ctx()
+        pipeline = Pipeline([ScheduleErrorStage(), RecalcTotalWorking()])
+        with pytest.raises(ScheduleError, match="norm violation"):
+            pipeline.run(ctx)
 
 
 class TestPipelineEquivalence:
