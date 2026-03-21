@@ -213,13 +213,13 @@ def solve_schedule(
             f"CP-SAT solver не нашёл решения (статус: {solver.status_name(status)})"
         )
 
-    wall_time_s = round(solver.wall_time, 3)
-    timed_out = status == cp_model.FEASIBLE and wall_time_s >= timeout * 0.95
+    duration_ms = round(solver.wall_time * 1000, 1)
+    timed_out = status == cp_model.FEASIBLE and solver.wall_time >= timeout * 0.95
     logger.info(
         "solver_finished",
         status=solver.status_name(status),
         objective=solver.objective_value,
-        wall_time_s=wall_time_s,
+        duration_ms=duration_ms,
         timed_out=timed_out,
     )
 

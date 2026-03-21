@@ -68,7 +68,22 @@ class TestEnvConfig:
 
 _EVENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
-_LOG_METHODS = frozenset({"debug", "info", "warning", "error", "critical", "exception"})
+_LOG_METHODS = frozenset(
+    {
+        "debug",
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "exception",
+        "adebug",
+        "ainfo",
+        "awarning",
+        "aerror",
+        "acritical",
+        "aexception",
+    }
+)
 
 
 def _extract_event_names() -> list[tuple[str, int, str]]:

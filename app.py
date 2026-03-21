@@ -9,10 +9,12 @@ import streamlit as st
 from pydantic import ValidationError
 
 from duty_schedule.calendar import CalendarError, compute_short_days, fetch_holidays
+from duty_schedule.logging import get_logger, setup_logging
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
     CarryOverState,
     Config,
+    OptimizationPriority,
     PinnedAssignment,
     collect_config_issues,
 )
@@ -54,6 +56,18 @@ from duty_schedule.ui.views import (
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
+
+setup_logging()
+logger = get_logger(__name__)
+
+_PRIORITY_OPTIONS: dict[str, str | None] = {
+    "Без приоритета": None,
+    "Минимум изолированных выходных": OptimizationPriority.ISOLATED_WEEKENDS,
+    "Равномерные вечерние смены": OptimizationPriority.EVENING_SHIFTS,
+    "Минимум рабочих серий": OptimizationPriority.CONSECUTIVE_DAYS,
+    "Равные выходные в сб/вс": OptimizationPriority.WEEKEND_DAYS,
+}
+_PRIORITY_LABELS: dict[str | None, str] = {v: k for k, v in _PRIORITY_OPTIONS.items()}
 
 st.set_page_config(page_title="График дежурств", page_icon=None, layout="wide")
 _init_state()
@@ -120,8 +134,8 @@ with st.sidebar:
     )
     if uploaded is not None:
         raw = uploaded.read().decode("utf-8")
-        df_loaded, pins_loaded, co_loaded, m, y, s, emp_dates_loaded, err = _yaml_to_df(
-            raw, st.session_state["cfg_year"]
+        df_loaded, pins_loaded, co_loaded, m, y, s, emp_dates_loaded, err, prio_loaded = (
+            _yaml_to_df(raw, st.session_state["cfg_year"])
         )
         if err:
             st.error(err)
@@ -137,6 +151,7 @@ with st.sidebar:
             st.session_state["employee_dates"] = emp_dates_loaded
             st.session_state["_df_for_download"] = df_loaded
             st.session_state["_pins_for_download"] = pins_loaded
+            st.session_state["optimization_priority"] = prio_loaded
             _bump_table()
             msg = f"Загружен конфиг: {len(df_loaded)} сотрудников"
             if co_loaded:
@@ -160,6 +175,7 @@ with st.sidebar:
         _cfg_seed,
         employee_dates=st.session_state["employee_dates"],
         pins_df=_dl_pins,
+        optimization_priority=st.session_state.get("optimization_priority"),
     )
     st.download_button(
         label="Скачать конфиг (.yaml)",
@@ -608,6 +624,26 @@ for _verr in _val_errors:
 for _vwarn in _val_warnings:
     st.warning(_vwarn)
 
+
+_prio_val = st.session_state.get("optimization_priority")
+_prio_btn_label = "Приоритеты: " + (_PRIORITY_LABELS.get(_prio_val) or "нет")
+with st.popover(_prio_btn_label):
+    _opts = list(_PRIORITY_OPTIONS.keys())
+    _current = st.session_state.get("optimization_priority")
+    _current_label = next(
+        (k for k, v in _PRIORITY_OPTIONS.items() if v == _current), "Без приоритета"
+    )
+    _chosen = st.radio(
+        "Приоритет при генерации:",
+        _opts,
+        index=_opts.index(_current_label),
+        key="prio_radio",
+    )
+    st.caption("Остальные параметры балансируются в обычном режиме.")
+    if st.button("Применить", type="primary", key="prio_apply"):
+        st.session_state["optimization_priority"] = _PRIORITY_OPTIONS[_chosen]
+        st.rerun()
+
 if st.button("Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(
         edited_df, employee_dates=st.session_state["employee_dates"]
@@ -668,6 +704,7 @@ if st.button("Сгенерировать расписание", type="primary", 
     carry_over_objs = matched
 
     _solver_val = st.session_state.get("cfg_solver", "greedy")
+    _opt_prio = st.session_state.get("optimization_priority")
     try:
         config = Config(
             month=month,
@@ -677,6 +714,7 @@ if st.button("Сгенерировать расписание", type="primary", 
             pins=pins,
             carry_over=carry_over_objs,
             solver=_solver_val,
+            optimization_priority=_opt_prio,
         )
     except (ValueError, ValidationError) as exc:
         st.error(f"Ошибка конфигурации: {exc}")
@@ -726,8 +764,16 @@ if st.button("Сгенерировать расписание", type="primary", 
         try:
             schedule = generate_schedule(config, holidays)
         except ScheduleError as e:
+            logger.error("streamlit_schedule_error", error=str(e))
             st.error(f"Не удалось построить расписание: {e}")
             st.stop()
+        else:
+            logger.info(
+                "streamlit_schedule_generated",
+                month=config.month,
+                year=config.year,
+                days=len(schedule.days),
+            )
 
     next_month = month % 12 + 1
     next_year = year + (1 if month == 12 else 0)

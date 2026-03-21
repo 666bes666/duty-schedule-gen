@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
     DaySchedule,
@@ -27,6 +28,8 @@ from .helpers import (
     _try_duty_shift_swap,
 )
 
+logger = get_logger(__name__)
+
 
 def _minimize_isolated_off(
     days: list[DaySchedule],
@@ -43,22 +46,8 @@ def _minimize_isolated_off(
     def is_working(name: str, d: DaySchedule) -> bool:
         return name in d.morning or name in d.evening or name in d.night or name in d.workday
 
-    def consec_off_if_freed(name: str, freed_idx: int) -> int:
-        length = 1
-        for i in range(freed_idx - 1, -1, -1):
-            if is_off(name, days[i]):
-                length += 1
-            else:
-                break
-        for i in range(freed_idx + 1, len(days)):
-            if is_off(name, days[i]):
-                length += 1
-            else:
-                break
-        return length
-
     for emp in employees:
-        if not emp.on_duty:
+        if emp.schedule_type != ScheduleType.FLEXIBLE:
             continue
 
         for _ in range(len(days)):
@@ -90,7 +79,8 @@ def _minimize_isolated_off(
                             continue
                     if (free_day.date, emp.name) in pinned_on:
                         continue
-                    if consec_off_if_freed(emp.name, extend_idx) > _max_co_postprocess(emp):
+                    off_streak = _streak_around(emp.name, extend_idx, days, working=False)
+                    if off_streak > _max_co_postprocess(emp):
                         continue
 
                     if in_workday:
@@ -130,6 +120,14 @@ def _minimize_isolated_off(
                             comp_day.day_off.remove(emp.name)
                             comp_day.workday.append(emp.name)
                             if _count_isolated_off(emp.name, days) < count_before:
+                                if changelog:
+                                    changelog.add(
+                                        "minimize_isolated_off",
+                                        "swap_workday",
+                                        emp.name,
+                                        free_day.date,
+                                        f"workday→day_off, comp {comp_day.date} day_off→workday",
+                                    )
                                 improved = True
                                 break
                             free_day.day_off.remove(emp.name)
@@ -137,7 +135,7 @@ def _minimize_isolated_off(
                             comp_day.workday.remove(emp.name)
                             comp_day.day_off.append(emp.name)
 
-                    elif emp.schedule_type == ScheduleType.FLEXIBLE:
+                    elif emp.on_duty and emp.schedule_type == ScheduleType.FLEXIBLE:
                         improved = _try_duty_shift_swap(
                             emp,
                             extend_idx,
@@ -149,6 +147,14 @@ def _minimize_isolated_off(
                             carry_over_cw,
                             carry_over_last_shift,
                         )
+                        if improved and changelog:
+                            changelog.add(
+                                "minimize_isolated_off",
+                                "duty_shift_swap",
+                                emp.name,
+                                free_day.date,
+                                f"duty shift swap at idx {extend_idx}",
+                            )
 
                     if improved:
                         break
@@ -192,6 +198,14 @@ def _minimize_isolated_off(
                             days[isolated_idx].workday.append(emp.name)
                             days[nb_i].workday.remove(emp.name)
                             days[nb_i].day_off.append(emp.name)
+                            if changelog:
+                                changelog.add(
+                                    "minimize_isolated_off",
+                                    "move_to_neighbor",
+                                    emp.name,
+                                    days[isolated_idx].date,
+                                    f"day_off → workday, {days[nb_i].date} workday → day_off",
+                                )
                             improved = True
                             improved_any = True
                             break
@@ -225,6 +239,14 @@ def _minimize_isolated_off(
                             comp_day.workday.remove(emp.name)
                             comp_day.day_off.append(emp.name)
                             if _count_isolated_off(emp.name, days) < count_before:
+                                if changelog:
+                                    changelog.add(
+                                        "minimize_isolated_off",
+                                        "swap_flex",
+                                        emp.name,
+                                        days[isolated_idx].date,
+                                        f"day_off → workday, {comp_day.date} workday → day_off",
+                                    )
                                 improved = True
                                 improved_any = True
                                 break
@@ -237,6 +259,145 @@ def _minimize_isolated_off(
                 break
 
     return days
+
+
+def _multi_employee_swap_pass(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
+    changelog: ChangeLog | None = None,
+) -> list[DaySchedule]:
+    flex_emps = sorted(
+        [e for e in employees if e.schedule_type == ScheduleType.FLEXIBLE],
+        key=lambda e: -_count_isolated_off(e.name, days),
+    )
+    _multi_employee_swap(days, flex_emps, pinned_on, holidays, carry_over_cw, changelog)
+    return days
+
+
+def _multi_employee_swap(
+    days: list[DaySchedule],
+    flex_emps: list[Employee],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    holidays: set[date],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+) -> None:
+    for _ in range(len(days)):
+        improved = False
+        for emp_a in flex_emps:
+            if _count_isolated_off(emp_a.name, days) == 0:
+                continue
+            for emp_b in flex_emps:
+                if emp_b.name == emp_a.name:
+                    continue
+                if emp_a.city != emp_b.city:
+                    continue
+                improved = _try_pairwise_swap(
+                    days, emp_a, emp_b, pinned_on, holidays, carry_over_cw, changelog
+                )
+                if improved:
+                    break
+            if improved:
+                break
+        if not improved:
+            break
+
+
+def _revert_pairwise(d1: DaySchedule, d2: DaySchedule, name_a: str, name_b: str) -> None:
+    d2.workday.remove(name_a)
+    d2.day_off.append(name_a)
+    d2.day_off.remove(name_b)
+    d2.workday.append(name_b)
+
+    d1.day_off.remove(name_a)
+    d1.workday.append(name_a)
+    d1.workday.remove(name_b)
+    d1.day_off.append(name_b)
+
+
+def _validate_pairwise(
+    days: list[DaySchedule],
+    emp_a: Employee,
+    emp_b: Employee,
+    d1_idx: int,
+    d2_idx: int,
+    carry_over_cw: dict[str, int] | None,
+) -> bool:
+    cw_a = _consec_work_if_added(emp_a.name, d2_idx, days, carry_over_cw)
+    cw_b = _consec_work_if_added(emp_b.name, d1_idx, days, carry_over_cw)
+    if cw_a > _max_cw_postprocess(emp_a) or cw_b > _max_cw_postprocess(emp_b):
+        return False
+    if _had_evening_before(emp_b.name, d1_idx, days):
+        return False
+    return not _had_evening_before(emp_a.name, d2_idx, days)
+
+
+def _try_pairwise_swap(
+    days: list[DaySchedule],
+    emp_a: Employee,
+    emp_b: Employee,
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    holidays: set[date],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+) -> bool:
+    total_before = _count_isolated_off(emp_a.name, days) + _count_isolated_off(emp_b.name, days)
+    if total_before == 0:
+        return False
+
+    day1_candidates = []
+    day2_candidates = []
+    for i in range(len(days)):
+        d = days[i]
+        if (d.date, emp_a.name) in pinned_on or (d.date, emp_b.name) in pinned_on:
+            continue
+        if emp_a.name in d.workday and emp_b.name in d.day_off:
+            day1_candidates.append(i)
+        elif emp_a.name in d.day_off and emp_b.name in d.workday:
+            day2_candidates.append(i)
+
+    for d1_idx in day1_candidates:
+        for d2_idx in day2_candidates:
+            if d1_idx == d2_idx:
+                continue
+            d1 = days[d1_idx]
+            d2 = days[d2_idx]
+
+            d1.workday.remove(emp_a.name)
+            d1.day_off.append(emp_a.name)
+            d1.day_off.remove(emp_b.name)
+            d1.workday.append(emp_b.name)
+
+            d2.day_off.remove(emp_a.name)
+            d2.workday.append(emp_a.name)
+            d2.workday.remove(emp_b.name)
+            d2.day_off.append(emp_b.name)
+
+            valid = _validate_pairwise(days, emp_a, emp_b, d1_idx, d2_idx, carry_over_cw)
+            if not valid:
+                _revert_pairwise(d1, d2, emp_a.name, emp_b.name)
+                continue
+
+            total_after = _count_isolated_off(emp_a.name, days) + _count_isolated_off(
+                emp_b.name, days
+            )
+            if total_after < total_before:
+                if changelog:
+                    changelog.add(
+                        "minimize_isolated_off",
+                        "multi_swap",
+                        emp_a.name,
+                        d1.date,
+                        f"pairwise with {emp_b.name}, comp {d2.date}",
+                    )
+                return True
+
+            _revert_pairwise(d1, d2, emp_a.name, emp_b.name)
+
+    return False
 
 
 def _break_evening_isolated_pattern(
@@ -317,12 +478,26 @@ def _break_evening_isolated_pattern(
 
                 count_a_after = _count_isolated_off(emp_a.name, days)
                 if count_a_after < count_a_before and count_b_after <= 2:
+                    if changelog:
+                        changelog.add(
+                            "break_evening_isolated",
+                            "swap",
+                            emp_a.name,
+                            ev_day.date,
+                            f"evening → {b_source}, {emp_b.name} {b_source} → evening",
+                        )
                     break
 
                 ev_day.evening.remove(emp_b.name)
                 (ev_day.morning if b_source == "morning" else ev_day.workday).remove(emp_a.name)
                 ev_day.evening.append(emp_a.name)
                 (ev_day.morning if b_source == "morning" else ev_day.workday).append(emp_b.name)
+                logger.debug(
+                    "evening_isolated_swap_reverted",
+                    employee=emp_a.name,
+                    swap_partner=emp_b.name,
+                    day=str(ev_day.date),
+                )
 
     return days
 
@@ -334,6 +509,7 @@ def _equalize_isolated_off(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     changelog: ChangeLog | None = None,
+    strict: bool = False,
 ) -> list[DaySchedule]:
     flex_duty = [
         e
@@ -343,21 +519,40 @@ def _equalize_isolated_off(
     if len(flex_duty) < 2:
         return days
 
-    for _ in range(len(days)):
-        iso_counts = {e.name: _count_isolated_off(e.name, days) for e in flex_duty}
+    cities: set[City] = {e.city for e in flex_duty}
+    for city in sorted(cities):
+        city_emps = [e for e in flex_duty if e.city == city]
+        if len(city_emps) < 2:
+            continue
+        _equalize_isolated_off_group(days, city_emps, pinned_on, carry_over_cw, changelog, strict)
+
+    return days
+
+
+def _equalize_isolated_off_group(
+    days: list[DaySchedule],
+    group: list[Employee],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+    strict: bool,
+) -> None:
+    _iterations = len(days) * (3 if strict else 1)
+    for _ in range(_iterations):
+        iso_counts = {e.name: _count_isolated_off(e.name, days) for e in group}
         max_name = max(iso_counts, key=lambda n: iso_counts[n])
         min_name = min(iso_counts, key=lambda n: iso_counts[n])
         max_val = iso_counts[max_name]
         min_val = iso_counts[min_name]
 
-        if max_val - min_val <= 1 or max_val <= 2:
+        if strict:
+            if max_val - min_val <= 0:
+                break
+        elif max_val - min_val <= 1 or max_val <= 2:
             break
 
-        max_emp = next(e for e in flex_duty if e.name == max_name)
-        min_emp = next(e for e in flex_duty if e.name == min_name)
-
-        if max_emp.city != min_emp.city:
-            break
+        max_emp = next(e for e in group if e.name == max_name)
+        min_emp = next(e for e in group if e.name == min_name)
 
         swapped = False
         for day_a_idx in range(len(days)):
@@ -423,6 +618,14 @@ def _equalize_isolated_off(
                 new_min = _count_isolated_off(min_name, days)
 
                 if new_max < max_val and new_min <= min_val + (max_val - new_max):
+                    if changelog:
+                        changelog.add(
+                            "equalize_isolated_off",
+                            "swap",
+                            max_name,
+                            days[day_a_idx].date,
+                            f"day_off↔workday with {min_name}, comp {days[day_b_idx].date}",
+                        )
                     swapped = True
                     break
 
@@ -441,5 +644,3 @@ def _equalize_isolated_off(
 
         if not swapped:
             break
-
-    return days
