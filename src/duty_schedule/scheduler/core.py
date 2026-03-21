@@ -4,7 +4,6 @@ import copy
 import random
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any
 
 from duty_schedule.constants import (
     MAX_BACKTRACK_ATTEMPTS,
@@ -14,7 +13,6 @@ from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     Config,
     DaySchedule,
-    OptimizationPriority,
     Schedule,
     ShiftType,
 )
@@ -115,17 +113,6 @@ def generate_schedule(
         _is_working_on_day,
     )
     from duty_schedule.scheduler.greedy import _build_day
-    from duty_schedule.scheduler.postprocess import (
-        _balance_duty_shifts,
-        _balance_evening_shifts,
-        _balance_weekend_work,
-        _break_evening_isolated_pattern,
-        _equalize_isolated_off,
-        _minimize_isolated_off,
-        _minimize_max_streak,
-        _target_adjustment_pass,
-        _trim_long_off_blocks,
-    )
 
     rng = random.Random(config.seed)
     all_days = get_all_days(config.year, config.month)
@@ -238,276 +225,24 @@ def generate_schedule(
 
     changelog = ChangeLog()
 
-    from duty_schedule.scheduler.postprocess.metrics import compute_snapshot
-
-    def _pp(stage: str, func: Any, *args: Any, **kwargs: Any) -> Any:
-        pre = len(changelog.entries)
-        before = compute_snapshot(days, employees, holidays)
-        result = func(*args, **kwargs)
-        after = compute_snapshot(result if isinstance(result, list) else days, employees, holidays)
-        logger.debug(
-            "postprocess_stage_done",
-            stage=stage,
-            changes=len(changelog.entries) - pre,
-            score_before=round(before.score(), 1),
-            score_after=round(after.score(), 1),
-            iso_off_delta=after.isolated_off_total - before.isolated_off_total,
-            evening_bal_delta=after.evening_balance - before.evening_balance,
-        )
-        return result
-
-    days = _pp(
-        "balance_weekend_work",
-        _balance_weekend_work,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
+    from duty_schedule.scheduler.postprocess.pipeline import (
+        PipelineContext,
+        build_default_pipeline,
     )
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
-    days = _pp(
-        "balance_duty_shifts",
-        _balance_duty_shifts,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
-    days = _pp(
-        "balance_evening_1",
-        _balance_evening_shifts,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
-    days = _pp(
-        "target_adjustment_1",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
+    ctx = PipelineContext(
+        days=days,
+        employees=employees,
+        holidays=holidays,
         pinned_on=pinned_on,
         carry_over_cw=initial_cw,
         carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "trim_long_off_blocks",
-        _trim_long_off_blocks,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _pp(
-        "target_adjustment_2",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_1",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "break_evening_isolated_pattern",
-        _break_evening_isolated_pattern,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_2",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "equalize_isolated_off",
-        _equalize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_3",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "balance_evening_2",
-        _balance_evening_shifts,
-        days,
-        employees,
-        pinned_on=pinned_on,
+        states=states,
         changelog=changelog,
     )
 
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _pp(
-        "target_adjustment_3",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-
-    prio = config.optimization_priority
-    if prio == OptimizationPriority.ISOLATED_WEEKENDS:
-        for _pass in range(5):
-            days = _pp(
-                f"priority_minimize_iso_{_pass}",
-                _minimize_isolated_off,
-                days,
-                employees,
-                holidays,
-                pinned_on=pinned_on,
-                carry_over_cw=initial_cw,
-                carry_over_last_shift=initial_last_shift,
-                changelog=changelog,
-            )
-        days = _pp(
-            "priority_equalize_iso",
-            _equalize_isolated_off,
-            days,
-            employees,
-            holidays,
-            pinned_on=pinned_on,
-            carry_over_cw=initial_cw,
-            changelog=changelog,
-            strict=True,
-        )
-    elif prio == OptimizationPriority.EVENING_SHIFTS:
-        days = _pp(
-            "priority_evening",
-            _balance_evening_shifts,
-            days,
-            employees,
-            pinned_on=pinned_on,
-            changelog=changelog,
-            strict=True,
-        )
-    elif prio == OptimizationPriority.CONSECUTIVE_DAYS:
-        days = _pp(
-            "priority_streak",
-            _minimize_max_streak,
-            days,
-            employees,
-            holidays,
-            pinned_on=pinned_on,
-            carry_over_cw=initial_cw,
-            carry_over_last_shift=initial_last_shift,
-            changelog=changelog,
-            strict=True,
-        )
-    elif prio == OptimizationPriority.WEEKEND_DAYS:
-        days = _pp(
-            "priority_weekend",
-            _balance_weekend_work,
-            days,
-            employees,
-            pinned_on=pinned_on,
-            carry_over_cw=initial_cw,
-            changelog=changelog,
-            strict=True,
-        )
-
-    if prio is not None:
-        for emp in employees:
-            states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-        days = _pp(
-            "priority_norm_fix",
-            _target_adjustment_pass,
-            days,
-            employees,
-            states,
-            holidays,
-            pinned_on=pinned_on,
-            carry_over_cw=initial_cw,
-            carry_over_last_shift=initial_last_shift,
-            changelog=changelog,
-        )
-
-    for emp in employees:
-        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
-        target = states[emp.name].effective_target
-        if actual > target:
-            for i in range(len(days) - 1, -1, -1):
-                if actual <= target:
-                    break
-                ds = days[i]
-                if emp.name in ds.workday and (ds.date, emp.name) not in pinned_on:
-                    ds.workday.remove(emp.name)
-                    ds.day_off.append(emp.name)
-                    actual -= 1
-
-    for emp in employees:
-        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
-        target = states[emp.name].effective_target
-        if actual > target:
-            removable = sum(
-                1 for d in days if emp.name in d.workday and (d.date, emp.name) not in pinned_on
-            )
-            if removable > 0:
-                raise ScheduleError(
-                    f"Нарушена норма для {emp.name}: факт={actual}, норма={target}, "
-                    f"осталось {removable} снимаемых WORKDAY"
-                )
-
-    days = _pp(
-        "balance_evening_final",
-        _balance_evening_shifts,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
+    pipeline = build_default_pipeline(config.optimization_priority)
+    days = pipeline.run(ctx)
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
