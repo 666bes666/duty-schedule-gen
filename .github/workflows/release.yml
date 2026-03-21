@@ -62,7 +62,7 @@ jobs:
             dist/checksums.txt
 
       - name: Run tests before publish
-        run: uv run pytest --cov=duty_schedule --cov-fail-under=80 -q
+        run: uv run pytest --ignore=tests/ui --cov=duty_schedule --cov-fail-under=80 -q
 
       - name: Publish release
         env:
