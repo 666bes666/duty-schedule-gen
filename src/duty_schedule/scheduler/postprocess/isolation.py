@@ -58,7 +58,7 @@ def _minimize_isolated_off(
         return length
 
     for emp in employees:
-        if not emp.on_duty:
+        if emp.schedule_type != ScheduleType.FLEXIBLE:
             continue
 
         for _ in range(len(days)):
@@ -145,7 +145,7 @@ def _minimize_isolated_off(
                             comp_day.workday.remove(emp.name)
                             comp_day.day_off.append(emp.name)
 
-                    elif emp.schedule_type == ScheduleType.FLEXIBLE:
+                    elif emp.on_duty and emp.schedule_type == ScheduleType.FLEXIBLE:
                         improved = _try_duty_shift_swap(
                             emp,
                             extend_idx,
