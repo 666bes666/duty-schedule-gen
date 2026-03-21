@@ -186,6 +186,23 @@ class EqualizeIsolatedOff:
 
 
 @dataclass
+class MultiEmployeeSwapPass:
+    name: str = "multi_employee_swap"
+
+    def run(self, ctx: PipelineContext) -> list[DaySchedule]:
+        from .isolation import _multi_employee_swap_pass
+
+        return _multi_employee_swap_pass(
+            ctx.days,
+            ctx.employees,
+            ctx.holidays,
+            pinned_on=ctx.pinned_on,
+            carry_over_cw=ctx.carry_over_cw,
+            changelog=ctx.changelog,
+        )
+
+
+@dataclass
 class MinimizeMaxStreak:
     name: str = "minimize_max_streak"
     strict: bool = False
@@ -295,6 +312,7 @@ def build_default_pipeline(
         MinimizeIsolatedOff(name="minimize_isolated_off_2"),
         EqualizeIsolatedOff(),
         MinimizeIsolatedOff(name="minimize_isolated_off_3"),
+        MultiEmployeeSwapPass(),
         BalanceEveningShifts(name="balance_evening_2"),
         RecalcTotalWorking(),
         TargetAdjustment(name="target_adjustment_3"),

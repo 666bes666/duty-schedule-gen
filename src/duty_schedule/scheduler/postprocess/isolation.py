@@ -271,6 +271,145 @@ def _minimize_isolated_off(
     return days
 
 
+def _multi_employee_swap_pass(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
+    changelog: ChangeLog | None = None,
+) -> list[DaySchedule]:
+    flex_emps = sorted(
+        [e for e in employees if e.schedule_type == ScheduleType.FLEXIBLE],
+        key=lambda e: -_count_isolated_off(e.name, days),
+    )
+    _multi_employee_swap(days, flex_emps, pinned_on, holidays, carry_over_cw, changelog)
+    return days
+
+
+def _multi_employee_swap(
+    days: list[DaySchedule],
+    flex_emps: list[Employee],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    holidays: set[date],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+) -> None:
+    for _ in range(len(days)):
+        improved = False
+        for emp_a in flex_emps:
+            if _count_isolated_off(emp_a.name, days) == 0:
+                continue
+            for emp_b in flex_emps:
+                if emp_b.name == emp_a.name:
+                    continue
+                if emp_a.city != emp_b.city:
+                    continue
+                improved = _try_pairwise_swap(
+                    days, emp_a, emp_b, pinned_on, holidays, carry_over_cw, changelog
+                )
+                if improved:
+                    break
+            if improved:
+                break
+        if not improved:
+            break
+
+
+def _revert_pairwise(d1: DaySchedule, d2: DaySchedule, name_a: str, name_b: str) -> None:
+    d2.workday.remove(name_a)
+    d2.day_off.append(name_a)
+    d2.day_off.remove(name_b)
+    d2.workday.append(name_b)
+
+    d1.day_off.remove(name_a)
+    d1.workday.append(name_a)
+    d1.workday.remove(name_b)
+    d1.day_off.append(name_b)
+
+
+def _validate_pairwise(
+    days: list[DaySchedule],
+    emp_a: Employee,
+    emp_b: Employee,
+    d1_idx: int,
+    d2_idx: int,
+    carry_over_cw: dict[str, int] | None,
+) -> bool:
+    cw_a = _consec_work_if_added(emp_a.name, d2_idx, days, carry_over_cw)
+    cw_b = _consec_work_if_added(emp_b.name, d1_idx, days, carry_over_cw)
+    if cw_a > _max_cw_postprocess(emp_a) or cw_b > _max_cw_postprocess(emp_b):
+        return False
+    if _had_evening_before(emp_b.name, d1_idx, days):
+        return False
+    return not _had_evening_before(emp_a.name, d2_idx, days)
+
+
+def _try_pairwise_swap(
+    days: list[DaySchedule],
+    emp_a: Employee,
+    emp_b: Employee,
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    holidays: set[date],
+    carry_over_cw: dict[str, int] | None,
+    changelog: ChangeLog | None,
+) -> bool:
+    total_before = _count_isolated_off(emp_a.name, days) + _count_isolated_off(emp_b.name, days)
+    if total_before == 0:
+        return False
+
+    day1_candidates = []
+    day2_candidates = []
+    for i in range(len(days)):
+        d = days[i]
+        if (d.date, emp_a.name) in pinned_on or (d.date, emp_b.name) in pinned_on:
+            continue
+        if emp_a.name in d.workday and emp_b.name in d.day_off:
+            day1_candidates.append(i)
+        elif emp_a.name in d.day_off and emp_b.name in d.workday:
+            day2_candidates.append(i)
+
+    for d1_idx in day1_candidates:
+        for d2_idx in day2_candidates:
+            if d1_idx == d2_idx:
+                continue
+            d1 = days[d1_idx]
+            d2 = days[d2_idx]
+
+            d1.workday.remove(emp_a.name)
+            d1.day_off.append(emp_a.name)
+            d1.day_off.remove(emp_b.name)
+            d1.workday.append(emp_b.name)
+
+            d2.day_off.remove(emp_a.name)
+            d2.workday.append(emp_a.name)
+            d2.workday.remove(emp_b.name)
+            d2.day_off.append(emp_b.name)
+
+            valid = _validate_pairwise(days, emp_a, emp_b, d1_idx, d2_idx, carry_over_cw)
+            if not valid:
+                _revert_pairwise(d1, d2, emp_a.name, emp_b.name)
+                continue
+
+            total_after = _count_isolated_off(emp_a.name, days) + _count_isolated_off(
+                emp_b.name, days
+            )
+            if total_after < total_before:
+                if changelog:
+                    changelog.add(
+                        "minimize_isolated_off",
+                        "multi_swap",
+                        emp_a.name,
+                        d1.date,
+                        f"pairwise with {emp_b.name}, comp {d2.date}",
+                    )
+                return True
+
+            _revert_pairwise(d1, d2, emp_a.name, emp_b.name)
+
+    return False
+
+
 def _break_evening_isolated_pattern(
     days: list[DaySchedule],
     employees: list[Employee],
