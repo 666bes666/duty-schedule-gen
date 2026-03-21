@@ -17,15 +17,6 @@ from duty_schedule.models import (
     PinnedAssignment,
     collect_config_issues,
 )
-
-_PRIORITY_OPTIONS: dict[str, str | None] = {
-    "Без приоритета": None,
-    "Минимум изолированных выходных": OptimizationPriority.ISOLATED_WEEKENDS,
-    "Равномерные вечерние смены": OptimizationPriority.EVENING_SHIFTS,
-    "Минимум рабочих серий": OptimizationPriority.CONSECUTIVE_DAYS,
-    "Равные выходные в сб/вс": OptimizationPriority.WEEKEND_DAYS,
-}
-_PRIORITY_LABELS: dict[str | None, str] = {v: k for k, v in _PRIORITY_OPTIONS.items()}
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.ui.builders import (
@@ -64,6 +55,15 @@ from duty_schedule.ui.views import (
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
+
+_PRIORITY_OPTIONS: dict[str, str | None] = {
+    "Без приоритета": None,
+    "Минимум изолированных выходных": OptimizationPriority.ISOLATED_WEEKENDS,
+    "Равномерные вечерние смены": OptimizationPriority.EVENING_SHIFTS,
+    "Минимум рабочих серий": OptimizationPriority.CONSECUTIVE_DAYS,
+    "Равные выходные в сб/вс": OptimizationPriority.WEEKEND_DAYS,
+}
+_PRIORITY_LABELS: dict[str | None, str] = {v: k for k, v in _PRIORITY_OPTIONS.items()}
 
 st.set_page_config(page_title="График дежурств", page_icon=None, layout="wide")
 _init_state()
@@ -621,8 +621,9 @@ for _vwarn in _val_warnings:
     st.warning(_vwarn)
 
 
-@st.dialog("Приоритеты оптимизации")
-def _priority_dialog() -> None:
+_prio_val = st.session_state.get("optimization_priority")
+_prio_btn_label = "Приоритеты: " + (_PRIORITY_LABELS.get(_prio_val) or "нет")
+with st.popover(_prio_btn_label):
     _opts = list(_PRIORITY_OPTIONS.keys())
     _current = st.session_state.get("optimization_priority")
     _current_label = next(
@@ -632,17 +633,12 @@ def _priority_dialog() -> None:
         "Приоритет при генерации:",
         _opts,
         index=_opts.index(_current_label),
+        key="prio_radio",
     )
     st.caption("Остальные параметры балансируются в обычном режиме.")
-    if st.button("Сохранить", type="primary"):
+    if st.button("Применить", type="primary", key="prio_apply"):
         st.session_state["optimization_priority"] = _PRIORITY_OPTIONS[_chosen]
         st.rerun()
-
-
-_prio_val = st.session_state.get("optimization_priority")
-_prio_btn_label = "Приоритеты: " + (_PRIORITY_LABELS.get(_prio_val) or "нет")
-if st.button(_prio_btn_label, use_container_width=False):
-    _priority_dialog()
 
 if st.button("Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(
