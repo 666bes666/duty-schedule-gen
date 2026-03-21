@@ -14,6 +14,7 @@ from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     Config,
     DaySchedule,
+    OptimizationPriority,
     Schedule,
     ShiftType,
 )
@@ -121,6 +122,7 @@ def generate_schedule(
         _break_evening_isolated_pattern,
         _equalize_isolated_off,
         _minimize_isolated_off,
+        _minimize_max_streak,
         _target_adjustment_pass,
         _trim_long_off_blocks,
     )
@@ -387,6 +389,82 @@ def generate_schedule(
         carry_over_last_shift=initial_last_shift,
         changelog=changelog,
     )
+
+    prio = config.optimization_priority
+    if prio == OptimizationPriority.ISOLATED_WEEKENDS:
+        for _pass in range(5):
+            days = _pp(
+                f"priority_minimize_iso_{_pass}",
+                _minimize_isolated_off,
+                days,
+                employees,
+                holidays,
+                pinned_on=pinned_on,
+                carry_over_cw=initial_cw,
+                carry_over_last_shift=initial_last_shift,
+                changelog=changelog,
+            )
+        days = _pp(
+            "priority_equalize_iso",
+            _equalize_isolated_off,
+            days,
+            employees,
+            holidays,
+            pinned_on=pinned_on,
+            carry_over_cw=initial_cw,
+            changelog=changelog,
+            strict=True,
+        )
+    elif prio == OptimizationPriority.EVENING_SHIFTS:
+        days = _pp(
+            "priority_evening",
+            _balance_evening_shifts,
+            days,
+            employees,
+            pinned_on=pinned_on,
+            changelog=changelog,
+            strict=True,
+        )
+    elif prio == OptimizationPriority.CONSECUTIVE_DAYS:
+        days = _pp(
+            "priority_streak",
+            _minimize_max_streak,
+            days,
+            employees,
+            holidays,
+            pinned_on=pinned_on,
+            carry_over_cw=initial_cw,
+            carry_over_last_shift=initial_last_shift,
+            changelog=changelog,
+            strict=True,
+        )
+    elif prio == OptimizationPriority.WEEKEND_DAYS:
+        days = _pp(
+            "priority_weekend",
+            _balance_weekend_work,
+            days,
+            employees,
+            pinned_on=pinned_on,
+            carry_over_cw=initial_cw,
+            changelog=changelog,
+            strict=True,
+        )
+
+    if prio is not None:
+        for emp in employees:
+            states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
+        days = _pp(
+            "priority_norm_fix",
+            _target_adjustment_pass,
+            days,
+            employees,
+            states,
+            holidays,
+            pinned_on=pinned_on,
+            carry_over_cw=initial_cw,
+            carry_over_last_shift=initial_last_shift,
+            changelog=changelog,
+        )
 
     for emp in employees:
         actual = sum(1 for d in days if _is_working_on_day(emp.name, d))

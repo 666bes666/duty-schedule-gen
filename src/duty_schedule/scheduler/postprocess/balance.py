@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from statistics import median
 
 from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.models import (
@@ -8,14 +9,18 @@ from duty_schedule.models import (
     DaySchedule,
     Employee,
     ScheduleType,
+    ShiftType,
 )
 from duty_schedule.scheduler.changelog import ChangeLog
 from duty_schedule.scheduler.constraints import (
     _consecutive_shift_count_at,
     _duty_only,
+    _had_evening_before,
     _is_weekend_or_holiday,
+    _is_working_on_day,
     _max_co,
     _max_cw,
+    _max_cw_postprocess,
 )
 
 from .helpers import _consec_work_if_added
@@ -27,6 +32,7 @@ def _balance_weekend_work(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     changelog: ChangeLog | None = None,
+    strict: bool = False,
 ) -> list[DaySchedule]:
     day_by_date = {d.date: d for d in days}
     day_idx_map = {d.date: i for i, d in enumerate(days)}
@@ -54,7 +60,7 @@ def _balance_weekend_work(
             }
             max_name = max(counts, key=counts.__getitem__)
             min_name = min(counts, key=counts.__getitem__)
-            if counts[max_name] - counts[min_name] <= 1:
+            if counts[max_name] - counts[min_name] <= (0 if strict else 1):
                 break
 
             swapped = False
@@ -243,6 +249,7 @@ def _balance_evening_shifts(
     employees: list[Employee],
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     changelog: ChangeLog | None = None,
+    strict: bool = False,
 ) -> list[DaySchedule]:
     eligible = [
         e
@@ -260,19 +267,21 @@ def _balance_evening_shifts(
     day_idx_map = {d.date: i for i, d in enumerate(days)}
     emp_by_name = {e.name: e for e in eligible}
 
-    for _ in range(len(days) * len(eligible)):
+    _threshold = 0 if strict else 1
+    _iterations = len(days) * len(eligible) * (3 if strict else 1)
+    for _ in range(_iterations):
         counts: dict[str, int] = {
             e.name: sum(1 for d in days if e.name in d.evening) for e in eligible
         }
         sorted_by_count = sorted(eligible, key=lambda e: counts[e.name])
         max_name = max(counts, key=counts.__getitem__)
-        if counts[max_name] - counts[sorted_by_count[0].name] <= 1:
+        if counts[max_name] - counts[sorted_by_count[0].name] <= _threshold:
             break
 
         swapped = False
         for candidate in sorted_by_count:
             min_name = candidate.name
-            if counts[max_name] - counts[min_name] <= 1:
+            if counts[max_name] - counts[min_name] <= _threshold:
                 break
 
             for day in days:
@@ -439,6 +448,134 @@ def _balance_evening_shifts(
                 break
 
         if not swapped:
+            break
+
+    return days
+
+
+def _minimize_max_streak(
+    days: list[DaySchedule],
+    employees: list[Employee],
+    holidays: set[date],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
+    carry_over_cw: dict[str, int] | None = None,
+    carry_over_last_shift: dict[str, ShiftType] | None = None,
+    changelog: ChangeLog | None = None,
+    strict: bool = False,
+) -> list[DaySchedule]:
+    def _max_streak(name: str) -> int:
+        best = 0
+        cur = 0
+        for d in days:
+            if _is_working_on_day(name, d):
+                cur += 1
+                best = max(best, cur)
+            else:
+                cur = 0
+        return best
+
+    _iterations = len(days) * (3 if strict else 1)
+    for _ in range(_iterations):
+        active_emps = [e for e in employees if e.on_duty]
+        if not active_emps:
+            break
+        streaks = {e.name: _max_streak(e.name) for e in active_emps}
+        med = median(streaks.values())
+        high_emps = sorted(
+            [
+                e
+                for e in active_emps
+                if (streaks[e.name] >= med if strict else streaks[e.name] > med)
+            ],
+            key=lambda e: -streaks[e.name],
+        )
+        if not high_emps:
+            break
+
+        improved = False
+        for emp in high_emps:
+            best_start = -1
+            best_len = 0
+            cur_start = -1
+            cur_len = 0
+            for i, d in enumerate(days):
+                if _is_working_on_day(emp.name, d):
+                    if cur_len == 0:
+                        cur_start = i
+                    cur_len += 1
+                    if cur_len > best_len:
+                        best_len = cur_len
+                        best_start = cur_start
+                else:
+                    cur_len = 0
+
+            if best_len <= med:
+                continue
+
+            mid = best_start + best_len // 2
+            streak_positions = sorted(
+                range(best_start, best_start + best_len),
+                key=lambda i: abs(i - mid),
+            )
+
+            for streak_idx in streak_positions:
+                day = days[streak_idx]
+                if emp.name not in day.workday:
+                    continue
+                if (day.date, emp.name) in pinned_on:
+                    continue
+
+                for comp_idx, comp_day in enumerate(days):
+                    if emp.name not in comp_day.day_off:
+                        continue
+                    if (comp_day.date, emp.name) in pinned_on:
+                        continue
+                    if emp.is_blocked(comp_day.date):
+                        continue
+                    if emp.is_day_off_weekly(comp_day.date):
+                        continue
+                    if abs(comp_idx - streak_idx) <= 1:
+                        continue
+                    if not emp.works_on_weekend() and _is_weekend_or_holiday(
+                        comp_day.date, holidays
+                    ):
+                        continue
+                    if _had_evening_before(emp.name, comp_idx, days, carry_over_last_shift):
+                        continue
+                    if _consec_work_if_added(
+                        emp.name, comp_idx, days, carry_over_cw
+                    ) > _max_cw_postprocess(emp):
+                        continue
+
+                    day.workday.remove(emp.name)
+                    day.day_off.append(emp.name)
+                    comp_day.day_off.remove(emp.name)
+                    comp_day.workday.append(emp.name)
+
+                    if _max_streak(emp.name) < streaks[emp.name]:
+                        if changelog:
+                            changelog.add(
+                                "priority_streak",
+                                "swap",
+                                emp.name,
+                                day.date,
+                                f"workday → day_off, comp {comp_day.date} day_off → workday",
+                            )
+                        improved = True
+                        break
+
+                    comp_day.workday.remove(emp.name)
+                    comp_day.day_off.append(emp.name)
+                    day.day_off.remove(emp.name)
+                    day.workday.append(emp.name)
+
+                if improved:
+                    break
+
+            if improved:
+                break
+
+        if not improved:
             break
 
     return days

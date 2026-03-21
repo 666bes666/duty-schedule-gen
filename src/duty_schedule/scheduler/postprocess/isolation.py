@@ -334,6 +334,7 @@ def _equalize_isolated_off(
     pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]] = frozenset(),
     carry_over_cw: dict[str, int] | None = None,
     changelog: ChangeLog | None = None,
+    strict: bool = False,
 ) -> list[DaySchedule]:
     flex_duty = [
         e
@@ -343,14 +344,18 @@ def _equalize_isolated_off(
     if len(flex_duty) < 2:
         return days
 
-    for _ in range(len(days)):
+    _iterations = len(days) * (3 if strict else 1)
+    for _ in range(_iterations):
         iso_counts = {e.name: _count_isolated_off(e.name, days) for e in flex_duty}
         max_name = max(iso_counts, key=lambda n: iso_counts[n])
         min_name = min(iso_counts, key=lambda n: iso_counts[n])
         max_val = iso_counts[max_name]
         min_val = iso_counts[min_name]
 
-        if max_val - min_val <= 1 or max_val <= 2:
+        if strict:
+            if max_val - min_val <= 0:
+                break
+        elif max_val - min_val <= 1 or max_val <= 2:
             break
 
         max_emp = next(e for e in flex_duty if e.name == max_name)

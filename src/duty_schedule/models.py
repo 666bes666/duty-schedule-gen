@@ -14,6 +14,13 @@ class ScheduleType(StrEnum):
     FIVE_TWO = "5/2"
 
 
+class OptimizationPriority(StrEnum):
+    ISOLATED_WEEKENDS = "isolated_weekends"
+    EVENING_SHIFTS = "evening_shifts"
+    CONSECUTIVE_DAYS = "consecutive_days"
+    WEEKEND_DAYS = "weekend_days"
+
+
 class ShiftType(StrEnum):
     MORNING = "morning"
     EVENING = "evening"
@@ -164,6 +171,7 @@ class Config(BaseModel):
     pins: list[PinnedAssignment] = []
     carry_over: list[CarryOverState] = []
     solver: Literal["greedy", "cpsat"] = "greedy"
+    optimization_priority: OptimizationPriority | None = None
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:

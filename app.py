@@ -13,9 +13,19 @@ from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
     CarryOverState,
     Config,
+    OptimizationPriority,
     PinnedAssignment,
     collect_config_issues,
 )
+
+_PRIORITY_OPTIONS: dict[str, str | None] = {
+    "Без приоритета": None,
+    "Минимум изолированных выходных": OptimizationPriority.ISOLATED_WEEKENDS,
+    "Равномерные вечерние смены": OptimizationPriority.EVENING_SHIFTS,
+    "Минимум рабочих серий": OptimizationPriority.CONSECUTIVE_DAYS,
+    "Равные выходные в сб/вс": OptimizationPriority.WEEKEND_DAYS,
+}
+_PRIORITY_LABELS: dict[str | None, str] = {v: k for k, v in _PRIORITY_OPTIONS.items()}
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.ui.builders import (
@@ -120,8 +130,8 @@ with st.sidebar:
     )
     if uploaded is not None:
         raw = uploaded.read().decode("utf-8")
-        df_loaded, pins_loaded, co_loaded, m, y, s, emp_dates_loaded, err = _yaml_to_df(
-            raw, st.session_state["cfg_year"]
+        df_loaded, pins_loaded, co_loaded, m, y, s, emp_dates_loaded, err, prio_loaded = (
+            _yaml_to_df(raw, st.session_state["cfg_year"])
         )
         if err:
             st.error(err)
@@ -137,6 +147,7 @@ with st.sidebar:
             st.session_state["employee_dates"] = emp_dates_loaded
             st.session_state["_df_for_download"] = df_loaded
             st.session_state["_pins_for_download"] = pins_loaded
+            st.session_state["optimization_priority"] = prio_loaded
             _bump_table()
             msg = f"Загружен конфиг: {len(df_loaded)} сотрудников"
             if co_loaded:
@@ -160,6 +171,7 @@ with st.sidebar:
         _cfg_seed,
         employee_dates=st.session_state["employee_dates"],
         pins_df=_dl_pins,
+        optimization_priority=st.session_state.get("optimization_priority"),
     )
     st.download_button(
         label="Скачать конфиг (.yaml)",
@@ -608,6 +620,30 @@ for _verr in _val_errors:
 for _vwarn in _val_warnings:
     st.warning(_vwarn)
 
+
+@st.dialog("Приоритеты оптимизации")
+def _priority_dialog() -> None:
+    _opts = list(_PRIORITY_OPTIONS.keys())
+    _current = st.session_state.get("optimization_priority")
+    _current_label = next(
+        (k for k, v in _PRIORITY_OPTIONS.items() if v == _current), "Без приоритета"
+    )
+    _chosen = st.radio(
+        "Приоритет при генерации:",
+        _opts,
+        index=_opts.index(_current_label),
+    )
+    st.caption("Остальные параметры балансируются в обычном режиме.")
+    if st.button("Сохранить", type="primary"):
+        st.session_state["optimization_priority"] = _PRIORITY_OPTIONS[_chosen]
+        st.rerun()
+
+
+_prio_val = st.session_state.get("optimization_priority")
+_prio_btn_label = "Приоритеты: " + (_PRIORITY_LABELS.get(_prio_val) or "нет")
+if st.button(_prio_btn_label, use_container_width=False):
+    _priority_dialog()
+
 if st.button("Сгенерировать расписание", type="primary", use_container_width=True):
     employees, errors = _build_employees(
         edited_df, employee_dates=st.session_state["employee_dates"]
@@ -668,6 +704,7 @@ if st.button("Сгенерировать расписание", type="primary", 
     carry_over_objs = matched
 
     _solver_val = st.session_state.get("cfg_solver", "greedy")
+    _opt_prio = st.session_state.get("optimization_priority")
     try:
         config = Config(
             month=month,
@@ -677,6 +714,7 @@ if st.button("Сгенерировать расписание", type="primary", 
             pins=pins,
             carry_over=carry_over_objs,
             solver=_solver_val,
+            optimization_priority=_opt_prio,
         )
     except (ValueError, ValidationError) as exc:
         st.error(f"Ошибка конфигурации: {exc}")

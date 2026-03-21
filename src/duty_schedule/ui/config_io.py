@@ -57,6 +57,7 @@ def _df_to_yaml(
     employee_dates: dict | None = None,
     pins_df: pd.DataFrame | None = None,
     carry_over: list[dict] | None = None,
+    optimization_priority: str | None = None,
 ) -> str:
     ed = employee_dates or {}
     employees = []
@@ -119,6 +120,8 @@ def _df_to_yaml(
             config_dict["pins"] = pins_list
     if carry_over:
         config_dict["carry_over"] = carry_over
+    if optimization_priority is not None:
+        config_dict["optimization_priority"] = optimization_priority
     result: str = yaml.dump(
         config_dict,
         allow_unicode=True,
@@ -174,14 +177,24 @@ def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
 def _yaml_to_df(
     raw_yaml: str,
     year: int,
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None, list[dict], int, int, int, dict, str | None]:
+) -> tuple[
+    pd.DataFrame | None,
+    pd.DataFrame | None,
+    list[dict],
+    int,
+    int,
+    int,
+    dict,
+    str | None,
+    str | None,
+]:
     try:
         data = yaml.safe_load(raw_yaml)
     except yaml.YAMLError as e:
-        return None, None, [], 0, 0, 42, {}, f"Ошибка разбора YAML: {e}"
+        return None, None, [], 0, 0, 42, {}, f"Ошибка разбора YAML: {e}", None
 
     if not isinstance(data, dict):
-        return None, None, [], 0, 0, 42, {}, "Неверный формат файла конфигурации."
+        return None, None, [], 0, 0, 42, {}, "Неверный формат файла конфигурации.", None
 
     month = int(data.get("month", date.today().month))
     year_val = int(data.get("year", year))
@@ -216,4 +229,15 @@ def _yaml_to_df(
 
     pins_df = _pins_list_to_df(data.get("pins", []), year_val)
     carry_over = data.get("carry_over", [])
-    return pd.DataFrame(rows), pins_df, carry_over, month, year_val, seed, employee_dates, None
+    opt_priority = data.get("optimization_priority") or None
+    return (
+        pd.DataFrame(rows),
+        pins_df,
+        carry_over,
+        month,
+        year_val,
+        seed,
+        employee_dates,
+        None,
+        opt_priority,
+    )
