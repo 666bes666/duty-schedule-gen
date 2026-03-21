@@ -244,6 +244,107 @@ def _balance_duty_shifts(
     return days
 
 
+def _can_take_evening(
+    name: str,
+    day_idx: int,
+    days: list[DaySchedule],
+    day_by_date: dict[date, DaySchedule],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+) -> bool:
+    day = days[day_idx]
+    if (day.date, name) in pinned_on:
+        return False
+    nxt = day_by_date.get(day.date + timedelta(days=1))
+    return not (nxt and (name in nxt.morning or name in nxt.workday))
+
+
+def _can_leave_evening(
+    name: str,
+    day: DaySchedule,
+    day_by_date: dict[date, DaySchedule],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+) -> bool:
+    if (day.date, name) in pinned_on:
+        return False
+    prev = day_by_date.get(day.date - timedelta(days=1))
+    return not (prev and name in prev.evening)
+
+
+def _try_three_way_rotation(
+    days: list[DaySchedule],
+    max_name: str,
+    min_name: str,
+    eligible: list[Employee],
+    day_by_date: dict[date, DaySchedule],
+    day_idx_map: dict[date, int],
+    pinned_on: frozenset[tuple[date, str]] | set[tuple[date, str]],
+    changelog: ChangeLog | None,
+) -> bool:
+    mid_names = [
+        e.name
+        for e in eligible
+        if e.name != max_name
+        and e.name != min_name
+        and e.can_work_morning()
+        and e.can_work_evening()
+    ]
+
+    for day1 in days:
+        if max_name not in day1.evening:
+            continue
+        if not _can_leave_evening(max_name, day1, day_by_date, pinned_on):
+            continue
+
+        for mid_name in mid_names:
+            if mid_name not in day1.morning:
+                continue
+            if (day1.date, mid_name) in pinned_on:
+                continue
+            idx1 = day_idx_map[day1.date]
+            if not _can_take_evening(mid_name, idx1, days, day_by_date, pinned_on):
+                continue
+
+            for day2 in days:
+                if day2.date == day1.date:
+                    continue
+                if mid_name not in day2.evening:
+                    continue
+                if not _can_leave_evening(mid_name, day2, day_by_date, pinned_on):
+                    continue
+                if day2.date == day1.date + timedelta(days=1):
+                    continue
+                if min_name not in day2.morning:
+                    continue
+                if (day2.date, min_name) in pinned_on:
+                    continue
+                if not _can_take_evening(
+                    min_name, day_idx_map[day2.date], days, day_by_date, pinned_on
+                ):
+                    continue
+
+                day1.evening.remove(max_name)
+                day1.morning.remove(mid_name)
+                day1.morning.append(max_name)
+                day1.evening.append(mid_name)
+
+                day2.evening.remove(mid_name)
+                day2.morning.remove(min_name)
+                day2.morning.append(mid_name)
+                day2.evening.append(min_name)
+
+                if changelog:
+                    changelog.add(
+                        "balance_evening",
+                        "three_way",
+                        max_name,
+                        day1.date,
+                        f"3-way: {max_name}→morning, {mid_name}→evening "
+                        f"(day2 {day2.date}: {mid_name}→morning, {min_name}→evening)",
+                    )
+                return True
+    return False
+
+
 def _balance_evening_shifts(
     days: list[DaySchedule],
     employees: list[Employee],
@@ -443,6 +544,18 @@ def _balance_evening_shifts(
                         )
                     swapped = True
                     break
+
+            if not swapped:
+                swapped = _try_three_way_rotation(
+                    days,
+                    max_name,
+                    min_name,
+                    eligible,
+                    day_by_date,
+                    day_idx_map,
+                    pinned_on,
+                    changelog,
+                )
 
             if swapped:
                 break
