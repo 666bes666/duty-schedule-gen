@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     DaySchedule,
     Employee,
@@ -16,6 +17,14 @@ from duty_schedule.scheduler.constraints import (
     _is_working_on_day,
     _max_cw_postprocess,
 )
+
+logger = get_logger(__name__)
+
+
+def build_day_lookups(
+    days: list[DaySchedule],
+) -> tuple[dict[date, DaySchedule], dict[date, int]]:
+    return {d.date: d for d in days}, {d.date: i for i, d in enumerate(days)}
 
 
 def _streak_around(
@@ -238,5 +247,11 @@ def _try_duty_shift_swap(
             free_day.day_off.append(partner.name)
         free_day.day_off.remove(emp.name)
         shift_list.append(emp.name)
+        logger.debug(
+            "duty_shift_swap_reverted",
+            employee=emp.name,
+            swap_partner=partner.name,
+            day=str(free_day.date),
+        )
 
     return False

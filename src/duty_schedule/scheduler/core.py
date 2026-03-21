@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import copy
 import random
+import time
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any
+
+import structlog
 
 from duty_schedule.constants import (
     MAX_BACKTRACK_ATTEMPTS,
@@ -98,6 +101,22 @@ def generate_schedule(
     config: Config,
     holidays: set[date],
 ) -> Schedule:
+    ctx_vars = structlog.contextvars.get_contextvars()
+    owns_context = "request_id" not in ctx_vars and "operation_id" not in ctx_vars
+    if owns_context:
+        structlog.contextvars.bind_contextvars(operation_id=uuid.uuid4().hex[:8])
+
+    try:
+        return _generate_schedule_impl(config, holidays)
+    finally:
+        if owns_context:
+            structlog.contextvars.unbind_contextvars("operation_id")
+
+
+def _generate_schedule_impl(
+    config: Config,
+    holidays: set[date],
+) -> Schedule:
     if config.solver == "cpsat":
         from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
 
@@ -114,16 +133,6 @@ def generate_schedule(
         _is_working_on_day,
     )
     from duty_schedule.scheduler.greedy import _build_day
-    from duty_schedule.scheduler.postprocess import (
-        _balance_duty_shifts,
-        _balance_evening_shifts,
-        _balance_weekend_work,
-        _break_evening_isolated_pattern,
-        _equalize_isolated_off,
-        _minimize_isolated_off,
-        _target_adjustment_pass,
-        _trim_long_off_blocks,
-    )
 
     rng = random.Random(config.seed)
     all_days = get_all_days(config.year, config.month)
@@ -135,12 +144,17 @@ def generate_schedule(
     pinned_on: set[tuple[date, str]] = {(p.date, p.employee_name) for p in config.pins}
 
     production_days = _calc_production_days(config.year, config.month, holidays)
-    logger.info("production_days_calculated", production_days=production_days)
+    logger.info(
+        "schedule_generation_start",
+        month=config.month,
+        year=config.year,
+        employees=len(employees),
+        solver=config.solver,
+        production_days=production_days,
+    )
     logger.debug(
         "scheduler_config",
-        solver=config.solver,
         seed=config.seed,
-        employees=len(employees),
         max_backtrack_attempts=MAX_BACKTRACK_ATTEMPTS,
         max_backtrack_days=MAX_BACKTRACK_DAYS,
     )
@@ -183,6 +197,7 @@ def generate_schedule(
     day_idx = 0
     total_backtracks = 0
 
+    t_greedy = time.monotonic()
     while day_idx < len(all_days):
         day = all_days[day_idx]
         saved_states = copy.deepcopy(states)
@@ -234,190 +249,57 @@ def generate_schedule(
 
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
+    logger.info(
+        "greedy_phase_done",
+        duration_ms=round((time.monotonic() - t_greedy) * 1000, 1),
+        backtracks=total_backtracks,
+    )
+
     changelog = ChangeLog()
 
-    def _pp(stage: str, func: Any, *args: Any, **kwargs: Any) -> Any:
-        pre = len(changelog.entries)
-        result = func(*args, **kwargs)
-        logger.debug(
-            "postprocess_stage_done",
-            stage=stage,
-            changes=len(changelog.entries) - pre,
+    from duty_schedule.scheduler.postprocess.pipeline import (
+        PipelineContext,
+        build_default_pipeline,
+    )
+
+    ctx = PipelineContext(
+        days=days,
+        employees=employees,
+        holidays=holidays,
+        pinned_on=pinned_on,
+        carry_over_cw=initial_cw,
+        carry_over_last_shift=initial_last_shift,
+        states=states,
+        changelog=changelog,
+    )
+
+    duty_count = sum(1 for e in employees if e.on_duty)
+    pipeline = build_default_pipeline(config.optimization_priority, small_team=(duty_count <= 4))
+
+    t_postprocess = time.monotonic()
+    days = pipeline.run(ctx)
+    logger.info(
+        "postprocess_phase_done",
+        duration_ms=round((time.monotonic() - t_postprocess) * 1000, 1),
+        stages=len(pipeline.stages),
+    )
+
+    for emp in employees:
+        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
+
+    from duty_schedule.scheduler.postprocess.validation import validate_schedule_or_raise
+
+    soft_violations = validate_schedule_or_raise(
+        days, employees, holidays, pins=config.pins, carry_over_cw=initial_cw
+    )
+    for v in soft_violations:
+        logger.warning(
+            "schedule_soft_violation",
+            employee=v.employee,
+            date=str(v.date),
+            constraint=v.constraint,
+            detail=v.detail,
         )
-        return result
-
-    days = _pp(
-        "balance_weekend_work",
-        _balance_weekend_work,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
-    )
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-
-    days = _pp(
-        "balance_duty_shifts",
-        _balance_duty_shifts,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
-    days = _pp(
-        "balance_evening_1",
-        _balance_evening_shifts,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
-    days = _pp(
-        "target_adjustment_1",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "trim_long_off_blocks",
-        _trim_long_off_blocks,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _pp(
-        "target_adjustment_2",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_1",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "break_evening_isolated_pattern",
-        _break_evening_isolated_pattern,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_2",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "equalize_isolated_off",
-        _equalize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        changelog=changelog,
-    )
-    days = _pp(
-        "minimize_isolated_off_3",
-        _minimize_isolated_off,
-        days,
-        employees,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-    days = _pp(
-        "balance_evening_2",
-        _balance_evening_shifts,
-        days,
-        employees,
-        pinned_on=pinned_on,
-        changelog=changelog,
-    )
-
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-    days = _pp(
-        "target_adjustment_3",
-        _target_adjustment_pass,
-        days,
-        employees,
-        states,
-        holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        changelog=changelog,
-    )
-
-    for emp in employees:
-        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
-        target = states[emp.name].effective_target
-        if actual > target:
-            for i in range(len(days) - 1, -1, -1):
-                if actual <= target:
-                    break
-                ds = days[i]
-                if emp.name in ds.workday and (ds.date, emp.name) not in pinned_on:
-                    ds.workday.remove(emp.name)
-                    ds.day_off.append(emp.name)
-                    actual -= 1
-
-    for emp in employees:
-        actual = sum(1 for d in days if _is_working_on_day(emp.name, d))
-        target = states[emp.name].effective_target
-        if actual > target:
-            removable = sum(
-                1 for d in days if emp.name in d.workday and (d.date, emp.name) not in pinned_on
-            )
-            if removable > 0:
-                raise ScheduleError(
-                    f"Нарушена норма для {emp.name}: факт={actual}, норма={target}, "
-                    f"осталось {removable} снимаемых WORKDAY"
-                )
-
-    days = _balance_evening_shifts(days, employees, pinned_on=pinned_on, changelog=changelog)
-
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
 
     duty_employees = [e for e in employees if e.on_duty]
     ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
@@ -425,21 +307,9 @@ def generate_schedule(
         max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
         logger.info("evening_shift_balance", max=max_ev, min=min_ev, diff=max_ev - min_ev)
 
-    for i in range(len(days) - 1):
-        for emp_name in days[i].evening:
-            if emp_name in days[i + 1].morning or emp_name in days[i + 1].workday:
-                raise ScheduleError(
-                    f"Нарушение отдыха: {emp_name} вечер {days[i].date} → "
-                    f"утро/день {days[i + 1].date}"
-                )
-
     total_nights = sum(len(d.night) for d in days)
     total_mornings = sum(len(d.morning) for d in days)
     total_evenings = sum(len(d.evening) for d in days)
-    uncovered = [d.date for d in days if not d.is_covered()]
-
-    if uncovered:
-        raise ScheduleError(f"Не покрыты смены для дней: {[str(d) for d in uncovered]}")
 
     working_days_report: dict[str, int] = {
         emp.name: states[emp.name].total_working for emp in employees
@@ -454,20 +324,9 @@ def generate_schedule(
         working_days_per_employee=working_days_report,
     )
 
-    final_carry_over = [
-        {
-            "employee_name": emp.name,
-            "last_shift": str(states[emp.name].last_shift) if states[emp.name].last_shift else None,
-            "consecutive_working": states[emp.name].consecutive_working,
-            "consecutive_off": states[emp.name].consecutive_off,
-            "consecutive_same_shift": max(
-                states[emp.name].consecutive_morning,
-                states[emp.name].consecutive_evening,
-                states[emp.name].consecutive_workday,
-            ),
-        }
-        for emp in employees
-    ]
+    from duty_schedule.scheduler.postprocess.carry_over_calc import compute_carry_over
+
+    final_carry_over = compute_carry_over(days, employees)
 
     return Schedule(
         config=config,

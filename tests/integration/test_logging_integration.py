@@ -47,7 +47,7 @@ class TestLoggingSmoke:
             generate_schedule(config, holidays)
 
         events = [entry["event"] for entry in cap]
-        assert "production_days_calculated" in events
+        assert "schedule_generation_start" in events
         assert "scheduler_config" in events
         assert "schedule_generated" in events
         assert any(e == "postprocess_stage_done" for e in events)

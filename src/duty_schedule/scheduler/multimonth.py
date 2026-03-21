@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import uuid
+
+import structlog
+
 from duty_schedule.calendar import fetch_holidays
 from duty_schedule.logging import get_logger
 from duty_schedule.models import CarryOverState, Config, Schedule
@@ -21,6 +25,11 @@ def generate_multimonth(
     end_month: int,
     end_year: int,
 ) -> list[Schedule]:
+    ctx_vars = structlog.contextvars.get_contextvars()
+    owns_context = "request_id" not in ctx_vars and "operation_id" not in ctx_vars
+    if owns_context:
+        structlog.contextvars.bind_contextvars(operation_id=uuid.uuid4().hex[:8])
+
     logger.info(
         "multimonth_start",
         start=f"{start_month:02d}.{start_year}",
@@ -53,5 +62,8 @@ def generate_multimonth(
                 carry_over.append(CarryOverState(**co))
 
         current_year, current_month = _next_month(current_year, current_month)
+
+    if owns_context:
+        structlog.contextvars.unbind_contextvars("operation_id")
 
     return schedules

@@ -41,6 +41,8 @@ def _init_state() -> None:
         st.session_state["last_result"] = None
     if "schedule_history" not in st.session_state:
         st.session_state["schedule_history"] = []
+    if "optimization_priority" not in st.session_state:
+        st.session_state["optimization_priority"] = None
 
 
 def _bump_table() -> None:
