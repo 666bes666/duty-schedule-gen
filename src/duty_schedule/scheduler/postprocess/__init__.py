@@ -17,6 +17,7 @@ from duty_schedule.scheduler.postprocess.isolation import (
     _equalize_isolated_off,
     _minimize_isolated_off,
 )
+from duty_schedule.scheduler.postprocess.metrics import ScheduleSnapshot, compute_snapshot
 from duty_schedule.scheduler.postprocess.target import (
     _target_adjustment_pass,
     _trim_long_off_blocks,
@@ -43,7 +44,9 @@ __all__ = [
     "_target_adjustment_pass",
     "_trim_long_off_blocks",
     "_try_duty_shift_swap",
+    "ScheduleSnapshot",
     "compute_carry_over",
+    "compute_snapshot",
     "validate_schedule",
     "validate_schedule_or_raise",
 ]

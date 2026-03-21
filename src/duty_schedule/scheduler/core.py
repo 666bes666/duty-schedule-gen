@@ -238,13 +238,21 @@ def generate_schedule(
 
     changelog = ChangeLog()
 
+    from duty_schedule.scheduler.postprocess.metrics import compute_snapshot
+
     def _pp(stage: str, func: Any, *args: Any, **kwargs: Any) -> Any:
         pre = len(changelog.entries)
+        before = compute_snapshot(days, employees, holidays)
         result = func(*args, **kwargs)
+        after = compute_snapshot(result if isinstance(result, list) else days, employees, holidays)
         logger.debug(
             "postprocess_stage_done",
             stage=stage,
             changes=len(changelog.entries) - pre,
+            score_before=round(before.score(), 1),
+            score_after=round(after.score(), 1),
+            iso_off_delta=after.isolated_off_total - before.isolated_off_total,
+            evening_bal_delta=after.evening_balance - before.evening_balance,
         )
         return result
 
