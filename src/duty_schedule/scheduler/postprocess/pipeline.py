@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import date
 from typing import Protocol, runtime_checkable
@@ -287,6 +288,7 @@ class Pipeline:
                 carry_over_cw=ctx.carry_over_cw,
             )
             pre_changes = len(ctx.changelog.entries)
+            t0 = time.monotonic()
             try:
                 ctx.days = stage.run(ctx)
             except ScheduleError:
@@ -294,6 +296,7 @@ class Pipeline:
             except Exception:
                 logger.exception("postprocess_stage_failed", stage=stage.name)
                 continue
+            stage_duration_ms = round((time.monotonic() - t0) * 1000, 1)
             after = compute_snapshot(
                 ctx.days,
                 ctx.employees,
@@ -304,6 +307,7 @@ class Pipeline:
             logger.debug(
                 "postprocess_stage_done",
                 stage=stage.name,
+                duration_ms=stage_duration_ms,
                 changes=len(ctx.changelog.entries) - pre_changes,
                 score_before=round(before.score(), 1),
                 score_after=round(after.score(), 1),

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import copy
 import random
+import time
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
+
+import structlog
 
 from duty_schedule.constants import (
     MAX_BACKTRACK_ATTEMPTS,
@@ -97,6 +101,22 @@ def generate_schedule(
     config: Config,
     holidays: set[date],
 ) -> Schedule:
+    ctx_vars = structlog.contextvars.get_contextvars()
+    owns_context = "request_id" not in ctx_vars and "operation_id" not in ctx_vars
+    if owns_context:
+        structlog.contextvars.bind_contextvars(operation_id=uuid.uuid4().hex[:8])
+
+    try:
+        return _generate_schedule_impl(config, holidays)
+    finally:
+        if owns_context:
+            structlog.contextvars.unbind_contextvars("operation_id")
+
+
+def _generate_schedule_impl(
+    config: Config,
+    holidays: set[date],
+) -> Schedule:
     if config.solver == "cpsat":
         from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
 
@@ -124,12 +144,17 @@ def generate_schedule(
     pinned_on: set[tuple[date, str]] = {(p.date, p.employee_name) for p in config.pins}
 
     production_days = _calc_production_days(config.year, config.month, holidays)
-    logger.info("production_days_calculated", production_days=production_days)
+    logger.info(
+        "schedule_generation_start",
+        month=config.month,
+        year=config.year,
+        employees=len(employees),
+        solver=config.solver,
+        production_days=production_days,
+    )
     logger.debug(
         "scheduler_config",
-        solver=config.solver,
         seed=config.seed,
-        employees=len(employees),
         max_backtrack_attempts=MAX_BACKTRACK_ATTEMPTS,
         max_backtrack_days=MAX_BACKTRACK_DAYS,
     )
@@ -172,6 +197,7 @@ def generate_schedule(
     day_idx = 0
     total_backtracks = 0
 
+    t_greedy = time.monotonic()
     while day_idx < len(all_days):
         day = all_days[day_idx]
         saved_states = copy.deepcopy(states)
@@ -223,6 +249,12 @@ def generate_schedule(
 
             rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
 
+    logger.info(
+        "greedy_phase_done",
+        duration_ms=round((time.monotonic() - t_greedy) * 1000, 1),
+        backtracks=total_backtracks,
+    )
+
     changelog = ChangeLog()
 
     from duty_schedule.scheduler.postprocess.pipeline import (
@@ -243,7 +275,14 @@ def generate_schedule(
 
     duty_count = sum(1 for e in employees if e.on_duty)
     pipeline = build_default_pipeline(config.optimization_priority, small_team=(duty_count <= 4))
+
+    t_postprocess = time.monotonic()
     days = pipeline.run(ctx)
+    logger.info(
+        "postprocess_phase_done",
+        duration_ms=round((time.monotonic() - t_postprocess) * 1000, 1),
+        stages=len(pipeline.stages),
+    )
 
     for emp in employees:
         states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))

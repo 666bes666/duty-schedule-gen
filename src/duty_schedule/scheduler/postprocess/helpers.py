@@ -250,7 +250,7 @@ def _try_duty_shift_swap(
         logger.debug(
             "duty_shift_swap_reverted",
             employee=emp.name,
-            partner=partner.name,
+            swap_partner=partner.name,
             day=str(free_day.date),
         )
 

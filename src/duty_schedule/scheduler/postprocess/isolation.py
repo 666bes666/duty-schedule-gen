@@ -494,8 +494,8 @@ def _break_evening_isolated_pattern(
                 (ev_day.morning if b_source == "morning" else ev_day.workday).append(emp_b.name)
                 logger.debug(
                     "evening_isolated_swap_reverted",
-                    employee_a=emp_a.name,
-                    employee_b=emp_b.name,
+                    employee=emp_a.name,
+                    swap_partner=emp_b.name,
                     day=str(ev_day.date),
                 )
 

@@ -9,6 +9,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from duty_schedule.calendar import CalendarError, compute_short_days, fetch_holidays
+from duty_schedule.logging import get_logger, setup_logging
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
     CarryOverState,
@@ -55,6 +56,9 @@ from duty_schedule.ui.views import (
     render_employee_ics_downloads,
 )
 from duty_schedule.xls_import import XlsImportError, parse_carry_over_from_xls
+
+setup_logging()
+logger = get_logger(__name__)
 
 _PRIORITY_OPTIONS: dict[str, str | None] = {
     "Без приоритета": None,
@@ -760,8 +764,16 @@ if st.button("Сгенерировать расписание", type="primary", 
         try:
             schedule = generate_schedule(config, holidays)
         except ScheduleError as e:
+            logger.error("streamlit_schedule_error", error=str(e))
             st.error(f"Не удалось построить расписание: {e}")
             st.stop()
+        else:
+            logger.info(
+                "streamlit_schedule_generated",
+                month=config.month,
+                year=config.year,
+                days=len(schedule.days),
+            )
 
     next_month = month % 12 + 1
     next_year = year + (1 if month == 12 else 0)
