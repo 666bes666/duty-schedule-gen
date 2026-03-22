@@ -293,54 +293,54 @@ with _setup_tab1:
     _edited_raw: pd.DataFrame = st.data_editor(
         _display_df,
         column_config={
-            "№": st.column_config.NumberColumn("№", width="small"),
-            "Имя": st.column_config.TextColumn("Имя", width="medium"),
+            "№": st.column_config.NumberColumn("№", width=40),
+            "Имя": st.column_config.TextColumn("Имя"),
             "Город": st.column_config.SelectboxColumn(
                 "Город",
                 options=["Москва", "Хабаровск"],
-                width="small",
+                width=115,
             ),
             "График": st.column_config.SelectboxColumn(
                 "График",
                 options=["Гибкий", "5/2"],
-                width="small",
+                width=90,
             ),
             "Дежурный": st.column_config.CheckboxColumn(
-                "Деж.",
+                "Дежурный",
                 help="Участвует в назначении дежурных смен",
-                width="small",
+                width=95,
             ),
             "Всегда на деж.": st.column_config.CheckboxColumn(
-                "Всегда",
+                "Всегда\nна деж.",
                 help=(
                     "Назначается на дежурство каждый доступный "
-                    "рабочий день. Требует: Деж.=✓, Город=Москва, "
-                    "указан тип смены (Утро▲ или Вечер▲)."
+                    "рабочий день. Требует: Дежурный=✓, Город=Москва, "
+                    "указан тип смены (Только утро или Только вечер)."
                 ),
-                width="small",
+                width=80,
             ),
             "Только утро": st.column_config.CheckboxColumn(
-                "Утро▲",
+                "Только\nутро",
                 help="Только утренние смены 08:00–17:00 МСК",
-                width="small",
+                width=75,
             ),
             "Только вечер": st.column_config.CheckboxColumn(
-                "Вечер▲",
+                "Только\nвечер",
                 help="Только вечерние смены 15:00–00:00 МСК",
-                width="small",
+                width=75,
             ),
             "Предпочт. смена": st.column_config.SelectboxColumn(
-                "Пред. смена",
+                "Предпочт.\nсмена",
                 options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
                 help="Предпочтительная смена (мягкий приоритет)",
-                width="small",
+                width=105,
             ),
             "Макс. подряд": st.column_config.NumberColumn(
-                "↑Подряд",
+                "Макс.\nподряд",
                 min_value=1,
                 step=1,
                 help="Макс. рабочих дней подряд (пусто = 5)",
-                width="small",
+                width=75,
             ),
         },
         column_order=[
