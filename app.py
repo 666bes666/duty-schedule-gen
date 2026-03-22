@@ -293,19 +293,22 @@ with _setup_tab1:
     _edited_raw: pd.DataFrame = st.data_editor(
         _display_df,
         column_config={
-            "№": st.column_config.NumberColumn("№"),
-            "Имя": st.column_config.TextColumn("Имя"),
+            "№": st.column_config.NumberColumn("№", width="small"),
+            "Имя": st.column_config.TextColumn("Имя", width="medium"),
             "Город": st.column_config.SelectboxColumn(
                 "Город",
                 options=["Москва", "Хабаровск"],
+                width="small",
             ),
             "График": st.column_config.SelectboxColumn(
                 "График",
                 options=["Гибкий", "5/2"],
+                width="small",
             ),
             "Дежурный": st.column_config.CheckboxColumn(
                 "Деж.",
                 help="Участвует в назначении дежурных смен",
+                width="small",
             ),
             "Всегда на деж.": st.column_config.CheckboxColumn(
                 "Всегда",
@@ -314,25 +317,30 @@ with _setup_tab1:
                     "рабочий день. Требует: Деж.=✓, Город=Москва, "
                     "указан тип смены (Утро▲ или Вечер▲)."
                 ),
+                width="small",
             ),
             "Только утро": st.column_config.CheckboxColumn(
                 "Утро▲",
                 help="Только утренние смены 08:00–17:00 МСК",
+                width="small",
             ),
             "Только вечер": st.column_config.CheckboxColumn(
                 "Вечер▲",
                 help="Только вечерние смены 15:00–00:00 МСК",
+                width="small",
             ),
             "Предпочт. смена": st.column_config.SelectboxColumn(
                 "Пред. смена",
                 options=["", "Утро", "Вечер", "Ночь", "Рабочий день"],
                 help="Предпочтительная смена (мягкий приоритет)",
+                width="small",
             ),
             "Макс. подряд": st.column_config.NumberColumn(
                 "↑Подряд",
                 min_value=1,
                 step=1,
                 help="Макс. рабочих дней подряд (пусто = 5)",
+                width="small",
             ),
         },
         column_order=[
