@@ -228,10 +228,12 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
             errors.append(f"«{name}»: нельзя одновременно «Только утро» и «Только вечер».")
         if bool(r.get("Всегда на деж.", False)):
             if not bool(r.get("Дежурный", True)):
-                errors.append(f"«{name}»: «Всегда на деж.» требует включённого «Деж.».")
+                errors.append(f"«{name}»: «Всегда на деж.» требует включённого «Дежурный».")
             if str(r.get("Город", "")) != "Москва":
                 errors.append(f"«{name}»: «Всегда на деж.» поддерживается только для Москвы.")
             if not bool(r.get("Только утро")) and not bool(r.get("Только вечер")):
-                errors.append(f"«{name}»: «Всегда на деж.» требует указания «Утро▲» или «Вечер▲».")
+                errors.append(
+                    f"«{name}»: «Всегда на деж.» требует указания «Только утро» или «Только вечер»."
+                )
 
     return errors, warnings
