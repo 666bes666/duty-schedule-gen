@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from duty_schedule import __version__
+from duty_schedule._errors_fmt import format_validation_errors
 from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
@@ -39,7 +40,8 @@ def _load_config(config_path: Path) -> Config:
     except yaml.YAMLError as exc:
         raise typer.BadParameter(f"Ошибка разбора YAML: {exc}") from exc
     except ValidationError as exc:
-        raise typer.BadParameter(f"Ошибка валидации конфигурации:\n{exc}") from exc
+        formatted = "\n".join(format_validation_errors(exc))
+        raise typer.BadParameter(f"Ошибка валидации конфигурации:\n{formatted}") from exc
 
 
 @app.command()

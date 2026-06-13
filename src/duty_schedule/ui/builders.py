@@ -4,9 +4,12 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
+from pydantic import ValidationError
 
+from duty_schedule._errors_fmt import format_validation_errors
 from duty_schedule.models import (
     City,
+    Config,
     DaySchedule,
     Employee,
     Schedule,
@@ -214,26 +217,29 @@ def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:
         errors.append("Добавьте хотя бы одного сотрудника.")
         return errors, warnings
 
-    moscow_duty = [r for r in active if r["Город"] == "Москва" and bool(r.get("Дежурный", True))]
-    khab_duty = [r for r in active if r["Город"] == "Хабаровск" and bool(r.get("Дежурный", True))]
-
-    if len(moscow_duty) < 4:
-        errors.append(f"Москва: {len(moscow_duty)} дежурных, нужно минимум 4.")
-    if len(khab_duty) < 2:
-        errors.append(f"Хабаровск: {len(khab_duty)} дежурных, нужно минимум 2.")
-
-    for r in active:
-        name = str(r["Имя"]).strip()
-        if bool(r.get("Только утро")) and bool(r.get("Только вечер")):
-            errors.append(f"«{name}»: нельзя одновременно «Только утро» и «Только вечер».")
-        if bool(r.get("Всегда на деж.", False)):
-            if not bool(r.get("Дежурный", True)):
-                errors.append(f"«{name}»: «Всегда на деж.» требует включённого «Дежурный».")
-            if str(r.get("Город", "")) != "Москва":
-                errors.append(f"«{name}»: «Всегда на деж.» поддерживается только для Москвы.")
-            if not bool(r.get("Только утро")) and not bool(r.get("Только вечер")):
-                errors.append(
-                    f"«{name}»: «Всегда на деж.» требует указания «Только утро» или «Только вечер»."
+    employees: list[Employee] = []
+    for row in active:
+        city = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
+        stype = ScheduleType.FLEXIBLE if row["График"] == "Гибкий" else ScheduleType.FIVE_TWO
+        try:
+            employees.append(
+                Employee(
+                    name=str(row["Имя"]).strip(),
+                    city=city,
+                    schedule_type=stype,
+                    on_duty=bool(row.get("Дежурный", True)),
+                    always_on_duty=bool(row.get("Всегда на деж.", False)),
+                    morning_only=bool(row.get("Только утро", False)),
+                    evening_only=bool(row.get("Только вечер", False)),
                 )
+            )
+        except ValidationError as exc:
+            errors.extend(format_validation_errors(exc))
+
+    if employees:
+        try:
+            Config(month=1, year=2026, employees=employees)
+        except ValidationError as exc:
+            errors.extend(format_validation_errors(exc))
 
     return errors, warnings
