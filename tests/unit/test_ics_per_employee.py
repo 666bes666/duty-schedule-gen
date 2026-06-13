@@ -118,3 +118,42 @@ class TestGenerateEmployeeIcsBytes:
         dt_start = events[0]["DTSTART"].dt
         assert str(dt_start.tzinfo) == "Asia/Vladivostok"
         assert dt_start.hour == 9
+
+    def test_night_shift_ends_next_day(self):
+        days = [
+            _day(date(2025, 3, 2), night=["Иванов"]),
+        ]
+        schedule = _make_schedule(days)
+        data = generate_employee_ics_bytes(schedule, "Иванов")
+        cal = Calendar.from_ical(data)
+        events = [c for c in cal.walk() if c.name == "VEVENT"]
+        assert len(events) == 1
+        dt_start = events[0]["DTSTART"].dt
+        dt_end = events[0]["DTEND"].dt
+        assert dt_end > dt_start
+        assert dt_start.date() == date(2025, 3, 2)
+        assert dt_start.hour == 0 and dt_start.minute == 0
+        assert dt_end.date() == date(2025, 3, 3)
+        assert dt_end.hour == 8 and dt_end.minute == 0
+
+    def test_night_shift_rollover_across_year_boundary(self):
+        config = Config(
+            month=12,
+            year=2025,
+            seed=42,
+            employees=list(_BASE_EMPS),
+        )
+        schedule = Schedule(
+            config=config,
+            days=[_day(date(2025, 12, 31), night=["Иванов"])],
+        )
+        data = generate_employee_ics_bytes(schedule, "Иванов")
+        cal = Calendar.from_ical(data)
+        events = [c for c in cal.walk() if c.name == "VEVENT"]
+        assert len(events) == 1
+        dt_start = events[0]["DTSTART"].dt
+        dt_end = events[0]["DTEND"].dt
+        assert dt_end > dt_start
+        assert dt_start.date() == date(2025, 12, 31)
+        assert dt_end.date() == date(2026, 1, 1)
+        assert dt_end.hour == 8 and dt_end.minute == 0

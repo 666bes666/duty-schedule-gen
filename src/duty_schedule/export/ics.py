@@ -57,7 +57,7 @@ def _shift_times(shift: ShiftType, day: date, tz: ZoneInfo) -> tuple[datetime, d
     eh, em = SHIFT_END[shift]
     dt_start = _make_datetime(day, sh, sm, tz)
 
-    if shift == ShiftType.EVENING:
+    if shift in (ShiftType.EVENING, ShiftType.NIGHT):
         dt_end = _make_datetime(day + timedelta(days=1), eh, em, tz)
     else:
         dt_end = _make_datetime(day, eh, em, tz)
