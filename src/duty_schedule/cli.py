@@ -153,9 +153,18 @@ def generate_range(
     with console.status(f"Генерация расписаний {start} — {end}..."):
         try:
             schedules = generate_multimonth(config, sm, sy, em, ey)
-        except Exception as exc:
-            console.print(f"[bold red]✗ Ошибка:[/bold red] {exc}")
+        except ScheduleError as exc:
+            console.print(f"[bold red]✗ ScheduleError:[/bold red] {exc}")
             raise typer.Exit(1) from exc
+        except CalendarError as exc:
+            console.print(f"[bold red]✗ CalendarError:[/bold red] {exc}")
+            raise typer.Exit(4) from exc
+        except ValidationError as exc:
+            console.print(f"[bold red]✗ ValidationError:[/bold red]\n{exc}")
+            raise typer.Exit(3) from exc
+        except ValueError as exc:
+            console.print(f"[bold red]✗ ValueError:[/bold red] {exc}")
+            raise typer.Exit(5) from exc
 
     for sched in schedules:
         m, y = sched.config.month, sched.config.year
