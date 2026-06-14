@@ -215,9 +215,7 @@ class TestEmployeeModelDocsDefault:
         from duty_schedule.models import Employee as _Employee
 
         field = _Employee.model_fields["max_consecutive_working"]
-        description = (field.description or "") + (
-            _Employee.__doc__ or ""
-        )
+        description = (field.description or "") + (_Employee.__doc__ or "")
         assert "6" in description or "MAX_CONSECUTIVE_WORKING_DEFAULT" in description, (
             "Документация Employee.max_consecutive_working должна упоминать значение по умолчанию"
         )

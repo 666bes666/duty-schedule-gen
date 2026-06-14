@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
@@ -13,7 +14,6 @@ from duty_schedule.models import (
     Employee,
     ScheduleType,
 )
-from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.scheduler import (
     generate_schedule,
 )
