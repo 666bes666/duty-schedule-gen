@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from duty_schedule.api.schemas import EmployeeStatsSchema, MultiMonthRequest, MultiMonthResponse
 from duty_schedule.calendar import fetch_holidays
 from duty_schedule.logging import get_logger
-from duty_schedule.models import Config, Schedule
+from duty_schedule.models import Config, Schedule, collect_config_issues
 from duty_schedule.scheduler import generate_schedule
 from duty_schedule.scheduler.constraints import _calc_production_days
 from duty_schedule.stats import build_assignments, compute_stats
@@ -26,6 +26,9 @@ async def generate(config: Config) -> Schedule:
         year=config.year,
         solver=config.solver,
     )
+    cfg_errors, _cfg_warnings = collect_config_issues(config)
+    if cfg_errors:
+        raise HTTPException(status_code=400, detail=cfg_errors)
     holidays, _short_days = await asyncio.to_thread(fetch_holidays, config.year, config.month)
     pre_errors, _pre_warnings = validate_pre_generation(config, holidays)
     if pre_errors:

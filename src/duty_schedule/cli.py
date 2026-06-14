@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from duty_schedule import __version__
+from duty_schedule._errors_fmt import format_validation_errors
 from duty_schedule.calendar import CalendarError, fetch_holidays
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
@@ -39,7 +40,8 @@ def _load_config(config_path: Path) -> Config:
     except yaml.YAMLError as exc:
         raise typer.BadParameter(f"Ошибка разбора YAML: {exc}") from exc
     except ValidationError as exc:
-        raise typer.BadParameter(f"Ошибка валидации конфигурации:\n{exc}") from exc
+        formatted = "\n".join(format_validation_errors(exc))
+        raise typer.BadParameter(f"Ошибка валидации конфигурации:\n{formatted}") from exc
 
 
 @app.command()
@@ -153,9 +155,18 @@ def generate_range(
     with console.status(f"Генерация расписаний {start} — {end}..."):
         try:
             schedules = generate_multimonth(config, sm, sy, em, ey)
-        except Exception as exc:
-            console.print(f"[bold red]✗ Ошибка:[/bold red] {exc}")
+        except ScheduleError as exc:
+            console.print(f"[bold red]✗ ScheduleError:[/bold red] {exc}")
             raise typer.Exit(1) from exc
+        except CalendarError as exc:
+            console.print(f"[bold red]✗ CalendarError:[/bold red] {exc}")
+            raise typer.Exit(4) from exc
+        except ValidationError as exc:
+            console.print(f"[bold red]✗ ValidationError:[/bold red]\n{exc}")
+            raise typer.Exit(3) from exc
+        except ValueError as exc:
+            console.print(f"[bold red]✗ ValueError:[/bold red] {exc}")
+            raise typer.Exit(5) from exc
 
     for sched in schedules:
         m, y = sched.config.month, sched.config.year

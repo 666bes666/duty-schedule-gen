@@ -70,6 +70,15 @@ class VacationPeriod(BaseModel):
 
 
 class Employee(BaseModel):
+    """Сотрудник.
+
+    max_consecutive_working: персональный лимит рабочих дней подряд.
+    Если None, используется MAX_CONSECUTIVE_WORKING_DEFAULT (6) при
+    планировании (greedy/CP-SAT). Для гибких дежурных без явного значения
+    постпроцессинг дополнительно применяет MAX_CONSECUTIVE_WORKING_FLEX (5)
+    при ребалансировке смен.
+    """
+
     name: str
     city: City
     schedule_type: ScheduleType
