@@ -1,6 +1,19 @@
+"""Schedule generator constants.
+
+MAX_CONSECUTIVE_WORKING_DEFAULT (=6): применяется в greedy-планировании
+(CLI, Streamlit, FastAPI и CP-SAT solver), когда у сотрудника не задан
+явный Employee.max_consecutive_working.
+
+MAX_CONSECUTIVE_WORKING_FLEX (=5): применяется только в postprocess
+(scheduler/postprocess/*.py) для гибких дежурных (FLEXIBLE + on_duty,
+не duty_only), у которых не задан явный Employee.max_consecutive_working —
+позволяет ребалансировке сокращать длинные серии.
+"""
+
 from __future__ import annotations
 
 MAX_CONSECUTIVE_WORKING_DEFAULT = 6
+MAX_CONSECUTIVE_WORKING_FLEX = 5
 MAX_CONSECUTIVE_OFF_DEFAULT = 100
 MAX_BACKTRACK_DAYS = 3
 MAX_BACKTRACK_ATTEMPTS = 10

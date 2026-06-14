@@ -7,6 +7,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from duty_schedule._errors_fmt import format_validation_errors
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.models import (
     City,
     Config,
@@ -187,7 +188,7 @@ def _validate_edited_schedule(schedule: Schedule) -> list[str]:
 
     for emp in schedule.config.employees:
         streak = 0
-        max_cw = emp.max_consecutive_working or 5
+        max_cw = emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
         for day in days:
             working = (
                 emp.name in day.morning

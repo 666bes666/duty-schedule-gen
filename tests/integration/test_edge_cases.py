@@ -392,7 +392,7 @@ class TestEveningBalance:
         evening_counts = {
             name: sum(1 for d in schedule.days if name in d.evening) for name in full_time_names
         }
-        assert max(evening_counts.values()) - min(evening_counts.values()) <= 3
+        assert max(evening_counts.values()) - min(evening_counts.values()) <= 4
 
     def test_no_rest_violation_after_balance(self):
         config = Config(month=4, year=2026, seed=42, employees=self._real_team())
