@@ -5,6 +5,7 @@ import re
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from duty_schedule import __version__
 from duty_schedule.api import create_app
 
 
@@ -15,7 +16,7 @@ class TestOpenAPIContract:
         assert resp.status_code == 200
         schema = resp.json()
         assert schema["info"]["title"] == "Duty Schedule API"
-        assert schema["info"]["version"] == "2.0.0"
+        assert schema["info"]["version"] == __version__
 
     @pytest.mark.asyncio
     async def test_all_endpoints_present(self, client) -> None:
