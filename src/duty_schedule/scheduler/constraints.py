@@ -6,6 +6,7 @@ from datetime import date
 from duty_schedule.constants import (
     MAX_CONSECUTIVE_OFF_DEFAULT,
     MAX_CONSECUTIVE_WORKING_DEFAULT,
+    MAX_CONSECUTIVE_WORKING_FLEX,
 )
 from duty_schedule.models import (
     DaySchedule,
@@ -16,7 +17,6 @@ from duty_schedule.models import (
 from duty_schedule.scheduler.core import EmployeeState
 
 MAX_CONSECUTIVE_WORKING = MAX_CONSECUTIVE_WORKING_DEFAULT
-MAX_CONSECUTIVE_WORKING_FLEX = MAX_CONSECUTIVE_WORKING_DEFAULT
 MAX_CONSECUTIVE_OFF = MAX_CONSECUTIVE_OFF_DEFAULT
 
 

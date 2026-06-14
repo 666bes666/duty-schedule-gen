@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import (
@@ -14,7 +15,6 @@ from duty_schedule.models import (
     ScheduleType,
 )
 from duty_schedule.scheduler import (
-    MAX_CONSECUTIVE_WORKING_FLEX,
     generate_schedule,
 )
 
@@ -102,9 +102,9 @@ def _max_streak_with_carryover(emp_name: str, schedule_days: list, carry_over: i
 
 class TestCarryOverConsecutiveConstraint:
     def test_no_violation_with_carryover_4(self):
-        """carry_over=4 + первый день февраля = 6 (max для гибких).
+        """carry_over=4 + greedy DEFAULT=6: серия не должна превышать DEFAULT.
 
-        Больше 6 подряд быть не должно.
+        Greedy-планирование enforce DEFAULT=6 как жёсткий лимит.
         """
         employees = [
             Employee(name=f"Москва {i}", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE)
@@ -124,19 +124,19 @@ class TestCarryOverConsecutiveConstraint:
 
         for emp_name, co_cw in [("Москва 1", 4), ("Хабаровск 1", 4)]:
             ms = _max_streak_with_carryover(emp_name, schedule.days, carry_over=co_cw)
-            assert ms <= MAX_CONSECUTIVE_WORKING_FLEX, (
-                f"{emp_name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_FLEX}"
+            assert ms <= MAX_CONSECUTIVE_WORKING_DEFAULT, (
+                f"{emp_name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_DEFAULT}"
                 f" (с учётом переноса {co_cw} дней)"
             )
 
     def test_no_violation_without_carryover(self):
-        """Без carry_over ограничение тоже соблюдается."""
+        """Без carry_over greedy-лимит DEFAULT соблюдается."""
         config = _make_config(month=2, year=2025)
         schedule = generate_schedule(config, set())
         for emp in config.employees:
             ms = _max_streak_with_carryover(emp.name, schedule.days)
-            assert ms <= MAX_CONSECUTIVE_WORKING_FLEX, (
-                f"{emp.name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_FLEX}"
+            assert ms <= MAX_CONSECUTIVE_WORKING_DEFAULT, (
+                f"{emp.name}: серия {ms} > {MAX_CONSECUTIVE_WORKING_DEFAULT}"
             )
 
 

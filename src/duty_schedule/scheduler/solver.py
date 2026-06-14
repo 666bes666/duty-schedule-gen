@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 from datetime import date
 
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     City,
@@ -131,7 +132,7 @@ def solve_schedule(
             )
 
     for e_idx, emp in enumerate(employees):
-        max_cw = emp.max_consecutive_working or 5
+        max_cw = emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
         for start in range(len(dates) - max_cw):
             window = range(start, start + max_cw + 1)
             if start + max_cw >= len(dates):

@@ -6,6 +6,7 @@ import uuid
 import structlog
 from fastapi import Depends, FastAPI, Request, Response
 
+from duty_schedule import __version__
 from duty_schedule.api.errors import register_exception_handlers
 from duty_schedule.api.ratelimit import check_rate_limit
 from duty_schedule.api.routes.config import router as config_router
@@ -23,7 +24,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Duty Schedule API",
-        version="2.0.0",
+        version=__version__,
         description="REST API для генератора графиков дежурств 24/7",
     )
 
