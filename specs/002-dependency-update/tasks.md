@@ -13,7 +13,7 @@
 
 - [x] T004 [US2] Проверить tests/contract, tests/unit, tests/integration, tests/system, tests/e2e, solver и сборку; выполнить минимальные адаптации при выявленных регрессах.
 - [x] T005 [P] [US2] Провести независимое ревью изменения pyproject.toml/uv.lock/кода и согласованности спецификации.
-- [ ] T006 [US2] Записать evidence в specs/002-dependency-update/evidence.md; commit/push в dev, обновить PR #66 и проверить CI.
+- [x] T006 [US2] Записать evidence в specs/002-dependency-update/evidence.md; commit/push в dev, обновить PR #66 и проверить CI.
 
 Зависимости: T001 → T002 → T003/T004; T005 после готового diff; T006 после локальной
 приёмки и ревью. Аудит и тесты используют одно окружение и выполняются последовательно

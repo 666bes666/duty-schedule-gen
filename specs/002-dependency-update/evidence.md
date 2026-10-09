@@ -40,7 +40,7 @@ WeasyPrint ≥70. `tool.uv.prerelease="disallow"` сохраняет одина�
 | DEP-001 | uv lock --check; fresh uv sync --locked --all-groups --all-extras | проходит, 127 установленных пакетов |
 | DEP-002 | исходный/base/expanded pip-audit; Bandit | было 78 находок в 10 пакетах; оба новых окружения: 0 находок; Bandit проходит |
 | DEP-003 | полный pytest, API snapshot, solver/PDF, AppTest, браузер | 619 основных +5 UI тестов прошли; API snapshot не менялся; native PDF и solver не skipped |
-| DEP-004 | Ruff, mypy, coverage, build/wheel smoke | проходят; coverage 89,44%; GitHub CI ожидается после push |
+| DEP-004 | Ruff, mypy, coverage, build/wheel smoke | проходят; coverage 89,44%; dev/PR CI прошли после push |
 | DEP-005 | metadata floors, официальный Ruff manifest, dependency review | security floors и Ruff parity подтверждены |
 
 Команды выполнены через uv. Для расширенного окружения использовались
@@ -117,3 +117,20 @@ PDF проверен на одном репрезентативном соста
 Локальная приёмка завершена. Осталась проверка dev/PR CI после commit/push;
 T006 и статус complete закрываются после получения фактических результатов.
 Версия приложения не изменяется, main/release не продвигаются.
+
+
+### GitHub CI после push
+
+Проверен commit `6faea7ae6f507344eb280d0f6cc96bcd66cfe745`:
+
+- [CI Dev](https://github.com/666bes666/duty-schedule-gen/actions/runs/38002941627):
+  все jobs success, включая Dependency Audit.
+- [SDD Gate dev](https://github.com/666bes666/duty-schedule-gen/actions/runs/38002941644): success.
+- [CI Test PR #66](https://github.com/666bes666/duty-schedule-gen/actions/runs/38002945153):
+  Security Scan, Lint + Mypy, Streamlit Smoke, Performance Benchmarks и все четыре
+  test-matrix jobs Linux/Windows × Python 3.12/3.13 — success.
+- [SDD Gate PR](https://github.com/666bes666/duty-schedule-gen/actions/runs/38002945130): success.
+
+Предыдущий security-блокер снят фактическими результатами нового CI. T006 и
+все требования приняты; статус complete фиксируется отдельным docs-коммитом.
+PR #66 готовится к обычному ревью; автоматическое слияние, main и релиз не выполняются.

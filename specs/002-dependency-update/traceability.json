@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "in-progress",
+  "status": "complete",
   "requirements": [
     {"id": "DEP-001", "tests": ["tests/e2e/test_cli_workflow.py"], "checks": ["uv lock --check", "uv sync --locked"]},
     {"id": "DEP-002", "tests": ["tests/contract/test_api_auth_contract.py"], "checks": ["pip-audit base and all groups/extras"]},
