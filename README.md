@@ -292,13 +292,20 @@ DUTY_LOG_LEVEL=DEBUG uv run duty-schedule generate config.example.yaml
 ```bash
 uv sync --dev
 
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+uv run ruff check src/ tests/ scripts/
+uv run ruff format src/ tests/ scripts/
+uv run mypy src/ scripts/
 uv run pytest tests/ -q --ignore=tests/ui
 ```
 
 Подробнее: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+
+Изменения выполняются по **Spec-Driven Development (SDD)**: требования → план →
+задачи → реализация → проверки и evidence. Начните с [руководства SDD](docs/sdd.md)
+и [конституции](.specify/memory/constitution.md). Проверенное существующее поведение
+и ограничения описаны в [baseline](specs/000-baseline/spec.md); инструкции агентов
+находятся в [AGENTS.md](AGENTS.md). Используется GitHub Spec Kit 1.1.3 без
+feature-веток; существующий pipeline сохранён.
 
 ## CI/CD
 
@@ -309,6 +316,9 @@ uv run pytest tests/ -q --ignore=tests/ui
 | dev | ci-dev.yml | lint, unit+integration, smoke |
 | test | ci-test.yml | + mypy, 4 платформы, security, performance |
 | main | ci-main.yml | + 6 платформ, UI/Playwright, system, e2e, build |
+
+Дополнительно `sdd.yml` проверяет структуру SDD-артефактов и текущую схему OpenAPI
+на всех трёх ветках.
 
 При изменении версии в `pyproject.toml` на main — автоматический tag и GitHub Release.
 

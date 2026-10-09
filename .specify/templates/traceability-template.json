@@ -1,0 +1,10 @@
+{
+  "kind": "change",
+  "status": "draft",
+  "requirements": [
+    {
+      "id": "FR-001",
+      "tests": ["tests/unit/test_feature.py::test_acceptance"]
+    }
+  ]
+}

@@ -1,0 +1,309 @@
+{
+  "kind": "baseline",
+  "status": "recorded",
+  "requirements": [
+    {
+      "id": "CFG-001",
+      "tests": [
+        "tests/unit/test_models.py::TestConfig::test_valid_config",
+        "tests/unit/test_models.py::TestConfig::test_too_few_moscow",
+        "tests/unit/test_models.py::TestConfig::test_too_few_khabarovsk",
+        "tests/unit/test_models.py::TestConfig::test_invalid_month",
+        "tests/unit/test_models.py::TestConfig::test_invalid_year",
+        "tests/unit/test_models.py::TestConfig::test_non_duty_not_counted_as_duty",
+        "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_minimal_yaml_config",
+        "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_unknown_fields_ignored"
+      ]
+    },
+    {
+      "id": "CFG-002",
+      "tests": [
+        "tests/unit/test_models.py::TestEmployee::test_morning_and_evening_only_raises",
+        "tests/unit/test_models.py::TestVacationPeriod::test_end_before_start_raises",
+        "tests/unit/test_models.py::TestVacationPeriod::test_same_day_valid",
+        "tests/unit/test_ui_validation.py::TestValidateConfigParityWithPydantic::test_always_on_duty_requires_on_duty_same_as_pydantic",
+        "tests/unit/test_ui_validation.py::TestValidateConfigParityWithPydantic::test_always_on_duty_moscow_only_same_as_pydantic",
+        "tests/integration/test_new_features.py::TestPreferredShift::test_preferred_shift_vacation_raises",
+        "tests/integration/test_new_features.py::TestPreferredShift::test_preferred_shift_day_off_raises",
+        "tests/integration/test_new_features.py::TestDaysOffWeekly::test_invalid_weekday_raises",
+        "tests/integration/test_new_features.py::TestMaxConsecutiveWorking::test_max_consecutive_working_below_1_raises"
+      ]
+    },
+    {
+      "id": "CFG-003",
+      "tests": [
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_duplicate_names",
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_pin_unknown_employee",
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_duplicate_pin_same_day_same_employee",
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_pin_moscow_to_night_error",
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_pin_khabarovsk_to_morning_error",
+        "tests/unit/test_models.py::TestCollectConfigIssues::test_carry_over_unknown_employee_warning"
+      ]
+    },
+    {
+      "id": "CFG-004",
+      "tests": [
+        "tests/unit/test_validation.py::test_no_errors_clean_config",
+        "tests/unit/test_validation.py::test_pin_on_vacation_date",
+        "tests/unit/test_validation.py::test_pin_on_unavailable_date",
+        "tests/unit/test_validation.py::test_city_incompatible_pin",
+        "tests/unit/test_validation.py::test_morning_only_pinned_evening"
+      ]
+    },
+    {
+      "id": "SCH-001",
+      "tests": [
+        "tests/system/test_business_rules.py::TestBusinessRules::test_all_days_covered",
+        "tests/system/test_business_rules.py::TestBusinessRules::test_schedule_covers_entire_month",
+        "tests/integration/test_full_schedule.py::TestFullScheduleGeneration::test_no_duplicate_assignments_per_day",
+        "tests/unit/test_validation_postprocess.py::TestCoverage::test_uncovered_day",
+        "tests/unit/test_validation_postprocess.py::TestDuplicates::test_duplicate_in_shifts",
+        "tests/unit/test_validation_postprocess.py::TestValidateOrRaise::test_hard_raises"
+      ]
+    },
+    {
+      "id": "SCH-002",
+      "tests": [
+        "tests/system/test_business_rules.py::TestBusinessRules::test_moscow_employees_not_on_night",
+        "tests/system/test_business_rules.py::TestBusinessRules::test_khabarovsk_employees_not_on_morning_evening",
+        "tests/unit/test_constraints.py::TestBuildDay::test_night_only_khabarovsk",
+        "tests/unit/test_constraints.py::TestBuildDay::test_khabarovsk_workday_on_non_night_day",
+        "tests/unit/test_solver.py::test_solver_respects_city"
+      ]
+    },
+    {
+      "id": "SCH-003",
+      "tests": [
+        "tests/system/test_business_rules.py::TestBusinessRules::test_vacation_respected",
+        "tests/system/test_constraint_satisfaction.py::TestConstraintSatisfaction::test_morning_only_no_evening",
+        "tests/system/test_constraint_satisfaction.py::TestConstraintSatisfaction::test_evening_only_no_morning",
+        "tests/system/test_constraint_satisfaction.py::TestConstraintSatisfaction::test_52_employees_no_weekend_duty",
+        "tests/integration/test_new_features.py::TestDaysOffWeekly::test_employee_not_assigned_on_weekly_day_off",
+        "tests/integration/test_edge_cases.py::TestUnavailableDates::test_unavailable_employee_not_assigned_on_blocked_day",
+        "tests/integration/test_edge_cases.py::TestUnavailableDates::test_unavailable_shows_as_day_off_not_vacation",
+        "tests/unit/test_validation_postprocess.py::TestBlockedDates::test_working_on_blocked_date"
+      ]
+    },
+    {
+      "id": "SCH-004",
+      "tests": [
+        "tests/unit/test_validation_postprocess.py::TestEveningRest::test_evening_then_morning_is_hard_violation",
+        "tests/integration/test_carry_over.py::TestCarryOverLastShift::test_carry_over_last_shift_evening_no_morning_day_1"
+      ]
+    },
+    {
+      "id": "SCH-005",
+      "tests": [
+        "tests/unit/test_max_consecutive_constants.py::TestExplicitConstants::test_default_is_six",
+        "tests/unit/test_max_consecutive_constants.py::TestExplicitConstants::test_flex_is_five",
+        "tests/unit/test_max_consecutive_constants.py::TestGreedyPlanningUsesDefault::test_explicit_override_respected",
+        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesFlex::test_flex_duty_returns_flex",
+        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesFlex::test_morning_only_returns_default",
+        "tests/unit/test_max_consecutive_constants.py::TestRealScheduleGreedyRespectsDefault::test_greedy_streaks_respect_default",
+        "tests/unit/test_validation_postprocess.py::TestMaxConsecutive::test_streak_exceeds_limit",
+        "tests/unit/test_validation_postprocess.py::TestValidateOrRaise::test_soft_only_returns"
+      ]
+    },
+    {
+      "id": "SCH-006",
+      "tests": [
+        "tests/integration/test_pins.py::TestPinnedMorning::test_pin_moscow_employee_to_morning",
+        "tests/integration/test_pins.py::TestPinnedNight::test_pin_khabarovsk_employee_to_night",
+        "tests/integration/test_pins.py::TestPinnedSurvivesPostProcessing::test_pinned_assignments_persist_in_final_schedule",
+        "tests/unit/test_validation_postprocess.py::TestPinnedAssignment::test_missing_pin"
+      ]
+    },
+    {
+      "id": "SCH-007",
+      "tests": [
+        "tests/system/test_determinism.py::TestDeterminism::test_same_seed_same_result",
+        "tests/system/test_determinism.py::TestDeterminism::test_different_seed_different_result",
+        "tests/system/test_determinism.py::TestDeterminism::test_multiple_runs_deterministic"
+      ]
+    },
+    {
+      "id": "SCH-008",
+      "tests": [
+        "tests/unit/test_constraints.py::TestBuildDay::test_no_night_khabarovsk_fails",
+        "tests/unit/test_failure_modes.py::TestSolverUnavailable::test_no_ortools_raises_solver_unavailable",
+        "tests/unit/test_solver.py::test_solver_produces_schedule",
+        "tests/unit/test_solver.py::test_solver_covers_shifts"
+      ]
+    },
+    {
+      "id": "SCH-009",
+      "tests": [
+        "tests/integration/test_priority_integration.py::TestPriorityIsolatedWeekends::test_isolated_weekends_not_worse_than_baseline",
+        "tests/integration/test_priority_integration.py::TestPriorityEveningShifts::test_evening_diff_not_worse_than_baseline",
+        "tests/integration/test_priority_integration.py::TestPriorityConsecutiveDays::test_max_streak_not_worse_than_baseline",
+        "tests/integration/test_priority_integration.py::TestHardConstraintsPreserved::test_all_shifts_covered",
+        "tests/integration/test_priority_integration.py::TestHardConstraintsPreserved::test_no_evening_to_morning_violation"
+      ]
+    },
+    {
+      "id": "SCH-010",
+      "tests": [
+        "tests/integration/test_multimonth.py::test_multimonth_two_months",
+        "tests/integration/test_multimonth.py::test_multimonth_cross_year",
+        "tests/integration/test_multimonth.py::test_multimonth_single_month",
+        "tests/integration/test_carry_over.py::TestCarryOverConsecutiveWorking::test_carry_over_consecutive_working_forces_rest_day_1",
+        "tests/integration/test_xls_roundtrip.py::TestGenerateExportImportGenerate::test_full_roundtrip_no_violations",
+        "tests/unit/test_carry_over_calc.py"
+      ]
+    },
+    {
+      "id": "SCH-011",
+      "tests": [
+        "tests/unit/test_calendar.py::TestFetchHolidays::test_success",
+        "tests/unit/test_calendar.py::TestFetchHolidays::test_short_days_detected",
+        "tests/unit/test_calendar.py::TestFetchHolidays::test_http_error_raises",
+        "tests/unit/test_calendar.py::TestFetchHolidays::test_wrong_length_raises",
+        "tests/unit/test_calendar.py::TestParseManualHolidays::test_valid_dates",
+        "tests/unit/test_calendar.py::TestParseManualHolidays::test_wrong_month_skipped",
+        "tests/unit/test_constraints.py::TestCalcProductionDays::test_march_2025_with_holidays"
+      ]
+    },
+    {
+      "id": "EXP-001",
+      "tests": [
+        "tests/contract/test_export_format_contract.py::TestXlsFormatContract::test_xls_file_created",
+        "tests/contract/test_export_format_contract.py::TestXlsFormatContract::test_schedule_totals_are_formulas",
+        "tests/contract/test_export_format_contract.py::TestXlsFormatContract::test_stats_formulas_reference_schedule",
+        "tests/contract/test_export_format_contract.py::TestXlsFormatContract::test_helper_sheet_hidden",
+        "tests/contract/test_export_format_contract.py::TestXlsFormatContract::test_data_validation_exists",
+        "tests/unit/test_export_security.py::TestSanitizeCell::test_xls_formula_injection_sanitized"
+      ]
+    },
+    {
+      "id": "EXP-002",
+      "tests": [
+        "tests/contract/test_export_format_contract.py::TestIcsFormatContract::test_ics_filenames",
+        "tests/contract/test_export_format_contract.py::TestIcsFormatContract::test_ics_valid_ical",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_contains_only_target_shifts",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_has_categories",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_has_color",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_khabarovsk_timezone",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_ends_next_day",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_rollover_across_year_boundary"
+      ]
+    },
+    {
+      "id": "EXP-003",
+      "tests": [
+        "tests/unit/test_pdf_export.py::test_generate_pdf_returns_bytes",
+        "tests/unit/test_pdf_export.py::test_generate_pdf_a3",
+        "tests/unit/test_pdf_export.py::test_generate_pdf_with_short_days",
+        "tests/unit/test_failure_modes.py::TestWeasyPrintUnavailable::test_oserror_raises_runtime_error"
+      ]
+    },
+    {
+      "id": "EXP-004",
+      "tests": [
+        "tests/unit/test_xls_import.py::TestParseBasic::test_parse_roundtrip",
+        "tests/unit/test_xls_import.py::TestParseEmptyFile::test_empty_bytes",
+        "tests/unit/test_xls_import.py::TestParseEmptyFile::test_random_bytes",
+        "tests/unit/test_xls_import.py::TestUnknownLabels::test_unknown_label_becomes_day_off",
+        "tests/unit/test_xls_import.py::TestConsecutiveWorkingAtEnd::test_4_working_days_at_end",
+        "tests/unit/test_xls_import.py::TestConsecutiveOffAtEnd::test_2_off_at_end",
+        "tests/unit/test_xls_import.py::TestConsecutiveSameShift::test_3_evenings_at_end",
+        "tests/integration/test_xls_roundtrip.py::TestGenerateExportImportGenerate::test_full_roundtrip_no_violations"
+      ]
+    },
+    {
+      "id": "EXP-005",
+      "tests": [
+        "tests/unit/test_stats.py::TestComputeStats::test_basic_stats",
+        "tests/unit/test_stats.py::TestComputeStats::test_short_days_reduce_hours",
+        "tests/unit/test_costs.py::test_basic_cost_no_multipliers",
+        "tests/unit/test_costs.py::test_night_multiplier",
+        "tests/unit/test_costs.py::test_weekend_multiplier",
+        "tests/unit/test_costs.py::test_holiday_multiplier",
+        "tests/unit/test_costs.py::test_night_on_holiday",
+        "tests/unit/test_costs.py::test_custom_model"
+      ]
+    },
+    {
+      "id": "CLI-001",
+      "tests": [
+        "tests/unit/test_cli.py::TestVersionCommand::test_version_output",
+        "tests/unit/test_cli.py::TestValidateCommand::test_valid_config",
+        "tests/unit/test_cli.py::TestGenerateCommand::test_generate_xls",
+        "tests/unit/test_cli.py::TestGenerateCommand::test_generate_ics",
+        "tests/unit/test_cli.py::TestGenerateCommand::test_generate_all",
+        "tests/unit/test_cli.py::TestGenerateCommand::test_generate_unknown_format",
+        "tests/e2e/test_cli_workflow.py::TestCliWorkflow::test_help_command"
+      ]
+    },
+    {
+      "id": "CLI-002",
+      "tests": [
+        "tests/unit/test_cli_exception_handling.py::TestGenerateRangeExceptionCatalog::test_schedule_error_exit_code_and_message",
+        "tests/unit/test_cli_exception_handling.py::TestGenerateRangeExceptionCatalog::test_calendar_error_exit_code_and_message",
+        "tests/unit/test_cli_exception_handling.py::TestGenerateRangeExceptionCatalog::test_validation_error_exit_code_and_message",
+        "tests/unit/test_cli_exception_handling.py::TestGenerateRangeExceptionCatalog::test_value_error_exit_code_and_message",
+        "tests/unit/test_cli_exception_handling.py::TestGenerateRangeExceptionCatalog::test_programming_bug_propagates",
+        "tests/unit/test_cli.py::TestGenerateCommand::test_generate_xls"
+      ]
+    },
+    {
+      "id": "UI-001",
+      "tests": [
+        "tests/ui/test_page_load.py::TestPageLoad::test_page_loads_without_errors",
+        "tests/ui/test_schedule_generation.py::TestScheduleGeneration::test_generate_button_visible",
+        "tests/unit/test_ui_validation.py::TestValidateConfigParityWithPydantic::test_morning_and_evening_only_same_as_pydantic",
+        "tests/unit/test_ui_validation.py::TestValidateConfigParityWithPydantic::test_moscow_duty_minimum_same_as_pydantic",
+        "tests/unit/test_ui_validation.py::TestValidateConfigParityWithPydantic::test_khabarovsk_duty_minimum_same_as_pydantic"
+      ]
+    },
+    {
+      "id": "UI-002",
+      "tests": [
+        "tests/unit/test_schedule_diff.py::test_identical_schedules",
+        "tests/unit/test_schedule_diff.py::test_single_change",
+        "tests/unit/test_schedule_diff.py::test_diff_contains_correct_shifts"
+      ]
+    },
+    {
+      "id": "API-001",
+      "tests": [
+        "tests/contract/test_api_response_schema_contract.py::TestScheduleGenerateSchema::test_top_level_fields",
+        "tests/contract/test_api_response_schema_contract.py::TestScheduleGenerateSchema::test_day_fields",
+        "tests/contract/test_api_response_schema_contract.py::TestScheduleStatsSchema::test_employee_fields",
+        "tests/contract/test_api_response_schema_contract.py::TestConfigValidateSchema::test_field_set",
+        "tests/contract/test_api_response_schema_contract.py::TestHolidaysSchema::test_date_iso_format",
+        "tests/contract/test_api_strict_validation.py::TestApiStrictValidationContract::test_collect_config_issues_parity",
+        "tests/contract/test_api_strict_validation.py::TestApiStrictValidationContract::test_carry_over_unknown_employee_not_rejected",
+        "tests/contract/test_api_content_type_contract.py::TestContentTypeContract::test_export_xls_spreadsheet",
+        "tests/contract/test_api_content_type_contract.py::TestContentTypeContract::test_export_ics_single_calendar",
+        "tests/contract/test_api_content_type_contract.py::TestContentTypeContract::test_export_ics_all_zip",
+        "tests/contract/test_api_error_contract.py::TestErrorContract::test_422_is_fastapi_native"
+      ]
+    },
+    {
+      "id": "API-002",
+      "tests": [
+        "tests/contract/test_api_auth_contract.py::TestAuthContract::test_401_body_exact",
+        "tests/contract/test_api_auth_contract.py::TestAuthContract::test_403_body_exact",
+        "tests/contract/test_api_auth_contract.py::TestAuthContract::test_all_endpoints_require_auth",
+        "tests/integration/test_api_auth_integration.py::TestAuthIntegration::test_bearer_token_works",
+        "tests/integration/test_api_auth_integration.py::TestAuthIntegration::test_docs_open_without_key",
+        "tests/integration/test_api_auth_integration.py::TestAuthIntegration::test_openapi_open_without_key",
+        "tests/contract/test_api_ratelimit_contract.py::TestRateLimitContract::test_remaining_decrements",
+        "tests/contract/test_api_ratelimit_contract.py::TestRateLimitContract::test_429_has_retry_after",
+        "tests/contract/test_api_ratelimit_contract.py::TestRateLimitContract::test_no_headers_when_auth_disabled"
+      ]
+    },
+    {
+      "id": "API-003",
+      "tests": [
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_success_one_variant",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_too_many_variants_422",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_zero_variants_422",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_invalid_baseline_400",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_partial_failure_variant",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_calendar_error_502",
+        "tests/contract/test_api_response_schema_contract.py::TestWhatIfSchema::test_metric_delta_fields"
+      ]
+    }
+  ]
+}

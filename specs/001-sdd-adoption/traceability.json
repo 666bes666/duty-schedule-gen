@@ -1,0 +1,12 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {"id": "SDD-001", "tests": ["tests/unit/test_sdd.py"]},
+    {"id": "SDD-002", "tests": ["tests/unit/test_sdd.py"]},
+    {"id": "SDD-003", "tests": ["tests/unit/test_sdd.py"]},
+    {"id": "SDD-004", "tests": ["tests/unit/test_sdd.py"]},
+    {"id": "SDD-005", "tests": ["tests/contract/test_openapi_snapshot.py"]},
+    {"id": "SDD-006", "tests": ["tests/unit/test_sdd.py"]}
+  ]
+}

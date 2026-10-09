@@ -1,0 +1,1347 @@
+{
+  "components": {
+    "schemas": {
+      "CarryOverState": {
+        "description": "Перенос состояния сотрудника с конца предыдущего месяца.",
+        "properties": {
+          "consecutive_off": {
+            "default": 0,
+            "title": "Consecutive Off",
+            "type": "integer"
+          },
+          "consecutive_same_shift": {
+            "default": 0,
+            "title": "Consecutive Same Shift",
+            "type": "integer"
+          },
+          "consecutive_working": {
+            "default": 0,
+            "title": "Consecutive Working",
+            "type": "integer"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "last_shift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShiftType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "employee_name"
+        ],
+        "title": "CarryOverState",
+        "type": "object"
+      },
+      "City": {
+        "enum": [
+          "moscow",
+          "khabarovsk"
+        ],
+        "title": "City",
+        "type": "string"
+      },
+      "Config": {
+        "properties": {
+          "carry_over": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CarryOverState"
+            },
+            "title": "Carry Over",
+            "type": "array"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/Employee"
+            },
+            "title": "Employees",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "optimization_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pins": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PinnedAssignment"
+            },
+            "title": "Pins",
+            "type": "array"
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "solver": {
+            "default": "greedy",
+            "enum": [
+              "greedy",
+              "cpsat"
+            ],
+            "title": "Solver",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Europe/Moscow",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "year",
+          "employees"
+        ],
+        "title": "Config",
+        "type": "object"
+      },
+      "ConfigValidationResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "errors",
+          "warnings"
+        ],
+        "title": "ConfigValidationResponse",
+        "type": "object"
+      },
+      "DaySchedule": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "day_off": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Day Off",
+            "type": "array"
+          },
+          "evening": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Evening",
+            "type": "array"
+          },
+          "is_holiday": {
+            "default": false,
+            "title": "Is Holiday",
+            "type": "boolean"
+          },
+          "morning": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Morning",
+            "type": "array"
+          },
+          "night": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Night",
+            "type": "array"
+          },
+          "vacation": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Vacation",
+            "type": "array"
+          },
+          "workday": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Workday",
+            "type": "array"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "DaySchedule",
+        "type": "object"
+      },
+      "Employee": {
+        "description": "Сотрудник.\n\nmax_consecutive_working: персональный лимит рабочих дней подряд.\nЕсли None, используется MAX_CONSECUTIVE_WORKING_DEFAULT (6) при\nпланировании (greedy/CP-SAT). Для гибких дежурных без явного значения\nпостпроцессинг дополнительно применяет MAX_CONSECUTIVE_WORKING_FLEX (5)\nпри ребалансировке смен.",
+        "properties": {
+          "always_on_duty": {
+            "default": false,
+            "title": "Always On Duty",
+            "type": "boolean"
+          },
+          "city": {
+            "$ref": "#/components/schemas/City"
+          },
+          "days_off_weekly": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days Off Weekly",
+            "type": "array"
+          },
+          "evening_only": {
+            "default": false,
+            "title": "Evening Only",
+            "type": "boolean"
+          },
+          "max_consecutive_working": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Consecutive Working"
+          },
+          "morning_only": {
+            "default": false,
+            "title": "Morning Only",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "on_duty": {
+            "default": true,
+            "title": "On Duty",
+            "type": "boolean"
+          },
+          "preferred_shift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShiftType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule_type": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "unavailable_dates": {
+            "default": [],
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Unavailable Dates",
+            "type": "array"
+          },
+          "vacations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VacationPeriod"
+            },
+            "title": "Vacations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "schedule_type"
+        ],
+        "title": "Employee",
+        "type": "object"
+      },
+      "EmployeeDelta": {
+        "properties": {
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricDelta"
+            },
+            "title": "Metrics",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "metrics"
+        ],
+        "title": "EmployeeDelta",
+        "type": "object"
+      },
+      "EmployeeStatsSchema": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "cost_hours": {
+            "default": 0.0,
+            "title": "Cost Hours",
+            "type": "number"
+          },
+          "day_off": {
+            "title": "Day Off",
+            "type": "integer"
+          },
+          "evening": {
+            "title": "Evening",
+            "type": "integer"
+          },
+          "holiday_work": {
+            "title": "Holiday Work",
+            "type": "integer"
+          },
+          "isolated_off": {
+            "title": "Isolated Off",
+            "type": "integer"
+          },
+          "max_streak_rest": {
+            "title": "Max Streak Rest",
+            "type": "integer"
+          },
+          "max_streak_work": {
+            "title": "Max Streak Work",
+            "type": "integer"
+          },
+          "morning": {
+            "title": "Morning",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "night": {
+            "title": "Night",
+            "type": "integer"
+          },
+          "paired_off": {
+            "title": "Paired Off",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "integer"
+          },
+          "total_hours": {
+            "title": "Total Hours",
+            "type": "integer"
+          },
+          "total_working": {
+            "title": "Total Working",
+            "type": "integer"
+          },
+          "vacation": {
+            "title": "Vacation",
+            "type": "integer"
+          },
+          "weekend_work": {
+            "title": "Weekend Work",
+            "type": "integer"
+          },
+          "workday": {
+            "title": "Workday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "total_working",
+          "target",
+          "morning",
+          "evening",
+          "night",
+          "workday",
+          "day_off",
+          "vacation",
+          "weekend_work",
+          "holiday_work",
+          "max_streak_work",
+          "max_streak_rest",
+          "isolated_off",
+          "paired_off",
+          "total_hours"
+        ],
+        "title": "EmployeeStatsSchema",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HolidaysResponse": {
+        "properties": {
+          "holidays": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Holidays",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "short_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Short Days",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "holidays",
+          "short_days"
+        ],
+        "title": "HolidaysResponse",
+        "type": "object"
+      },
+      "MetricDelta": {
+        "properties": {
+          "baseline": {
+            "title": "Baseline",
+            "type": "integer"
+          },
+          "delta": {
+            "title": "Delta",
+            "type": "integer"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "variant": {
+            "title": "Variant",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "baseline",
+          "variant",
+          "delta",
+          "direction"
+        ],
+        "title": "MetricDelta",
+        "type": "object"
+      },
+      "MultiMonthRequest": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "end_month": {
+            "title": "End Month",
+            "type": "integer"
+          },
+          "end_year": {
+            "title": "End Year",
+            "type": "integer"
+          },
+          "start_month": {
+            "title": "Start Month",
+            "type": "integer"
+          },
+          "start_year": {
+            "title": "Start Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config",
+          "start_month",
+          "start_year",
+          "end_month",
+          "end_year"
+        ],
+        "title": "MultiMonthRequest",
+        "type": "object"
+      },
+      "MultiMonthResponse": {
+        "properties": {
+          "schedules": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules"
+        ],
+        "title": "MultiMonthResponse",
+        "type": "object"
+      },
+      "OptimizationPriority": {
+        "enum": [
+          "isolated_weekends",
+          "evening_shifts",
+          "consecutive_days",
+          "weekend_days"
+        ],
+        "title": "OptimizationPriority",
+        "type": "string"
+      },
+      "PinnedAssignment": {
+        "description": "Фиксированное назначение: конкретный сотрудник на конкретный день и смену.",
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/ShiftType"
+          }
+        },
+        "required": [
+          "date",
+          "employee_name",
+          "shift"
+        ],
+        "title": "PinnedAssignment",
+        "type": "object"
+      },
+      "ScenarioResult": {
+        "properties": {
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeStatsSchema"
+            },
+            "title": "Stats",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SummaryMetrics"
+          }
+        },
+        "required": [
+          "stats",
+          "summary"
+        ],
+        "title": "ScenarioResult",
+        "type": "object"
+      },
+      "Schedule": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DaySchedule"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "config",
+          "days"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
+      "ScheduleType": {
+        "enum": [
+          "flexible",
+          "5/2"
+        ],
+        "title": "ScheduleType",
+        "type": "string"
+      },
+      "ShiftType": {
+        "enum": [
+          "morning",
+          "evening",
+          "night",
+          "workday",
+          "day_off",
+          "vacation"
+        ],
+        "title": "ShiftType",
+        "type": "string"
+      },
+      "SummaryMetrics": {
+        "properties": {
+          "coverage_gaps": {
+            "title": "Coverage Gaps",
+            "type": "integer"
+          },
+          "fairness_score": {
+            "title": "Fairness Score",
+            "type": "number"
+          },
+          "isolated_off_total": {
+            "title": "Isolated Off Total",
+            "type": "integer"
+          },
+          "weekend_balance_stddev": {
+            "title": "Weekend Balance Stddev",
+            "type": "number"
+          },
+          "workload_stddev": {
+            "title": "Workload Stddev",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fairness_score",
+          "workload_stddev",
+          "coverage_gaps",
+          "isolated_off_total",
+          "weekend_balance_stddev"
+        ],
+        "title": "SummaryMetrics",
+        "type": "object"
+      },
+      "VacationPeriod": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "VacationPeriod",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VariantPatch": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "title": "Patch",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "patch"
+        ],
+        "title": "VariantPatch",
+        "type": "object"
+      },
+      "VariantResult": {
+        "properties": {
+          "deltas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EmployeeDelta"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deltas"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EmployeeStatsSchema"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "VariantResult",
+        "type": "object"
+      },
+      "WhatIfRequest": {
+        "properties": {
+          "baseline": {
+            "additionalProperties": true,
+            "title": "Baseline",
+            "type": "object"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantPatch"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline",
+          "variants"
+        ],
+        "title": "WhatIfRequest",
+        "type": "object"
+      },
+      "WhatIfResponse": {
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/ScenarioResult"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantResult"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline",
+          "variants"
+        ],
+        "title": "WhatIfResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "REST API для генератора графиков дежурств 24/7",
+    "title": "Duty Schedule API",
+    "version": "4.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/config/validate": {
+      "post": {
+        "operationId": "validate_config_api_v1_config_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Validate Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/v1/export/ics": {
+      "post": {
+        "operationId": "export_ics_endpoint_api_v1_export_ics_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "employee_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Ics Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/pdf": {
+      "post": {
+        "operationId": "export_pdf_endpoint_api_v1_export_pdf_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": "A3",
+              "pattern": "^(A3|A4)$",
+              "title": "Page Size",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Pdf Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/xls": {
+      "post": {
+        "operationId": "export_xls_endpoint_api_v1_export_xls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Xls Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/holidays/{year}/{month}": {
+      "get": {
+        "operationId": "get_holidays_api_v1_holidays__year___month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "minimum": 2024,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HolidaysResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Holidays",
+        "tags": [
+          "holidays"
+        ]
+      }
+    },
+    "/api/v1/schedule/generate": {
+      "post": {
+        "operationId": "generate_api_v1_schedule_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Generate",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/schedule/generate-range": {
+      "post": {
+        "operationId": "generate_range_api_v1_schedule_generate_range_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiMonthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiMonthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Generate Range",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/schedule/stats": {
+      "post": {
+        "operationId": "stats_api_v1_schedule_stats_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmployeeStatsSchema"
+                  },
+                  "title": "Response Stats Api V1 Schedule Stats Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Stats",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/whatif/compare": {
+      "post": {
+        "operationId": "compare_scenarios_api_v1_whatif_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatIfRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatIfResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Compare Scenarios",
+        "tags": [
+          "whatif"
+        ]
+      }
+    }
+  }
+}

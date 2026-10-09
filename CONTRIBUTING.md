@@ -17,6 +17,12 @@ uv sync --dev --extra solver
 
 ## Ветвление и workflow
 
+Перед реализацией подготовьте спецификацию изменения, план, задачи и связь
+требований с тестами по [руководству SDD](docs/sdd.md). Правила проекта закреплены
+в [конституции](.specify/memory/constitution.md). Для агентов общая точка входа —
+[AGENTS.md](AGENTS.md). SDD дополняет текущий pipeline; Spec Kit не создаёт
+feature-ветки и не требует отдельного согласования каждого этапа.
+
 Проект использует трёхуровневый pipeline:
 
 ```
@@ -31,10 +37,15 @@ dev ──PR──> test ──PR──> main
 
 ### Создание фичи
 
-1. Коммит напрямую в `dev` (без feature-веток)
-2. Push в GitHub сразу после коммита
-3. PR из `dev` в `test` — проходит полный набор тестов + security + performance
-4. PR из `test` в `main` — полная регрессия + UI + system тесты
+1. Требования с ID и критерии приёмки → план → задачи → анализ согласованности
+2. Реализация и тесты; актуализация задач, traceability и evidence
+3. Локальные проверки, включая `uv run python scripts/check_sdd.py`
+4. Коммит напрямую в `dev` (без feature-веток), затем push в GitHub сразу
+5. PR из `dev` в `test` — полный набор проверок + security + performance
+6. PR из `test` в `main` — полная регрессия + UI + system тесты
+
+В PR укажите каталог спецификации, затронутые ID требований и evidence.
+Структурный gate не заменяет содержательное ревью и тесты поведения.
 
 ### Hotfix
 
@@ -60,9 +71,10 @@ dev ──PR──> test ──PR──> main
 - Docstrings не обязательны
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+uv run python scripts/check_sdd.py
+uv run ruff check src/ tests/ scripts/
+uv run ruff format src/ tests/ scripts/
+uv run mypy src/ scripts/
 ```
 
 ## Тесты
@@ -221,9 +233,12 @@ docker compose up api       # REST API (порт 8000)
 
 | Ветка | PR обязателен | Ревью | CI checks | Force push |
 |-------|:---:|:---:|-----------|:---:|
-| `dev` | Да | 0 | lint, unit-tests, smoke | Нет |
-| `test` | Да | 1 | Все ci-test jobs | Нет |
-| `main` | Да | 1 + env approval | Все ci-main jobs | Нет |
+| `dev` | Нет, прямые коммиты | 0 | lint, unit-tests, smoke, SDD | Нет |
+| `test` | Да | 1 | Все ci-test jobs + SDD | Нет |
+| `main` | Да | 1 + env approval | Все ci-main jobs + SDD | Нет |
+
+Таблица описывает ожидаемую политику, а не подтверждённые текущие настройки GitHub.
+Для `dev` обязательный PR несовместим с принятой политикой прямых коммитов.
 
 Настройка через GitHub Settings → Branches → Branch protection rules:
 - **main/test**: Required status checks, Require PR before merging, Dismiss stale reviews, Restrict force-push.

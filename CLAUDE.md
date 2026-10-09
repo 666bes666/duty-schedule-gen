@@ -1,5 +1,14 @@
 # Claude Code Instructions for duty-schedule-gen
 
+## SDD и общие инструкции
+
+Сначала прочитайте [AGENTS.md](AGENTS.md),
+[конституцию](.specify/memory/constitution.md), [руководство SDD](docs/sdd.md) и
+документы выбранного изменения в `specs/`. Общие правила SDD действуют вместе с
+инструкциями ниже. Claude skills находятся в `.claude/skills/` и вызываются как
+`/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze` и
+`/speckit-implement`. Feature-ветки не создаются; git extension не используется.
+
 ## Branching Flow
 
 dev -> test -> main
@@ -29,9 +38,10 @@ NEVER push directly to main (except hotfixes).
 
 Run locally:
 ```
-uv run ruff check src/ tests/
-uv run ruff format --check src/ tests/
-uv run mypy src/
+uv run python scripts/check_sdd.py
+uv run ruff check src/ tests/ scripts/
+uv run ruff format --check src/ tests/ scripts/
+uv run mypy src/ scripts/
 uv run pytest tests/ -q --ignore=tests/ui
 ```
 
@@ -73,6 +83,10 @@ Do NOT use Docker for cloud deployment — this is a local-only setup.
 | main | ci-main.yml | + 6 platforms, UI/Playwright, system, e2e, build | ~2min |
 | main (push) | ci-tag.yml | auto-create git tag on version change | ~5s |
 | tag v*.*.* | release.yml | build → draft release → tests → publish | ~1min |
+
+Дополнительно `sdd.yml` проверяет SDD-артефакты и OpenAPI snapshot на `dev`, `test` и
+`main`. Это структурная проверка; соответствие реализации требованиям подтверждают
+тесты и ревью.
 
 ### Streamlit healthcheck
 
