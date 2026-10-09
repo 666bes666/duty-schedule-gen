@@ -1,0 +1,11 @@
+{
+  "kind": "change",
+  "status": "in-progress",
+  "requirements": [
+    {"id": "DEP-001", "tests": ["tests/e2e/test_cli_workflow.py"], "checks": ["uv lock --check", "uv sync --locked"]},
+    {"id": "DEP-002", "tests": ["tests/contract/test_api_auth_contract.py"], "checks": ["pip-audit base and all groups/extras"]},
+    {"id": "DEP-003", "tests": ["tests/contract/test_openapi_snapshot.py", "tests/contract/test_export_format_contract.py", "tests/unit/test_solver.py", "tests/system/test_determinism.py"]},
+    {"id": "DEP-004", "tests": ["tests/unit/test_sdd.py"], "checks": ["Ruff", "mypy", "pytest coverage >=80%", "uv build", "GitHub CI"]},
+    {"id": "DEP-005", "tests": ["tests/contract/test_model_contracts.py"], "checks": ["published metadata security floors", "Ruff hook rev parity"]}
+  ]
+}
