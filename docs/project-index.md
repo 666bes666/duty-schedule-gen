@@ -45,7 +45,7 @@
 | [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | complete | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
 | [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | complete | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
 | [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | complete | REPAIR-001, REPAIR-002 |
-| [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | complete | QUALITY-001, QUALITY-002, QUALITY-003 |
+| [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | in-progress | QUALITY-001, QUALITY-002, QUALITY-003 |
 
 ## API операции
 

@@ -166,6 +166,9 @@ def test_whatif_preserves_trusted_quality_context(quality_state):
 
 
 def test_pdf_renderer_receives_month_and_boundary_series(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
     from duty_schedule.export.pdf import generate_schedule_pdf
     from duty_schedule.scheduler.validation import validate_schedule_result
     from duty_schedule.stats import build_assignments, compute_stats
@@ -182,7 +185,8 @@ def test_pdf_renderer_receives_month_and_boundary_series(monkeypatch):
         def write_pdf(self, stream):
             stream.write(b"%PDF-test")
 
-    monkeypatch.setattr("weasyprint.HTML", CapturingHTML)
+    monkeypatch.setitem(sys.modules, "weasyprint", SimpleNamespace(HTML=CapturingHTML))
+    monkeypatch.setattr("duty_schedule.export.pdf._safe_url_fetcher", lambda: None)
     assert generate_schedule_pdf(schedule) == b"%PDF-test"
     html = captured["html"]
     assert "Серия в месяце" in html

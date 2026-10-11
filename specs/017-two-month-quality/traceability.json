@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "complete",
+  "status": "in-progress",
   "files": [
     "docs/project-index.json",
     "docs/project-index.md",

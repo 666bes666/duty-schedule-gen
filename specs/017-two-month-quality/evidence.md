@@ -28,3 +28,13 @@ QUALITY-001/002/003: Fraction и integer-scaled solver используют ро
 Реализация: `922b0c09dfc96698e62e1db414b794f07ba11576` (`feat: deliver reliable authoring, stable repair and two-month quality`). `git push origin dev` прошёл; локальный HEAD и origin/dev совпали, рабочее дерево чистое. До коммита `check_sdd.py --staged` и hooks прошли; перед push `check_sdd.py --base HEAD~1` и project_context --check прошли. Все критерии/задачи текущего контракта проверены; status complete означает реализацию и dev delivery.
 
 [PR66 dev→test](https://github.com/666bes666/duty-schedule-gen/pull/66) обновляется автоматически новым dev head. CI на новом SHA запущен; test/main promotion не выполнен и требует зелёного CI и одного required approving review. Это ограничение доставки релиза, а не непроверенное поведение закрытого контракта.
+
+## 2026-10-11 — Windows CI выявил зависимость теста от native library
+
+CI Test38162559093 на2ed33ce: Ubuntu3.12/3.13, CP-SAT, security, performance и smoke прошли; Windows3.12/3.13 failed только на новом test_pdf_renderer_receives_month_and_boundary_series при импорте WeasyPrint (`libgobject-2.0-0` unavailable). Это не пропуск и не успешный платформенный результат. Требование QUALITY-003 неизменно.
+
+Контракт017 вновь открыт, plan/T008 записаны до изменения теста. Renderer contract теперь подменяет весь module через monkeypatch sys.modules и fetcher stub, не импортирует native DLL и продолжает проверять полный реально переданный HTML. Production PDF/security не изменён. Targeted no-native regression1passed; semantic_review_g и semantic_review_h повторно дали PASS. Native PDF/security+quality suite41passed6.57s на macOS с Pango. Первая full portable попытка остановилась из-за заполненного системного диска; удалён только неиспользуемый disposable audit virtual environment, повторный прогон выполняется. Итоговый portable результат и исправленный dev SHA добавляются ниже.
+
+### Portable full local verification
+
+`UV_PROJECT_ENVIRONMENT=/tmp/duty-specs-20261011 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib uv run pytest tests/ -o addopts='' -q --ignore=tests/ui --cov=duty_schedule --cov-fail-under=80 --tb=short`: **850 passed,7warnings274.73s;coverage88.20%**. Ruff lint/format181files, mypy69files, SDD scoped/index checks прошли. T008 остаётся открытой до current-SHA Windows CI.

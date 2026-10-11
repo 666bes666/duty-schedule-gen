@@ -50,3 +50,7 @@ window/source/pools/quality components. Legacy priority даёт явное пр
 ## 2026-10-11 — завершение дополнительного независимого ревью
 
 QUALITY-002: центральный append revision проверяет external snapshot против active ID/config/days и ready; form serialization не восстанавливает stale источник. QUALITY-003: PDF HTML собирается после boundary table; внешний source ID XLS санитизируется. Добавлены runtime/API/renderer регрессии в уже согласованной области files.
+
+## 2026-10-11 — Windows CI contract test portability
+
+Windows CI на2ed33ce выявил импорт native WeasyPrint в новом HTML capture test. Требование QUALITY-003 не меняется. До правки теста планируем заменить весь renderer module test-double через sys.modules и URLFetcher double на функции boundary, без skip. Runtime PDF остаётся прежним; native PDF smoke отдельно прошёл на macOS/Linux. Область: tests/unit/test_two_month_quality.py и SDD artifacts017; exact files уже присутствуют. Проверить targeted test, gates и current-SHA Windows matrix.
