@@ -1,0 +1,56 @@
+{
+  "kind": "change",
+  "status": "planned",
+  "files": [
+    "specs/000-baseline/contracts/openapi.json",
+    "specs/017-two-month-quality/evidence.md",
+    "specs/017-two-month-quality/plan.md",
+    "specs/017-two-month-quality/spec.md",
+    "specs/017-two-month-quality/tasks.md",
+    "specs/017-two-month-quality/traceability.json",
+    "src/duty_schedule/api/planning.py",
+    "src/duty_schedule/api/schemas.py",
+    "src/duty_schedule/api/whatif_service.py",
+    "src/duty_schedule/export/pdf.py",
+    "src/duty_schedule/export/xls.py",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/project.py",
+    "src/duty_schedule/quality_history.py",
+    "src/duty_schedule/scheduler/core.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/multimonth.py",
+    "src/duty_schedule/scheduler/postprocess/quality.py",
+    "src/duty_schedule/scheduler/solver.py",
+    "src/duty_schedule/stats.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/views.py",
+    "tests/contract/test_quality_context.py",
+    "tests/integration/test_two_month_quality.py",
+    "tests/ui/test_quality_journey.py",
+    "tests/unit/test_two_month_quality.py"
+  ],
+  "requirements": [
+    {
+      "id": "QUALITY-001",
+      "tests": [
+        "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
+        "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+      ]
+    },
+    {
+      "id": "QUALITY-002",
+      "tests": [
+        "tests/unit/test_two_month_quality.py::test_missing_and_stale_history_are_not_zero",
+        "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source"
+      ]
+    },
+    {
+      "id": "QUALITY-003",
+      "tests": [
+        "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+        "tests/contract/test_quality_context.py::test_standalone_api_reports_month_only_quality",
+        "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window"
+      ]
+    }
+  ]
+}

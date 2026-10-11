@@ -1,13 +1,14 @@
 {
   "kind": "change",
-  "status": "complete",
+  "status": "planned",
   "requirements": [
     {
       "id": "REV-001",
       "tests": [
         "tests/unit/test_project.py",
         "tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours",
-        "tests/ui/test_project_journey.py"
+        "tests/ui/test_project_journey.py",
+        "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id"
       ]
     },
     {
@@ -16,7 +17,8 @@
         "tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours",
         "tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project",
         "tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain",
-        "tests/ui/test_project_journey.py"
+        "tests/ui/test_project_journey.py",
+        "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
       ]
     },
     {
@@ -33,6 +35,14 @@
         "tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported",
         "tests/unit/test_cli_project.py",
         "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "REV-005",
+      "tests": [
+        "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle",
+        "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins",
+        "tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version"
       ]
     }
   ],
@@ -73,6 +83,10 @@
     "src/duty_schedule/cli.py",
     "src/duty_schedule/models.py",
     "src/duty_schedule/project.py",
+    "src/duty_schedule/scheduler/core.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/postprocess/quality.py",
+    "src/duty_schedule/scheduler/solver.py",
     "src/duty_schedule/ui/__init__.py",
     "src/duty_schedule/ui/__pycache__/__init__.cpython-312.pyc",
     "src/duty_schedule/ui/__pycache__/builders.cpython-312.pyc",
@@ -88,10 +102,13 @@
     "src/duty_schedule/ui/state.py",
     "src/duty_schedule/ui/views.py",
     "tests/contract/test_revision_api.py",
+    "tests/integration/test_replanning.py",
+    "tests/ui/test_product_recovery.py",
     "tests/ui/test_project_journey.py",
     "tests/unit/test_cli.py",
     "tests/unit/test_cli_project.py",
     "tests/unit/test_project.py",
+    "tests/unit/test_replanning.py",
     "tests/unit/test_ui_workflow.py"
   ]
 }

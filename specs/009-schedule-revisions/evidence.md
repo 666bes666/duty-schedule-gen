@@ -32,3 +32,12 @@ project.py реализует формат1, неизменяемые snapshots 
 | REV-002 | `tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours`, `tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project`, `tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | REV-003 | `tests/unit/test_project.py::test_edit_pins_both_changed_participants`, `tests/unit/test_ui_workflow.py::test_ui_range_preserves_configuration_and_manual_pins_of_each_period`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | REV-004 | `tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported`, `tests/unit/test_cli_project.py`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+
+## 2026-10-11 — уточнение контракта после продуктового интервью 013
+
+Основные правки выполняются в приложении; текущая версия проекта — источник анализа/выдачи, Excel/PDF не являются альтернативной редактируемой истиной. REV-001 дополнен идемпотентностью одинаковой проверки: при неизменённом ready входе/результате новая ревизия назначений не создаётся. REV-002 сохраняет весь backup/recovery payload; browser adapter определён FLOW-002/003. Старый результат реализации не доказывает эти новые критерии.
+
+Новые критерии НЕ реализованы. Прежние PASS выше сохраняются как история
+проверки прежних требований; они не доказывают устранение PLOG или выполнение
+новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
+Status возвращён в planned. Анализ и gates документов: evidence013.

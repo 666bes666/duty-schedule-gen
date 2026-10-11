@@ -43,3 +43,21 @@ solver/security/UI/platform проверки. Внешние календарн�
 workload.py является общей арифметикой 8/7/individual hours и selected monthly target. Отсутствия вычитаются union рабочих дат; full choice относится к employee/month. Stats, costs, XLS, UI, engines и validator используют эту модель. Качество фиксировано лексикографически. CP, postprocess и What-if summary используют общий eligible_duty_names для пропорционального баланса среди реально доступных сотрудников.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Продолжение после продуктового аудита 013
+
+HOURS-004 явно изменён по ответу владельца: окно баланса теперь текущий и предыдущий месяц, а не только месяц расчёта. При первом построении порядок мягких целей сохраняется; в repair до этих целей минимизируются изменённые ячейки (016). Нормы/доступность учитываются для каждого подходящего пула и периода, missing history не подменяется нулём (017). HARD требования HOURS-001..003 сохранены.
+
+Точные дополнительные пути текущего planned scope:
+
+- src/duty_schedule/quality_history.py
+- src/duty_schedule/stats.py
+- src/duty_schedule/project.py
+- src/duty_schedule/scheduler/multimonth.py
+- src/duty_schedule/ui/views.py
+- tests/unit/test_two_month_quality.py
+- tests/integration/test_two_month_quality.py
+- tests/unit/test_product_integrity.py
+
+Новые приёмочные selectors перечислены в traceability. Сначала воспроизведение
+и failing tests, затем ограниченные изменения по 014–017 и итоговое evidence.

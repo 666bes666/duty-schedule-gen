@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "complete",
+  "status": "planned",
   "requirements": [
     {
       "id": "HOURS-001",
@@ -31,7 +31,16 @@
         "tests/unit/test_planning_rules.py::test_off_duty_quality_balances_only_available_employees",
         "tests/unit/test_planning_rules.py::test_solver_off_duty_balance_ignores_weekday_only_duty_role",
         "tests/unit/test_whatif_service.py::test_quality_is_proportional_to_selected_hours",
-        "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool"
+        "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool",
+        "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
+        "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+      ]
+    },
+    {
+      "id": "HOURS-005",
+      "tests": [
+        "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+        "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance"
       ]
     }
   ],
@@ -43,15 +52,23 @@
     "specs/008-workload-quality/traceability.json",
     "src/duty_schedule/api/whatif_service.py",
     "src/duty_schedule/models.py",
+    "src/duty_schedule/project.py",
+    "src/duty_schedule/quality_history.py",
     "src/duty_schedule/scheduler/core.py",
     "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/multimonth.py",
     "src/duty_schedule/scheduler/postprocess/quality.py",
     "src/duty_schedule/scheduler/solver.py",
+    "src/duty_schedule/stats.py",
+    "src/duty_schedule/ui/views.py",
     "src/duty_schedule/workload.py",
     "tests/integration/test_pipeline_hour_compatibility.py",
+    "tests/integration/test_two_month_quality.py",
     "tests/ui/test_project_journey.py",
     "tests/unit/test_hour_consumers.py",
     "tests/unit/test_planning_rules.py",
+    "tests/unit/test_product_integrity.py",
+    "tests/unit/test_two_month_quality.py",
     "tests/unit/test_whatif_service.py",
     "tests/unit/test_workload.py"
   ]

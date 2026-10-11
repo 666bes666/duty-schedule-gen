@@ -60,3 +60,20 @@ Runtime проверки и ограничения собраны в [общем
 Это уточнение области уже реализованных требований, не изменение смысла ID.
 Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
 прогон отражены в evidence012.
+
+## Продолжение после продуктового аудита 013
+
+Основные правки выполняются в приложении; текущая версия проекта — источник анализа/выдачи, Excel/PDF не являются альтернативной редактируемой истиной. REV-001 дополнен идемпотентностью одинаковой проверки: при неизменённом ready входе/результате новая ревизия назначений не создаётся. REV-002 сохраняет весь backup/recovery payload; browser adapter определён FLOW-002/003. Старый результат реализации не доказывает эти новые критерии.
+
+Точные дополнительные пути текущего planned scope:
+
+- src/duty_schedule/scheduler/core.py
+- src/duty_schedule/scheduler/greedy.py
+- src/duty_schedule/scheduler/solver.py
+- src/duty_schedule/scheduler/postprocess/quality.py
+- tests/unit/test_replanning.py
+- tests/integration/test_replanning.py
+- tests/ui/test_product_recovery.py
+
+Новые приёмочные selectors перечислены в traceability. Сначала воспроизведение
+и failing tests, затем ограниченные изменения по 014–017 и итоговое evidence.

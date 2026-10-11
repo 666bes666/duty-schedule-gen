@@ -1,7 +1,7 @@
 # Индекс проекта
 
 Генерируется `uv run python scripts/project_context.py --write`; ручные изменения запрещены.
-Версия приложения: 5.0.0. Файлов: 316. Полные symbols/imports/traceability: [JSON](project-index.json).
+Версия приложения: 5.0.0. Файлов: 342. Полные symbols/imports/traceability: [JSON](project-index.json).
 
 Холодный старт: [руководство](cold-start.md). Правила: [AGENTS](../AGENTS.md), [SDD](sdd.md), [конституция](../.specify/memory/constitution.md).
 
@@ -18,7 +18,7 @@
 | export | 5 |
 | project | 20 |
 | scheduler | 19 |
-| sdd_contract | 70 |
+| sdd_contract | 96 |
 | sdd_toolkit | 25 |
 | tests | 100 |
 | tooling | 8 |
@@ -31,16 +31,21 @@
 | [specs/000-baseline](../specs/000-baseline/spec.md) | recorded | CFG-001, CFG-002, CFG-003, CFG-004, SCH-001, SCH-002, SCH-003, SCH-004, SCH-005, SCH-006, SCH-007, SCH-008, SCH-009, SCH-010, SCH-011, EXP-001, EXP-002, EXP-003, EXP-004, EXP-005, CLI-001, CLI-002, UI-001, UI-002, API-001, API-002, API-003 |
 | [specs/001-sdd-adoption](../specs/001-sdd-adoption/spec.md) | complete | SDD-001, SDD-002, SDD-003, SDD-004, SDD-005, SDD-006 |
 | [specs/002-dependency-update](../specs/002-dependency-update/spec.md) | complete | DEP-001, DEP-002, DEP-003, DEP-004, DEP-005 |
-| [specs/003-secure-api-exports](../specs/003-secure-api-exports/spec.md) | complete | SEC-001, SEC-002, SEC-003 |
+| [specs/003-secure-api-exports](../specs/003-secure-api-exports/spec.md) | planned | SEC-001, SEC-002, SEC-003 |
 | [specs/004-scheduling-validity](../specs/004-scheduling-validity/spec.md) | complete | VALID-001, VALID-002, VALID-003, VALID-004 |
 | [specs/005-postprocess-integrity](../specs/005-postprocess-integrity/spec.md) | complete | POST-001, POST-002, POST-003 |
-| [specs/006-month-continuity](../specs/006-month-continuity/spec.md) | complete | HIST-001, HIST-002, HIST-003, HIST-004 |
+| [specs/006-month-continuity](../specs/006-month-continuity/spec.md) | planned | HIST-001, HIST-002, HIST-003, HIST-004 |
 | [specs/007-calendar-shift-model](../specs/007-calendar-shift-model/spec.md) | complete | TIME-001, TIME-002, TIME-003 |
-| [specs/008-workload-quality](../specs/008-workload-quality/spec.md) | complete | HOURS-001, HOURS-002, HOURS-003, HOURS-004 |
-| [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | complete | REV-001, REV-002, REV-003, REV-004 |
-| [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | complete | UIC-001, UIC-002, UIC-003, UIC-004 |
+| [specs/008-workload-quality](../specs/008-workload-quality/spec.md) | planned | HOURS-001, HOURS-002, HOURS-003, HOURS-004, HOURS-005 |
+| [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | planned | REV-001, REV-002, REV-003, REV-004, REV-005 |
+| [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | planned | UIC-001, UIC-002, UIC-003, UIC-004, UIC-005, UIC-006 |
 | [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | complete | DEL-001, DEL-002, DEL-003, DEL-004 |
 | [specs/012-project-audit](../specs/012-project-audit/spec.md) | complete | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
+| [specs/013-product-logic-audit](../specs/013-product-logic-audit/spec.md) | in-progress | PAUD-001, PAUD-002, PAUD-003, PAUD-004, PAUD-005 |
+| [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | planned | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
+| [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | planned | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
+| [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | planned | REPAIR-001, REPAIR-002 |
+| [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | planned | QUALITY-001, QUALITY-002, QUALITY-003 |
 
 ## API операции
 
@@ -221,6 +226,32 @@
 | [specs/012-project-audit/spec.md](../specs/012-project-audit/spec.md) | sdd_contract |
 | [specs/012-project-audit/tasks.md](../specs/012-project-audit/tasks.md) | sdd_contract |
 | [specs/012-project-audit/traceability.json](../specs/012-project-audit/traceability.json) | sdd_contract |
+| [specs/013-product-logic-audit/audit.md](../specs/013-product-logic-audit/audit.md) | sdd_contract |
+| [specs/013-product-logic-audit/evidence.md](../specs/013-product-logic-audit/evidence.md) | sdd_contract |
+| [specs/013-product-logic-audit/plan.md](../specs/013-product-logic-audit/plan.md) | sdd_contract |
+| [specs/013-product-logic-audit/spec.md](../specs/013-product-logic-audit/spec.md) | sdd_contract |
+| [specs/013-product-logic-audit/tasks.md](../specs/013-product-logic-audit/tasks.md) | sdd_contract |
+| [specs/013-product-logic-audit/traceability.json](../specs/013-product-logic-audit/traceability.json) | sdd_contract |
+| [specs/014-product-reliability/evidence.md](../specs/014-product-reliability/evidence.md) | sdd_contract |
+| [specs/014-product-reliability/plan.md](../specs/014-product-reliability/plan.md) | sdd_contract |
+| [specs/014-product-reliability/spec.md](../specs/014-product-reliability/spec.md) | sdd_contract |
+| [specs/014-product-reliability/tasks.md](../specs/014-product-reliability/tasks.md) | sdd_contract |
+| [specs/014-product-reliability/traceability.json](../specs/014-product-reliability/traceability.json) | sdd_contract |
+| [specs/015-guided-authoring/evidence.md](../specs/015-guided-authoring/evidence.md) | sdd_contract |
+| [specs/015-guided-authoring/plan.md](../specs/015-guided-authoring/plan.md) | sdd_contract |
+| [specs/015-guided-authoring/spec.md](../specs/015-guided-authoring/spec.md) | sdd_contract |
+| [specs/015-guided-authoring/tasks.md](../specs/015-guided-authoring/tasks.md) | sdd_contract |
+| [specs/015-guided-authoring/traceability.json](../specs/015-guided-authoring/traceability.json) | sdd_contract |
+| [specs/016-stable-replanning/evidence.md](../specs/016-stable-replanning/evidence.md) | sdd_contract |
+| [specs/016-stable-replanning/plan.md](../specs/016-stable-replanning/plan.md) | sdd_contract |
+| [specs/016-stable-replanning/spec.md](../specs/016-stable-replanning/spec.md) | sdd_contract |
+| [specs/016-stable-replanning/tasks.md](../specs/016-stable-replanning/tasks.md) | sdd_contract |
+| [specs/016-stable-replanning/traceability.json](../specs/016-stable-replanning/traceability.json) | sdd_contract |
+| [specs/017-two-month-quality/evidence.md](../specs/017-two-month-quality/evidence.md) | sdd_contract |
+| [specs/017-two-month-quality/plan.md](../specs/017-two-month-quality/plan.md) | sdd_contract |
+| [specs/017-two-month-quality/spec.md](../specs/017-two-month-quality/spec.md) | sdd_contract |
+| [specs/017-two-month-quality/tasks.md](../specs/017-two-month-quality/tasks.md) | sdd_contract |
+| [specs/017-two-month-quality/traceability.json](../specs/017-two-month-quality/traceability.json) | sdd_contract |
 | [src/duty_schedule/__init__.py](../src/duty_schedule/__init__.py) | domain |
 | [src/duty_schedule/_errors_fmt.py](../src/duty_schedule/_errors_fmt.py) | domain |
 | [src/duty_schedule/api/__init__.py](../src/duty_schedule/api/__init__.py) | api |

@@ -793,6 +793,110 @@
       "role": "sdd_contract"
     },
     {
+      "path": "specs/013-product-logic-audit/audit.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/013-product-logic-audit/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/013-product-logic-audit/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/013-product-logic-audit/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/013-product-logic-audit/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/013-product-logic-audit/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/014-product-reliability/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/014-product-reliability/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/014-product-reliability/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/014-product-reliability/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/014-product-reliability/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/015-guided-authoring/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/015-guided-authoring/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/015-guided-authoring/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/015-guided-authoring/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/015-guided-authoring/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/016-stable-replanning/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/016-stable-replanning/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/016-stable-replanning/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/016-stable-replanning/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/016-stable-replanning/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/017-two-month-quality/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/017-two-month-quality/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/017-two-month-quality/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/017-two-month-quality/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/017-two-month-quality/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
       "path": "src/duty_schedule/__init__.py",
       "role": "domain",
       "symbols": [],
@@ -5033,7 +5137,7 @@
     {
       "path": "specs/003-secure-api-exports",
       "kind": "change",
-      "status": "complete",
+      "status": "planned",
       "requirements": [
         {
           "id": "SEC-001",
@@ -5048,7 +5152,9 @@
             "tests/contract/test_revision_api.py::test_bad_range_is_native_422_before_generation",
             "tests/contract/test_revision_api.py::test_unknown_employee_quotes_and_newline_produce_json",
             "tests/contract/test_api_strict_validation.py",
-            "tests/unit/test_api_errors.py"
+            "tests/unit/test_api_errors.py",
+            "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
+            "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search"
           ]
         },
         {
@@ -5106,10 +5212,12 @@
         "src/duty_schedule/export/ics.py",
         "src/duty_schedule/export/pdf.py",
         "src/duty_schedule/export/xls.py",
+        "src/duty_schedule/models.py",
         "tests/contract/conftest.py",
         "tests/contract/test_api_error_contract.py",
         "tests/contract/test_api_response_schema_contract.py",
         "tests/contract/test_api_strict_validation.py",
+        "tests/contract/test_product_inputs.py",
         "tests/contract/test_revision_api.py",
         "tests/integration/test_api_endpoints.py",
         "tests/unit/test_api_errors.py",
@@ -5279,7 +5387,7 @@
     {
       "path": "specs/006-month-continuity",
       "kind": "change",
-      "status": "complete",
+      "status": "planned",
       "requirements": [
         {
           "id": "HIST-001",
@@ -5294,7 +5402,8 @@
           "tests": [
             "tests/unit/test_ui_workflow.py::test_manual_history_requires_explicit_known_or_new_employee",
             "tests/unit/test_project.py::test_standalone_month_with_verified_external_history_is_allowed",
-            "tests/unit/test_planning_rules.py::test_validator_rejects_forged_ready_and_missing_calendar_history"
+            "tests/unit/test_planning_rules.py::test_validator_rejects_forged_ready_and_missing_calendar_history",
+            "tests/unit/test_product_integrity.py::test_unchanged_history_preserves_counters_and_source"
           ]
         },
         {
@@ -5302,7 +5411,9 @@
           "tests": [
             "tests/unit/test_history.py",
             "tests/unit/test_xls_import.py",
-            "tests/integration/test_xls_roundtrip.py"
+            "tests/integration/test_xls_roundtrip.py",
+            "tests/unit/test_product_integrity.py::test_employee_identity_roundtrips_names_and_rejects_blank",
+            "tests/ui/test_product_recovery.py::test_imported_history_unchanged_save_preserves_every_employee"
           ]
         },
         {
@@ -5324,12 +5435,15 @@
         "src/duty_schedule/project.py",
         "src/duty_schedule/scheduler/multimonth.py",
         "src/duty_schedule/scheduler/postprocess/carry_over_calc.py",
+        "src/duty_schedule/ui/components.py",
         "src/duty_schedule/xls_import.py",
         "tests/integration/test_multimonth.py",
         "tests/integration/test_xls_roundtrip.py",
+        "tests/ui/test_product_recovery.py",
         "tests/unit/test_history.py",
         "tests/unit/test_multimonth.py",
         "tests/unit/test_planning_rules.py",
+        "tests/unit/test_product_integrity.py",
         "tests/unit/test_project.py",
         "tests/unit/test_solver.py",
         "tests/unit/test_ui_workflow.py",
@@ -5401,7 +5515,7 @@
     {
       "path": "specs/008-workload-quality",
       "kind": "change",
-      "status": "complete",
+      "status": "planned",
       "requirements": [
         {
           "id": "HOURS-001",
@@ -5432,7 +5546,16 @@
             "tests/unit/test_planning_rules.py::test_off_duty_quality_balances_only_available_employees",
             "tests/unit/test_planning_rules.py::test_solver_off_duty_balance_ignores_weekday_only_duty_role",
             "tests/unit/test_whatif_service.py::test_quality_is_proportional_to_selected_hours",
-            "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool"
+            "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool",
+            "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
+            "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+          ]
+        },
+        {
+          "id": "HOURS-005",
+          "tests": [
+            "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+            "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance"
           ]
         }
       ],
@@ -5444,15 +5567,23 @@
         "specs/008-workload-quality/traceability.json",
         "src/duty_schedule/api/whatif_service.py",
         "src/duty_schedule/models.py",
+        "src/duty_schedule/project.py",
+        "src/duty_schedule/quality_history.py",
         "src/duty_schedule/scheduler/core.py",
         "src/duty_schedule/scheduler/greedy.py",
+        "src/duty_schedule/scheduler/multimonth.py",
         "src/duty_schedule/scheduler/postprocess/quality.py",
         "src/duty_schedule/scheduler/solver.py",
+        "src/duty_schedule/stats.py",
+        "src/duty_schedule/ui/views.py",
         "src/duty_schedule/workload.py",
         "tests/integration/test_pipeline_hour_compatibility.py",
+        "tests/integration/test_two_month_quality.py",
         "tests/ui/test_project_journey.py",
         "tests/unit/test_hour_consumers.py",
         "tests/unit/test_planning_rules.py",
+        "tests/unit/test_product_integrity.py",
+        "tests/unit/test_two_month_quality.py",
         "tests/unit/test_whatif_service.py",
         "tests/unit/test_workload.py"
       ]
@@ -5460,14 +5591,15 @@
     {
       "path": "specs/009-schedule-revisions",
       "kind": "change",
-      "status": "complete",
+      "status": "planned",
       "requirements": [
         {
           "id": "REV-001",
           "tests": [
             "tests/unit/test_project.py",
             "tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours",
-            "tests/ui/test_project_journey.py"
+            "tests/ui/test_project_journey.py",
+            "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id"
           ]
         },
         {
@@ -5476,7 +5608,8 @@
             "tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours",
             "tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project",
             "tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain",
-            "tests/ui/test_project_journey.py"
+            "tests/ui/test_project_journey.py",
+            "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
           ]
         },
         {
@@ -5493,6 +5626,14 @@
             "tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported",
             "tests/unit/test_cli_project.py",
             "tests/ui/test_project_journey.py"
+          ]
+        },
+        {
+          "id": "REV-005",
+          "tests": [
+            "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle",
+            "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins",
+            "tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version"
           ]
         }
       ],
@@ -5533,6 +5674,10 @@
         "src/duty_schedule/cli.py",
         "src/duty_schedule/models.py",
         "src/duty_schedule/project.py",
+        "src/duty_schedule/scheduler/core.py",
+        "src/duty_schedule/scheduler/greedy.py",
+        "src/duty_schedule/scheduler/postprocess/quality.py",
+        "src/duty_schedule/scheduler/solver.py",
         "src/duty_schedule/ui/__init__.py",
         "src/duty_schedule/ui/__pycache__/__init__.cpython-312.pyc",
         "src/duty_schedule/ui/__pycache__/builders.cpython-312.pyc",
@@ -5548,24 +5693,29 @@
         "src/duty_schedule/ui/state.py",
         "src/duty_schedule/ui/views.py",
         "tests/contract/test_revision_api.py",
+        "tests/integration/test_replanning.py",
+        "tests/ui/test_product_recovery.py",
         "tests/ui/test_project_journey.py",
         "tests/unit/test_cli.py",
         "tests/unit/test_cli_project.py",
         "tests/unit/test_project.py",
+        "tests/unit/test_replanning.py",
         "tests/unit/test_ui_workflow.py"
       ]
     },
     {
       "path": "specs/010-ui-configuration",
       "kind": "change",
-      "status": "complete",
+      "status": "planned",
       "requirements": [
         {
           "id": "UIC-001",
           "tests": [
             "tests/unit/test_ui_workflow.py::test_yaml_roundtrip_preserves_all_typed_fields",
             "tests/unit/test_ui_workflow.py::test_yaml_import_is_atomic_for_invalid_input",
-            "tests/unit/test_ui_workflow.py::test_empty_team_is_rejected_instead_of_demo_substitution"
+            "tests/unit/test_ui_workflow.py::test_empty_team_is_rejected_instead_of_demo_substitution",
+            "tests/unit/test_product_integrity.py::test_unchanged_history_preserves_counters_and_source",
+            "tests/unit/test_product_integrity.py::test_employee_identity_roundtrips_names_and_rejects_blank"
           ]
         },
         {
@@ -5580,7 +5730,8 @@
           "tests": [
             "tests/unit/test_ui_workflow.py::test_real_streamlit_project_edit_check_and_reopen",
             "tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours",
-            "tests/ui/test_project_journey.py"
+            "tests/ui/test_project_journey.py",
+            "tests/ui/test_product_recovery.py::test_unavailable_log_is_not_reported_as_no_changes"
           ]
         },
         {
@@ -5589,7 +5740,23 @@
             "tests/unit/test_ui_workflow.py::test_whatif_ui_uses_the_api_patch_fields",
             "tests/unit/test_ui_workflow.py::test_whatif_calendar_mismatch_is_reported_without_crashing_application",
             "tests/unit/test_ui_workflow.py::test_ui_range_keeps_first_ready_month_and_stops_at_diagnostic",
-            "tests/integration/test_whatif_endpoint.py"
+            "tests/integration/test_whatif_endpoint.py",
+            "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search"
+          ]
+        },
+        {
+          "id": "UIC-005",
+          "tests": [
+            "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict",
+            "tests/ui/test_first_month_journey.py::test_first_month_without_all_cell_pins_and_technical_operations"
+          ]
+        },
+        {
+          "id": "UIC-006",
+          "tests": [
+            "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours",
+            "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot",
+            "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision"
           ]
         }
       ],
@@ -5603,6 +5770,7 @@
         "specs/010-ui-configuration/traceability.json",
         "src/duty_schedule/api/schemas.py",
         "src/duty_schedule/api/whatif_service.py",
+        "src/duty_schedule/project.py",
         "src/duty_schedule/ui/__init__.py",
         "src/duty_schedule/ui/__pycache__/__init__.cpython-312.pyc",
         "src/duty_schedule/ui/__pycache__/builders.cpython-312.pyc",
@@ -5611,14 +5779,21 @@
         "src/duty_schedule/ui/__pycache__/mappings.cpython-312.pyc",
         "src/duty_schedule/ui/__pycache__/state.cpython-312.pyc",
         "src/duty_schedule/ui/__pycache__/views.cpython-312.pyc",
+        "src/duty_schedule/ui/autosave.py",
+        "src/duty_schedule/ui/autosave_component/index.html",
         "src/duty_schedule/ui/builders.py",
         "src/duty_schedule/ui/components.py",
         "src/duty_schedule/ui/config_io.py",
         "src/duty_schedule/ui/mappings.py",
         "src/duty_schedule/ui/state.py",
         "src/duty_schedule/ui/views.py",
+        "tests/contract/test_product_inputs.py",
         "tests/integration/test_whatif_endpoint.py",
+        "tests/ui/test_first_month_journey.py",
+        "tests/ui/test_product_recovery.py",
         "tests/ui/test_project_journey.py",
+        "tests/unit/test_product_integrity.py",
+        "tests/unit/test_ui_autosave.py",
         "tests/unit/test_ui_workflow.py"
       ]
     },
@@ -5825,6 +6000,319 @@
         "tests/unit/test_planning_rules.py",
         "tests/unit/test_project_context.py",
         "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "path": "specs/013-product-logic-audit",
+      "kind": "change",
+      "status": "in-progress",
+      "requirements": [
+        {
+          "id": "PAUD-001",
+          "tests": [
+            "tests/unit/test_planning_rules.py",
+            "tests/unit/test_project.py",
+            "tests/contract/test_revision_api.py",
+            "tests/ui/test_project_journey.py"
+          ]
+        },
+        {
+          "id": "PAUD-002",
+          "tests": [
+            "tests/unit/test_whatif_service.py",
+            "tests/unit/test_hour_consumers.py",
+            "tests/unit/test_export_time_model.py"
+          ]
+        },
+        {
+          "id": "PAUD-003",
+          "tests": [
+            "tests/unit/test_sdd.py"
+          ]
+        },
+        {
+          "id": "PAUD-004",
+          "tests": [
+            "tests/unit/test_sdd.py"
+          ]
+        },
+        {
+          "id": "PAUD-005",
+          "tests": [
+            "tests/unit/test_sdd.py",
+            "tests/unit/test_project_context.py",
+            "tests/contract/test_openapi_snapshot.py"
+          ]
+        }
+      ],
+      "files": [
+        "docs/project-index.json",
+        "docs/project-index.md",
+        "specs/000-baseline/gaps.md",
+        "specs/003-secure-api-exports/evidence.md",
+        "specs/003-secure-api-exports/plan.md",
+        "specs/003-secure-api-exports/spec.md",
+        "specs/003-secure-api-exports/tasks.md",
+        "specs/003-secure-api-exports/traceability.json",
+        "specs/004-scheduling-validity/decisions.md",
+        "specs/006-month-continuity/evidence.md",
+        "specs/006-month-continuity/plan.md",
+        "specs/006-month-continuity/spec.md",
+        "specs/006-month-continuity/tasks.md",
+        "specs/006-month-continuity/traceability.json",
+        "specs/008-workload-quality/evidence.md",
+        "specs/008-workload-quality/plan.md",
+        "specs/008-workload-quality/spec.md",
+        "specs/008-workload-quality/tasks.md",
+        "specs/008-workload-quality/traceability.json",
+        "specs/009-schedule-revisions/evidence.md",
+        "specs/009-schedule-revisions/plan.md",
+        "specs/009-schedule-revisions/spec.md",
+        "specs/009-schedule-revisions/tasks.md",
+        "specs/009-schedule-revisions/traceability.json",
+        "specs/010-ui-configuration/evidence.md",
+        "specs/010-ui-configuration/plan.md",
+        "specs/010-ui-configuration/spec.md",
+        "specs/010-ui-configuration/tasks.md",
+        "specs/010-ui-configuration/traceability.json",
+        "specs/013-product-logic-audit/audit.md",
+        "specs/013-product-logic-audit/evidence.md",
+        "specs/013-product-logic-audit/plan.md",
+        "specs/013-product-logic-audit/spec.md",
+        "specs/013-product-logic-audit/tasks.md",
+        "specs/013-product-logic-audit/traceability.json",
+        "specs/014-product-reliability/evidence.md",
+        "specs/014-product-reliability/plan.md",
+        "specs/014-product-reliability/spec.md",
+        "specs/014-product-reliability/tasks.md",
+        "specs/014-product-reliability/traceability.json",
+        "specs/015-guided-authoring/evidence.md",
+        "specs/015-guided-authoring/plan.md",
+        "specs/015-guided-authoring/spec.md",
+        "specs/015-guided-authoring/tasks.md",
+        "specs/015-guided-authoring/traceability.json",
+        "specs/016-stable-replanning/evidence.md",
+        "specs/016-stable-replanning/plan.md",
+        "specs/016-stable-replanning/spec.md",
+        "specs/016-stable-replanning/tasks.md",
+        "specs/016-stable-replanning/traceability.json",
+        "specs/017-two-month-quality/evidence.md",
+        "specs/017-two-month-quality/plan.md",
+        "specs/017-two-month-quality/spec.md",
+        "specs/017-two-month-quality/tasks.md",
+        "specs/017-two-month-quality/traceability.json"
+      ]
+    },
+    {
+      "path": "specs/014-product-reliability",
+      "kind": "change",
+      "status": "planned",
+      "requirements": [
+        {
+          "id": "DATA-001",
+          "tests": [
+            "tests/unit/test_product_integrity.py::test_employee_identity_roundtrips_names_and_rejects_blank",
+            "tests/contract/test_product_inputs.py::test_blank_employee_is_rejected_before_generation"
+          ]
+        },
+        {
+          "id": "DATA-002",
+          "tests": [
+            "tests/unit/test_product_integrity.py::test_unchanged_history_preserves_counters_and_source",
+            "tests/ui/test_product_recovery.py::test_imported_history_unchanged_save_preserves_every_employee"
+          ]
+        },
+        {
+          "id": "DATA-003",
+          "tests": [
+            "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search",
+            "tests/unit/test_product_integrity.py::test_legacy_team_lead_migration_is_visible"
+          ]
+        },
+        {
+          "id": "DATA-004",
+          "tests": [
+            "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
+            "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically"
+          ]
+        },
+        {
+          "id": "DATA-005",
+          "tests": [
+            "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance",
+            "tests/ui/test_product_recovery.py::test_unavailable_log_is_not_reported_as_no_changes"
+          ]
+        }
+      ],
+      "files": [
+        "specs/000-baseline/contracts/openapi.json",
+        "specs/014-product-reliability/evidence.md",
+        "specs/014-product-reliability/plan.md",
+        "specs/014-product-reliability/spec.md",
+        "specs/014-product-reliability/tasks.md",
+        "specs/014-product-reliability/traceability.json",
+        "src/duty_schedule/api/planning.py",
+        "src/duty_schedule/api/schemas.py",
+        "src/duty_schedule/api/whatif_service.py",
+        "src/duty_schedule/models.py",
+        "src/duty_schedule/project.py",
+        "src/duty_schedule/scheduler/core.py",
+        "src/duty_schedule/scheduler/postprocess/quality.py",
+        "src/duty_schedule/ui/builders.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/config_io.py",
+        "src/duty_schedule/ui/views.py",
+        "src/duty_schedule/xls_import.py",
+        "tests/contract/test_product_inputs.py",
+        "tests/ui/test_product_recovery.py",
+        "tests/unit/test_product_integrity.py"
+      ]
+    },
+    {
+      "path": "specs/015-guided-authoring",
+      "kind": "change",
+      "status": "planned",
+      "requirements": [
+        {
+          "id": "FLOW-001",
+          "tests": [
+            "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict"
+          ]
+        },
+        {
+          "id": "FLOW-002",
+          "tests": [
+            "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
+          ]
+        },
+        {
+          "id": "FLOW-003",
+          "tests": [
+            "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot",
+            "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision"
+          ]
+        },
+        {
+          "id": "FLOW-004",
+          "tests": [
+            "tests/ui/test_first_month_journey.py::test_first_month_without_all_cell_pins_and_technical_operations"
+          ]
+        }
+      ],
+      "files": [
+        "app.py",
+        "specs/015-guided-authoring/evidence.md",
+        "specs/015-guided-authoring/plan.md",
+        "specs/015-guided-authoring/spec.md",
+        "specs/015-guided-authoring/tasks.md",
+        "specs/015-guided-authoring/traceability.json",
+        "src/duty_schedule/models.py",
+        "src/duty_schedule/project.py",
+        "src/duty_schedule/ui/autosave.py",
+        "src/duty_schedule/ui/autosave_component/index.html",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/state.py",
+        "src/duty_schedule/ui/views.py",
+        "tests/ui/test_first_month_journey.py",
+        "tests/ui/test_product_recovery.py",
+        "tests/unit/test_ui_autosave.py"
+      ]
+    },
+    {
+      "path": "specs/016-stable-replanning",
+      "kind": "change",
+      "status": "planned",
+      "requirements": [
+        {
+          "id": "REPAIR-001",
+          "tests": [
+            "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle",
+            "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins"
+          ]
+        },
+        {
+          "id": "REPAIR-002",
+          "tests": [
+            "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id",
+            "tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version",
+            "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells"
+          ]
+        }
+      ],
+      "files": [
+        "specs/016-stable-replanning/evidence.md",
+        "specs/016-stable-replanning/plan.md",
+        "specs/016-stable-replanning/spec.md",
+        "specs/016-stable-replanning/tasks.md",
+        "specs/016-stable-replanning/traceability.json",
+        "src/duty_schedule/models.py",
+        "src/duty_schedule/project.py",
+        "src/duty_schedule/scheduler/core.py",
+        "src/duty_schedule/scheduler/greedy.py",
+        "src/duty_schedule/scheduler/postprocess/quality.py",
+        "src/duty_schedule/scheduler/solver.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/views.py",
+        "tests/integration/test_replanning.py",
+        "tests/ui/test_replanning_journey.py",
+        "tests/unit/test_replanning.py"
+      ]
+    },
+    {
+      "path": "specs/017-two-month-quality",
+      "kind": "change",
+      "status": "planned",
+      "requirements": [
+        {
+          "id": "QUALITY-001",
+          "tests": [
+            "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
+            "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+          ]
+        },
+        {
+          "id": "QUALITY-002",
+          "tests": [
+            "tests/unit/test_two_month_quality.py::test_missing_and_stale_history_are_not_zero",
+            "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source"
+          ]
+        },
+        {
+          "id": "QUALITY-003",
+          "tests": [
+            "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+            "tests/contract/test_quality_context.py::test_standalone_api_reports_month_only_quality",
+            "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window"
+          ]
+        }
+      ],
+      "files": [
+        "specs/000-baseline/contracts/openapi.json",
+        "specs/017-two-month-quality/evidence.md",
+        "specs/017-two-month-quality/plan.md",
+        "specs/017-two-month-quality/spec.md",
+        "specs/017-two-month-quality/tasks.md",
+        "specs/017-two-month-quality/traceability.json",
+        "src/duty_schedule/api/planning.py",
+        "src/duty_schedule/api/schemas.py",
+        "src/duty_schedule/api/whatif_service.py",
+        "src/duty_schedule/export/pdf.py",
+        "src/duty_schedule/export/xls.py",
+        "src/duty_schedule/models.py",
+        "src/duty_schedule/project.py",
+        "src/duty_schedule/quality_history.py",
+        "src/duty_schedule/scheduler/core.py",
+        "src/duty_schedule/scheduler/greedy.py",
+        "src/duty_schedule/scheduler/multimonth.py",
+        "src/duty_schedule/scheduler/postprocess/quality.py",
+        "src/duty_schedule/scheduler/solver.py",
+        "src/duty_schedule/stats.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/views.py",
+        "tests/contract/test_quality_context.py",
+        "tests/integration/test_two_month_quality.py",
+        "tests/ui/test_quality_journey.py",
+        "tests/unit/test_two_month_quality.py"
       ]
     }
   ],

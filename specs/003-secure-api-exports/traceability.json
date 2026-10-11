@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "complete",
+  "status": "planned",
   "requirements": [
     {
       "id": "SEC-001",
@@ -15,7 +15,9 @@
         "tests/contract/test_revision_api.py::test_bad_range_is_native_422_before_generation",
         "tests/contract/test_revision_api.py::test_unknown_employee_quotes_and_newline_produce_json",
         "tests/contract/test_api_strict_validation.py",
-        "tests/unit/test_api_errors.py"
+        "tests/unit/test_api_errors.py",
+        "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
+        "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search"
       ]
     },
     {
@@ -73,10 +75,12 @@
     "src/duty_schedule/export/ics.py",
     "src/duty_schedule/export/pdf.py",
     "src/duty_schedule/export/xls.py",
+    "src/duty_schedule/models.py",
     "tests/contract/conftest.py",
     "tests/contract/test_api_error_contract.py",
     "tests/contract/test_api_response_schema_contract.py",
     "tests/contract/test_api_strict_validation.py",
+    "tests/contract/test_product_inputs.py",
     "tests/contract/test_revision_api.py",
     "tests/integration/test_api_endpoints.py",
     "tests/unit/test_api_errors.py",

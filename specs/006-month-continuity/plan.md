@@ -44,3 +44,16 @@ solver/security/UI/platform проверки. Внешние календарн�
 Перенос хранит ID/имя, as_of, source и раздельные рабочие/одинаковые/выходные серии; compute_carry_over учитывает initial_history. XLS содержит hidden metadata chunked JSON и индивидуальные часы; importer пересчитывает реальные ячейки с initial history, отвергает неизвестные и пустые смены. Range сохраняет matching calendar snapshots, переносит только ready и останавливается на первом diagnostic.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Продолжение после продуктового аудита 013
+
+HIST-002/003 дополнены сохранностью полных счётчиков и source при неизменённом сохранении UI history и правке одного сотрудника. Допустимые display names не теряют сотрудника в XLS; неизвестная строка не считается успешным концом импорта. Это DATA-001/002 изменения 014; история качества из 017 отделена от обязательного carry-over отдыха.
+
+Точные дополнительные пути текущего planned scope:
+
+- src/duty_schedule/ui/components.py
+- tests/unit/test_product_integrity.py
+- tests/ui/test_product_recovery.py
+
+Новые приёмочные selectors перечислены в traceability. Сначала воспроизведение
+и failing tests, затем ограниченные изменения по 014–017 и итоговое evidence.

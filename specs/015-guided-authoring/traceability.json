@@ -1,0 +1,49 @@
+{
+  "kind": "change",
+  "status": "planned",
+  "files": [
+    "app.py",
+    "specs/015-guided-authoring/evidence.md",
+    "specs/015-guided-authoring/plan.md",
+    "specs/015-guided-authoring/spec.md",
+    "specs/015-guided-authoring/tasks.md",
+    "specs/015-guided-authoring/traceability.json",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/project.py",
+    "src/duty_schedule/ui/autosave.py",
+    "src/duty_schedule/ui/autosave_component/index.html",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/state.py",
+    "src/duty_schedule/ui/views.py",
+    "tests/ui/test_first_month_journey.py",
+    "tests/ui/test_product_recovery.py",
+    "tests/unit/test_ui_autosave.py"
+  ],
+  "requirements": [
+    {
+      "id": "FLOW-001",
+      "tests": [
+        "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict"
+      ]
+    },
+    {
+      "id": "FLOW-002",
+      "tests": [
+        "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
+      ]
+    },
+    {
+      "id": "FLOW-003",
+      "tests": [
+        "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot",
+        "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision"
+      ]
+    },
+    {
+      "id": "FLOW-004",
+      "tests": [
+        "tests/ui/test_first_month_journey.py::test_first_month_without_all_cell_pins_and_technical_operations"
+      ]
+    }
+  ]
+}

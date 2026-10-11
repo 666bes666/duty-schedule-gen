@@ -54,3 +54,21 @@ Runtime проверки и ограничения собраны в [общем
 Это уточнение области уже реализованных требований, не изменение смысла ID.
 Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
 прогон отражены в evidence012.
+
+## Продолжение после продуктового аудита 013
+
+UIC-001 дополнен сохранностью допустимых имён/полной исходной истории при unchanged UI round-trip (DATA-001/002). UIC-003 требует правдивого объяснения оптимизации и подписанного окна метрик (DATA-005/QUALITY-003). UIC-004 проверяет одинаковые top-level/nested patch пути UI/API, исключая ложный успех опечатки (DATA-003). Основные правки происходят в приложении; XLS/PDF — выдача, импорт старой истории сохраняется.
+
+Точные дополнительные пути текущего planned scope:
+
+- src/duty_schedule/ui/autosave.py
+- src/duty_schedule/ui/autosave_component/index.html
+- src/duty_schedule/project.py
+- tests/unit/test_product_integrity.py
+- tests/contract/test_product_inputs.py
+- tests/ui/test_product_recovery.py
+- tests/ui/test_first_month_journey.py
+- tests/unit/test_ui_autosave.py
+
+Новые приёмочные selectors перечислены в traceability. Сначала воспроизведение
+и failing tests, затем ограниченные изменения по 014–017 и итоговое evidence.

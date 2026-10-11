@@ -32,3 +32,12 @@
 | HIST-002 | `tests/unit/test_ui_workflow.py::test_manual_history_requires_explicit_known_or_new_employee`, `tests/unit/test_project.py::test_standalone_month_with_verified_external_history_is_allowed`, `tests/unit/test_planning_rules.py::test_validator_rejects_forged_ready_and_missing_calendar_history` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | HIST-003 | `tests/unit/test_history.py`, `tests/unit/test_xls_import.py`, `tests/integration/test_xls_roundtrip.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | HIST-004 | `tests/unit/test_multimonth.py::test_range_keeps_ready_month_and_stops_on_first_diagnostic`, `tests/integration/test_multimonth.py`, `tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+
+## 2026-10-11 — уточнение контракта после продуктового интервью 013
+
+HIST-002/003 дополнены сохранностью полных счётчиков и source при неизменённом сохранении UI history и правке одного сотрудника. Допустимые display names не теряют сотрудника в XLS; неизвестная строка не считается успешным концом импорта. Это DATA-001/002 изменения 014; история качества из 017 отделена от обязательного carry-over отдыха.
+
+Новые критерии НЕ реализованы. Прежние PASS выше сохраняются как история
+проверки прежних требований; они не доказывают устранение PLOG или выполнение
+новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
+Status возвращён в planned. Анализ и gates документов: evidence013.

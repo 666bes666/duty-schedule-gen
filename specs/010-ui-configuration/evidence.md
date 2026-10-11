@@ -32,3 +32,12 @@ app.py делегирует оркестрацию ui/components.py; типиз�
 | UIC-002 | `tests/unit/test_ui_workflow.py`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | UIC-003 | `tests/unit/test_ui_workflow.py::test_real_streamlit_project_edit_check_and_reopen`, `tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | UIC-004 | `tests/unit/test_ui_workflow.py::test_whatif_ui_uses_the_api_patch_fields`, `tests/unit/test_ui_workflow.py::test_whatif_calendar_mismatch_is_reported_without_crashing_application`, `tests/unit/test_ui_workflow.py::test_ui_range_keeps_first_ready_month_and_stops_at_diagnostic`, `tests/integration/test_whatif_endpoint.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+
+## 2026-10-11 — уточнение контракта после продуктового интервью 013
+
+UIC-001 дополнен сохранностью допустимых имён/полной исходной истории при unchanged UI round-trip (DATA-001/002). UIC-003 требует правдивого объяснения оптимизации и подписанного окна метрик (DATA-005/QUALITY-003). UIC-004 проверяет одинаковые top-level/nested patch пути UI/API, исключая ложный успех опечатки (DATA-003). Основные правки происходят в приложении; XLS/PDF — выдача, импорт старой истории сохраняется.
+
+Новые критерии НЕ реализованы. Прежние PASS выше сохраняются как история
+проверки прежних требований; они не доказывают устранение PLOG или выполнение
+новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
+Status возвращён в planned. Анализ и gates документов: evidence013.

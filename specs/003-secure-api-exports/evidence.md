@@ -35,3 +35,12 @@ employee сохраняют400; это отдельно проверяет test_
 | SEC-001 | `tests/unit/test_export_security.py::test_pdf_names_are_escaped_in_both_tables`, `tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | SEC-002 | `tests/contract/test_revision_api.py::test_bad_range_is_native_422_before_generation`, `tests/contract/test_revision_api.py::test_unknown_employee_quotes_and_newline_produce_json`, `tests/contract/test_api_strict_validation.py`, `tests/unit/test_api_errors.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | SEC-003 | `tests/contract/test_revision_api.py::test_binary_export_media_types_are_documented`, `tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported`, `tests/contract/test_revision_api.py::test_control_characters_in_employee_name_export_as_escaped_calendar_text`, `tests/unit/test_export_security.py::test_archive_names_are_safe_unique_and_preserve_original_inputs` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+
+## 2026-10-11 — уточнение контракта после продуктового интервью 013
+
+Для SEC-002 несовместимый период полного календаря и неизвестный путь what-if являются ошибкой входа native 422 до поиска/сети. Реальный сбой источника календаря сохраняет 502; прежние бизнес-ошибки 400 и export 409 сохраняются. См. DATA-003/004 изменения 014.
+
+Новые критерии НЕ реализованы. Прежние PASS выше сохраняются как история
+проверки прежних требований; они не доказывают устранение PLOG или выполнение
+новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
+Status возвращён в planned. Анализ и gates документов: evidence013.
