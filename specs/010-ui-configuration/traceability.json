@@ -34,5 +34,33 @@
         "tests/integration/test_whatif_endpoint.py"
       ]
     }
+  ],
+  "files": [
+    "app.py",
+    "docs/scheduling-workflow.md",
+    "specs/010-ui-configuration/evidence.md",
+    "specs/010-ui-configuration/plan.md",
+    "specs/010-ui-configuration/spec.md",
+    "specs/010-ui-configuration/tasks.md",
+    "specs/010-ui-configuration/traceability.json",
+    "src/duty_schedule/api/schemas.py",
+    "src/duty_schedule/api/whatif_service.py",
+    "src/duty_schedule/ui/__init__.py",
+    "src/duty_schedule/ui/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/builders.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/components.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/config_io.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/mappings.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/state.cpython-312.pyc",
+    "src/duty_schedule/ui/__pycache__/views.cpython-312.pyc",
+    "src/duty_schedule/ui/builders.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/config_io.py",
+    "src/duty_schedule/ui/mappings.py",
+    "src/duty_schedule/ui/state.py",
+    "src/duty_schedule/ui/views.py",
+    "tests/integration/test_whatif_endpoint.py",
+    "tests/ui/test_project_journey.py",
+    "tests/unit/test_ui_workflow.py"
   ]
 }

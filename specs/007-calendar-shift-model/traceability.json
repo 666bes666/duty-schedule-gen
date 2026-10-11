@@ -28,5 +28,34 @@
         "tests/ui/test_project_journey.py"
       ]
     }
+  ],
+  "files": [
+    "specs/007-calendar-shift-model/evidence.md",
+    "specs/007-calendar-shift-model/plan.md",
+    "specs/007-calendar-shift-model/spec.md",
+    "specs/007-calendar-shift-model/tasks.md",
+    "specs/007-calendar-shift-model/traceability.json",
+    "src/duty_schedule/calendar.py",
+    "src/duty_schedule/constants.py",
+    "src/duty_schedule/costs.py",
+    "src/duty_schedule/export/__init__.py",
+    "src/duty_schedule/export/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/filenames.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/ics.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/pdf.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/xls.cpython-312.pyc",
+    "src/duty_schedule/export/filenames.py",
+    "src/duty_schedule/export/ics.py",
+    "src/duty_schedule/export/pdf.py",
+    "src/duty_schedule/export/xls.py",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/stats.py",
+    "src/duty_schedule/workload.py",
+    "tests/ui/test_project_journey.py",
+    "tests/unit/test_calendar_model.py",
+    "tests/unit/test_export_time_model.py",
+    "tests/unit/test_hour_consumers.py",
+    "tests/unit/test_ics_per_employee.py",
+    "tests/unit/test_workload.py"
   ]
 }

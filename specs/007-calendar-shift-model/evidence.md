@@ -24,3 +24,14 @@ ProductionCalendar содержит полный уникальный месяц
 Смысловое SDD-ревью исправило привязку TIME-001/002: полный/проверенный/saved
 календарь относится к TIME-001, общая арифметика типов дат и часов — к TIME-002.
 Структурный gate до этого был зелёным; сама ошибка была в смысле mapping, не в коде.
+
+## 2026-10-11 — миграция к строгому SDD и явная приёмка
+
+Область `files` восстановлена из плана и реальных файлов. Это актуализация
+живого контракта, а не утверждение о ретроспективном прохождении нового gate.
+
+| ID | Проверяющие тесты | Evidence |
+|---|---|---|
+| TIME-001 | `tests/unit/test_calendar_model.py::test_calendar_preserves_working_saturday_and_short_day`, `tests/unit/test_calendar_model.py::test_calendar_rejects_unknown_codes`, `tests/unit/test_calendar_model.py::test_calendar_requires_complete_unique_month`, `tests/unit/test_calendar_model.py::test_calendar_uses_only_verified_saved_requested_period`, `tests/unit/test_calendar_model.py::test_wrong_saved_period_does_not_replace_calendar` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| TIME-002 | `tests/unit/test_calendar_model.py::test_calendar_preserves_working_saturday_and_short_day`, `tests/unit/test_hour_consumers.py`, `tests/unit/test_workload.py::test_assignment_hours_share_short_and_individual_workday_model` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| TIME-003 | `tests/unit/test_export_time_model.py`, `tests/unit/test_ics_per_employee.py`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |

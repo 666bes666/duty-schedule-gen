@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
-
 from duty_schedule.models import (
     City,
+    Config,
     DaySchedule,
     Employee,
     ScheduleType,
@@ -16,8 +15,6 @@ from duty_schedule.models import (
 )
 from duty_schedule.scheduler import (
     EmployeeState,
-    ScheduleError,
-    _build_day,
     _calc_blocked_working_days,
     _can_work,
     _is_weekend_or_holiday,
@@ -131,114 +128,60 @@ class TestEmployeeState:
         assert state.needs_more_work(remaining_days=5) is False
 
 
-class TestBuildDay:
-    """Тесты построения расписания на один день."""
+class TestBuildCandidate:
+    def _make_config(self) -> Config:
+        return Config(
+            year=2025,
+            month=3,
+            employees=[
+                _emp("Москва 1"),
+                _emp("Москва 2"),
+                _emp("Москва 3"),
+                _emp("Москва 4"),
+                _emp("Хабаровск 1", City.KHABAROVSK),
+                _emp("Хабаровск 2", City.KHABAROVSK),
+            ],
+        )
 
-    def _make_team(self) -> tuple[list[Employee], dict]:
-        employees = [
-            _emp("Москва 1"),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            _emp("Хабаровск 1", City.KHABAROVSK),
-            _emp("Хабаровск 2", City.KHABAROVSK),
-        ]
-        states = {e.name: EmployeeState(target_working_days=21) for e in employees}
-        return employees, states
+    def _first_day(self) -> DaySchedule:
+        from duty_schedule.calendar import calendar_for_config
+        from duty_schedule.scheduler.greedy import build_candidate
+
+        config = self._make_config()
+        days, _successful = build_candidate(config, calendar_for_config(config), 42)
+        return days[0]
 
     def test_all_shifts_covered(self):
-        import random as _random
-
-        employees, states = self._make_team()
-        rng = _random.Random(42)
-        day = date(2025, 3, 3)
-        ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
-        assert ds.morning, "Утренняя смена не покрыта"
-        assert ds.evening, "Вечерняя смена не покрыта"
-        assert ds.night, "Ночная смена не покрыта"
+        day = self._first_day()
+        assert day.morning and day.evening and day.night
 
     def test_night_only_khabarovsk(self):
-        """В колонке 'night' только хабаровские сотрудники."""
-        import random as _random
-
-        employees, states = self._make_team()
-        rng = _random.Random(42)
-        day = date(2025, 3, 3)
-        ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
-        khb_names = {"Хабаровск 1", "Хабаровск 2"}
-        for name in ds.night:
-            assert name in khb_names, f"Ночная смена назначена не хабаровскому: {name}"
+        assert set(self._first_day().night) <= {"Хабаровск 1", "Хабаровск 2"}
 
     def test_moscow_not_in_night(self):
-        """Московские сотрудники НЕ появляются в ночной смене."""
-        import random as _random
-
-        employees, states = self._make_team()
-        rng = _random.Random(42)
-        day = date(2025, 3, 3)
-        ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
-        moscow_names = {"Москва 1", "Москва 2", "Москва 3", "Москва 4"}
-        for name in ds.night:
-            assert name not in moscow_names, f"Московский в ночной смене: {name}"
+        assert not set(self._first_day().night) & {"Москва 1", "Москва 2", "Москва 3", "Москва 4"}
 
     def test_khabarovsk_not_in_morning_evening(self):
-        """Хабаровские сотрудники НЕ появляются в утренней/вечерней MSK сменах."""
-        import random as _random
+        day = self._first_day()
+        assert not (set(day.morning) | set(day.evening)) & {"Хабаровск 1", "Хабаровск 2"}
 
-        employees, states = self._make_team()
-        rng = _random.Random(42)
-        day = date(2025, 3, 3)
-        ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
-        khb_names = {"Хабаровск 1", "Хабаровск 2"}
-        for name in ds.morning:
-            assert name not in khb_names, f"Хабаровский в утренней смене MSK: {name}"
-        for name in ds.evening:
-            assert name not in khb_names, f"Хабаровский в вечерней смене MSK: {name}"
+    def test_khabarovsk_has_one_assignment_per_day(self):
+        day = self._first_day()
+        for name in ("Хабаровск 1", "Хабаровск 2"):
+            assert sum(name in group for group in (day.night, day.workday, day.day_off)) == 1
 
-    def test_khabarovsk_workday_on_non_night_day(self):
-        """Хабаровский не на ночи и не после ночи — получает workday (норма)."""
-        import random as _random
+    def test_no_night_pool_returns_failed_candidate_without_fabricated_coverage(self):
+        from duty_schedule.calendar import calendar_for_config
+        from duty_schedule.scheduler.greedy import build_candidate
 
-        employees, states = self._make_team()
-        rng = _random.Random(42)
-        day = date(2025, 3, 3)
-        ds = _build_day(day, employees, states, set(), rng, remaining_days=29)
-        khb_names = {"Хабаровск 1", "Хабаровск 2"}
-        night_set = set(ds.night)
-        workday_set = set(ds.workday)
-        day_off_set = set(ds.day_off)
-        for name in khb_names:
-            assert name in (night_set | workday_set | day_off_set), (
-                f"{name} не назначен ни на одну смену"
-            )
-
-    def test_no_night_khabarovsk_fails(self):
-        """Если все хабаровские в отпуске — ScheduleError."""
-        import random as _random
-
-        day = date(2025, 3, 3)
-        employees = [
-            _emp("Москва 1"),
-            _emp("Москва 2"),
-            _emp("Москва 3"),
-            _emp("Москва 4"),
-            Employee(
-                name="Хабаровск 1",
-                city=City.KHABAROVSK,
-                schedule_type=ScheduleType.FLEXIBLE,
-                vacations=[VacationPeriod(start=day, end=day)],
-            ),
-            Employee(
-                name="Хабаровск 2",
-                city=City.KHABAROVSK,
-                schedule_type=ScheduleType.FLEXIBLE,
-                vacations=[VacationPeriod(start=day, end=day)],
-            ),
-        ]
-        states = {e.name: EmployeeState(target_working_days=21) for e in employees}
-        rng = _random.Random(42)
-        with pytest.raises(ScheduleError, match="ночную смену"):
-            _build_day(day, employees, states, set(), rng, remaining_days=29)
+        config = self._make_config()
+        first = date(config.year, config.month, 1)
+        for employee in config.employees:
+            if employee.city == City.KHABAROVSK:
+                employee.vacations = [VacationPeriod(start=first, end=first)]
+        days, successful = build_candidate(config, calendar_for_config(config), 42)
+        assert not successful and not days[0].night
+        assert set(days[0].vacation) == {"Хабаровск 1", "Хабаровск 2"}
 
 
 class TestCalcBlockedWorkingDays:

@@ -116,3 +116,12 @@ directories captured above]
 |-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+
+## Mandatory project SDD gate
+
+All changes, including tests, dependencies, CI, docs, cleanup and hotfix, require
+this contract before implementation. Keep exact paths in traceability `files`,
+map every requirement ID and use unique T-IDs. Complete requires executed checks
+and per-ID acceptance in evidence. Validate staged snapshot before commit and
+scoped diff before push; regenerate/check docs/project-index.* when it changes.
+A baseline or unrelated feature cannot authorize implementation.

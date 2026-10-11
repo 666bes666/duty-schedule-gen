@@ -43,3 +43,14 @@ solver/security/UI/platform проверки. Внешние календарн�
 app.py делегирует оркестрацию ui/components.py; типизированные YAML/table adapters проверяют вход до изменения state. UI хранит ScheduleProject и отображает одну текущую версию, sickness/norm/history/approval/R controls, pins/unpin, save/open и настоящий range. Каждый месяц повторного range берёт свой Config и свежий carry. What-if использует API patch schema, ловит CalendarError; diff показывает old/new R hours; legacy sorting/bulk/charts/cost/ICS остаются.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Аудит012 — scope интеграции и продвижения
+
+Сверка фактического cumulative diff к test/main дополнительно подтвердила
+принадлежность следующих файлов этому контракту:
+
+- `docs/scheduling-workflow.md`
+
+Это уточнение области уже реализованных требований, не изменение смысла ID.
+Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
+прогон отражены в evidence012.

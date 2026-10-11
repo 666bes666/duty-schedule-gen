@@ -34,5 +34,26 @@
         "tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain"
       ]
     }
+  ],
+  "files": [
+    "specs/006-month-continuity/evidence.md",
+    "specs/006-month-continuity/plan.md",
+    "specs/006-month-continuity/spec.md",
+    "specs/006-month-continuity/tasks.md",
+    "specs/006-month-continuity/traceability.json",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/project.py",
+    "src/duty_schedule/scheduler/multimonth.py",
+    "src/duty_schedule/scheduler/postprocess/carry_over_calc.py",
+    "src/duty_schedule/xls_import.py",
+    "tests/integration/test_multimonth.py",
+    "tests/integration/test_xls_roundtrip.py",
+    "tests/unit/test_history.py",
+    "tests/unit/test_multimonth.py",
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_project.py",
+    "tests/unit/test_solver.py",
+    "tests/unit/test_ui_workflow.py",
+    "tests/unit/test_xls_import.py"
   ]
 }

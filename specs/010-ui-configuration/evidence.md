@@ -20,3 +20,15 @@ app.py делегирует оркестрацию ui/components.py; типиз�
 ## 2026-10-11T00:37:32+03:00 — завершение локальной реализации
 
 Критерии проверены связанными тестами: общий прогон750passed, coverage85.73%, браузер7passed, независимые review fixes закрыты. Реальные команды и границы доказательств находятся в [общем evidence](../011-delivery-assurance/evidence.md). Задачи T001–T005 закрыты; статус complete относится к реализации этих требований, не к публикации релиза.
+
+## 2026-10-11 — миграция к строгому SDD и явная приёмка
+
+Область `files` восстановлена из плана и реальных файлов. Это актуализация
+живого контракта, а не утверждение о ретроспективном прохождении нового gate.
+
+| ID | Проверяющие тесты | Evidence |
+|---|---|---|
+| UIC-001 | `tests/unit/test_ui_workflow.py::test_yaml_roundtrip_preserves_all_typed_fields`, `tests/unit/test_ui_workflow.py::test_yaml_import_is_atomic_for_invalid_input`, `tests/unit/test_ui_workflow.py::test_empty_team_is_rejected_instead_of_demo_substitution` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| UIC-002 | `tests/unit/test_ui_workflow.py`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| UIC-003 | `tests/unit/test_ui_workflow.py::test_real_streamlit_project_edit_check_and_reopen`, `tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| UIC-004 | `tests/unit/test_ui_workflow.py::test_whatif_ui_uses_the_api_patch_fields`, `tests/unit/test_ui_workflow.py::test_whatif_calendar_mismatch_is_reported_without_crashing_application`, `tests/unit/test_ui_workflow.py::test_ui_range_keeps_first_ready_month_and_stops_at_diagnostic`, `tests/integration/test_whatif_endpoint.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |

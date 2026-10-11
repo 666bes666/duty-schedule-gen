@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: sdd
         name: SDD artifact validation
-        entry: uv run python scripts/check_sdd.py
+        entry: uv run python scripts/check_sdd.py --staged
         language: system
         pass_filenames: false
         always_run: true

@@ -45,3 +45,18 @@ solver/security/UI/platform проверки. Внешние календарн�
 Типизированные plan/revision endpoints добавлены без удаления экспорта из Config. Native422 используется для входной модели и диапазона, прежний unknown employee400 сохраняется; diagnostic даёт409 в legacy generate/export. PDF экранирует имена в обеих таблицах и использует URLFetcher без разрешённых протоколов. Персональные ICS используют VALUE=TEXT; скачивания и ZIP имеют безопасные уникальные leaf names.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Аудит012 — scope интеграции и продвижения
+
+Сверка фактического cumulative diff к test/main дополнительно подтвердила
+принадлежность следующих файлов этому контракту:
+
+- `tests/contract/conftest.py`
+- `tests/contract/test_api_error_contract.py`
+- `tests/contract/test_api_response_schema_contract.py`
+- `tests/integration/test_api_endpoints.py`
+- `tests/unit/test_pdf_export.py`
+
+Это уточнение области уже реализованных требований, не изменение смысла ID.
+Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
+прогон отражены в evidence012.

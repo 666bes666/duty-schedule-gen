@@ -43,3 +43,14 @@ solver/security/UI/platform проверки. Внешние календарн�
 Setup использует frozen uv и explicit solver extra. Required solver workflow отвергает skips/empty JUnit. Бенчмарки проверяют ready и сравнивают реально восстановленный prior SHA baseline с mean:10%; promotion зависит от успешных gates. Main lint проверяет SDD linkage --base. Build проверяет installed wheel/native PDF, packaged-runtime выполняет API/UI без source mounts; tag/release — reusable dependencies того же SHA/version/manifest/checksum. Версия5.0.0 явно фиксирует несовместимый ready/export контракт старых входов без verified context.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Аудит012 — scope интеграции и продвижения
+
+Сверка фактического cumulative diff к test/main дополнительно подтвердила
+принадлежность следующих файлов этому контракту:
+
+- `docker-compose.yml`
+
+Это уточнение области уже реализованных требований, не изменение смысла ID.
+Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
+прогон отражены в evidence012.

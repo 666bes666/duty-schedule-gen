@@ -43,3 +43,18 @@ solver/security/UI/platform проверки. Внешние календарн�
 scheduler/rules.py задаёт единые роли, доступность, отдых, серию и подтверждения; scheduler/validation.py независимо пересчитывает календарь, нормы, назначения, историю и перенос. Greedy и CP-SAT возвращают Schedule со status/diagnostics/search_status. Подтверждения фильтруются по employee/date/value, не зависят от порядка и не уменьшают обычный лимит. Timeout/exhaustion проверяются отдельными реальными runtime-регрессиями.
 
 Runtime проверки и ограничения собраны в [общем evidence](../011-delivery-assurance/evidence.md); конкретные требования связаны с тестами в traceability.json. Подробный пользовательский переход — [руководство](../../docs/scheduling-workflow.md).
+
+## Аудит012 — scope интеграции и продвижения
+
+Сверка фактического cumulative diff к test/main дополнительно подтвердила
+принадлежность следующих файлов этому контракту:
+
+- `tests/conftest.py`
+- `tests/integration/test_full_schedule.py`
+- `tests/unit/test_failure_modes.py`
+- `tests/unit/test_max_consecutive_constants.py`
+- `tests/unit/test_models.py`
+
+Это уточнение области уже реализованных требований, не изменение смысла ID.
+Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
+прогон отражены в evidence012.

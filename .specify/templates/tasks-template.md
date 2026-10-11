@@ -253,3 +253,12 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+
+## Mandatory project SDD gate
+
+All changes, including tests, dependencies, CI, docs, cleanup and hotfix, require
+this contract before implementation. Keep exact paths in traceability `files`,
+map every requirement ID and use unique T-IDs. Complete requires executed checks
+and per-ID acceptance in evidence. Validate staged snapshot before commit and
+scoped diff before push; regenerate/check docs/project-index.* when it changes.
+A baseline or unrelated feature cannot authorize implementation.

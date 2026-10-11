@@ -34,5 +34,25 @@
         "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool"
       ]
     }
+  ],
+  "files": [
+    "specs/008-workload-quality/evidence.md",
+    "specs/008-workload-quality/plan.md",
+    "specs/008-workload-quality/spec.md",
+    "specs/008-workload-quality/tasks.md",
+    "specs/008-workload-quality/traceability.json",
+    "src/duty_schedule/api/whatif_service.py",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/scheduler/core.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/postprocess/quality.py",
+    "src/duty_schedule/scheduler/solver.py",
+    "src/duty_schedule/workload.py",
+    "tests/integration/test_pipeline_hour_compatibility.py",
+    "tests/ui/test_project_journey.py",
+    "tests/unit/test_hour_consumers.py",
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_whatif_service.py",
+    "tests/unit/test_workload.py"
   ]
 }

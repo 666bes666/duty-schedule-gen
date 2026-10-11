@@ -27,7 +27,9 @@ jobs:
           else
             uv run python scripts/check_sdd.py
           fi
+      - name: Verify complete project index
+        run: uv run python scripts/project_context.py --check
       - run: uv run ruff check scripts/ tests/unit/test_sdd.py tests/contract/test_openapi_snapshot.py
       - run: uv run ruff format --check scripts/ tests/unit/test_sdd.py tests/contract/test_openapi_snapshot.py
       - run: uv run mypy src/ scripts/
-      - run: uv run pytest tests/unit/test_sdd.py tests/contract/test_openapi_snapshot.py -q
+      - run: uv run pytest tests/unit/test_sdd.py tests/unit/test_project_context.py tests/contract/test_openapi_snapshot.py -q

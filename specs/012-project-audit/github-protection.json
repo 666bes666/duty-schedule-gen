@@ -1,0 +1,220 @@
+{
+  "date": "2026-10-11",
+  "repository": "666bes666/duty-schedule-gen",
+  "branches": {
+    "dev": {
+      "strict": true,
+      "before_required_checks": [
+        "Lint",
+        "Unit Tests",
+        "Smoke Tests"
+      ],
+      "required_checks": [
+        "Lint",
+        "Unit Tests",
+        "Smoke Tests",
+        "Dependency Audit",
+        "Specifications and API contract"
+      ],
+      "checks": [
+        {
+          "context": "Lint",
+          "app_id": 15368
+        },
+        {
+          "context": "Unit Tests",
+          "app_id": 15368
+        },
+        {
+          "context": "Smoke Tests",
+          "app_id": 15368
+        },
+        {
+          "context": "Dependency Audit",
+          "app_id": 15368
+        },
+        {
+          "context": "Specifications and API contract",
+          "app_id": 15368
+        }
+      ],
+      "required_approving_review_count": 0,
+      "enforce_admins": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "other_settings_preserved": true
+    },
+    "test": {
+      "strict": true,
+      "before_required_checks": [
+        "Lint + Mypy",
+        "Tests (ubuntu-latest / py3.12)",
+        "Tests (ubuntu-latest / py3.13)",
+        "Tests (windows-latest / py3.12)",
+        "Tests (windows-latest / py3.13)",
+        "Security Scan",
+        "Performance Benchmarks",
+        "Streamlit Smoke"
+      ],
+      "required_checks": [
+        "Lint + Mypy",
+        "Tests (ubuntu-latest / py3.12)",
+        "Tests (ubuntu-latest / py3.13)",
+        "Tests (windows-latest / py3.12)",
+        "Tests (windows-latest / py3.13)",
+        "Security Scan",
+        "Performance Benchmarks",
+        "Streamlit Smoke",
+        "Required Solver / CP-SAT without skips",
+        "Specifications and API contract"
+      ],
+      "checks": [
+        {
+          "context": "Lint + Mypy",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (ubuntu-latest / py3.12)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (ubuntu-latest / py3.13)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (windows-latest / py3.12)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (windows-latest / py3.13)",
+          "app_id": 15368
+        },
+        {
+          "context": "Security Scan",
+          "app_id": 15368
+        },
+        {
+          "context": "Performance Benchmarks",
+          "app_id": 15368
+        },
+        {
+          "context": "Streamlit Smoke",
+          "app_id": 15368
+        },
+        {
+          "context": "Required Solver / CP-SAT without skips",
+          "app_id": 15368
+        },
+        {
+          "context": "Specifications and API contract",
+          "app_id": 15368
+        }
+      ],
+      "required_approving_review_count": 1,
+      "enforce_admins": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "other_settings_preserved": true
+    },
+    "main": {
+      "strict": true,
+      "before_required_checks": [
+        "Lint + Mypy",
+        "Tests (ubuntu-latest / py3.12)",
+        "Tests (ubuntu-latest / py3.13)",
+        "Tests (windows-latest / py3.12)",
+        "Tests (windows-latest / py3.13)",
+        "Tests (macos-latest / py3.12)",
+        "Tests (macos-latest / py3.13)",
+        "Security Scan",
+        "UI Tests (Playwright)",
+        "System Tests",
+        "Build"
+      ],
+      "required_checks": [
+        "Tests (ubuntu-latest / py3.12)",
+        "Tests (ubuntu-latest / py3.13)",
+        "Tests (windows-latest / py3.12)",
+        "Tests (windows-latest / py3.13)",
+        "Tests (macos-latest / py3.12)",
+        "Tests (macos-latest / py3.13)",
+        "Security Scan",
+        "UI Tests (Playwright)",
+        "System Tests",
+        "Lint + Mypy + SDD",
+        "Build and Installed Artifact",
+        "Required Solver / CP-SAT without skips",
+        "Performance Benchmarks for Release SHA",
+        "Container API and UI Journeys",
+        "Specifications and API contract"
+      ],
+      "checks": [
+        {
+          "context": "Tests (ubuntu-latest / py3.12)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (ubuntu-latest / py3.13)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (windows-latest / py3.12)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (windows-latest / py3.13)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (macos-latest / py3.12)",
+          "app_id": 15368
+        },
+        {
+          "context": "Tests (macos-latest / py3.13)",
+          "app_id": 15368
+        },
+        {
+          "context": "Security Scan",
+          "app_id": 15368
+        },
+        {
+          "context": "UI Tests (Playwright)",
+          "app_id": 15368
+        },
+        {
+          "context": "System Tests",
+          "app_id": 15368
+        },
+        {
+          "context": "Lint + Mypy + SDD",
+          "app_id": 15368
+        },
+        {
+          "context": "Build and Installed Artifact",
+          "app_id": 15368
+        },
+        {
+          "context": "Required Solver / CP-SAT without skips",
+          "app_id": 15368
+        },
+        {
+          "context": "Performance Benchmarks for Release SHA",
+          "app_id": 15368
+        },
+        {
+          "context": "Container API and UI Journeys",
+          "app_id": 15368
+        },
+        {
+          "context": "Specifications and API contract",
+          "app_id": 15368
+        }
+      ],
+      "required_approving_review_count": 1,
+      "enforce_admins": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "other_settings_preserved": true
+    }
+  }
+}

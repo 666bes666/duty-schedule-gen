@@ -1105,7 +1105,7 @@ def _results(project: ScheduleProject) -> None:
             count,
             short_days=snapshot.short_dates() if snapshot else set(),
         )
-        _render_load_dashboard(schedule, config_to_tables(schedule.config).employees, stats)
+        _render_load_dashboard(schedule, stats)
     with tabs[2]:
         _edit_current(project, schedule)
     with tabs[3]:

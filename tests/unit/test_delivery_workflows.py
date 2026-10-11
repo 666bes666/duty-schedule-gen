@@ -207,3 +207,20 @@ def test_main_release_compares_previous_success_and_promotes_after_all_gates() -
         "${{ github.event.pull_request.base.sha || github.event.before }}"
     )
     assert '--base "$DUTY_SDD_BASE"' in linkage["run"]
+    assert any(
+        "project_context.py --check" in step.get("run", "") for step in jobs["lint"]["steps"]
+    )
+
+
+def test_sdd_gate_covers_all_branches_index_and_staged_snapshot() -> None:
+    workflow = yaml.load((ROOT / ".github/workflows/sdd.yml").read_text(), Loader=yaml.BaseLoader)
+    for event in ("push", "pull_request"):
+        assert set(workflow["on"][event]["branches"]) == {"dev", "test", "main"}
+    steps = workflow["jobs"]["sdd"]["steps"]
+    assert any("check_sdd.py --base" in step.get("run", "") for step in steps)
+    assert any("project_context.py --check" in step.get("run", "") for step in steps)
+    assert any("test_project_context.py" in step.get("run", "") for step in steps)
+    hooks = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
+    hook = next(hook for repo in hooks["repos"] for hook in repo["hooks"] if hook["id"] == "sdd")
+    assert hook["entry"] == "uv run python scripts/check_sdd.py --staged"
+    assert hook["always_run"] and not hook["pass_filenames"]

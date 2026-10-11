@@ -347,7 +347,6 @@ def _render_weekend_holiday_chart(stats_list: list[EmployeeStats]) -> None:
 
 def _render_load_dashboard(
     schedule: Schedule,
-    employees_df: pd.DataFrame,
     stats_list: list[EmployeeStats] | None = None,
 ) -> None:
     if stats_list is not None and len(stats_list) > 0:

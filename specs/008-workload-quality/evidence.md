@@ -20,3 +20,15 @@ workload.py является общей арифметикой 8/7/individual ho
 ## 2026-10-11T00:37:32+03:00 — завершение локальной реализации
 
 Критерии проверены связанными тестами: общий прогон750passed, coverage85.73%, браузер7passed, независимые review fixes закрыты. Реальные команды и границы доказательств находятся в [общем evidence](../011-delivery-assurance/evidence.md). Задачи T001–T005 закрыты; статус complete относится к реализации этих требований, не к публикации релиза.
+
+## 2026-10-11 — миграция к строгому SDD и явная приёмка
+
+Область `files` восстановлена из плана и реальных файлов. Это актуализация
+живого контракта, а не утверждение о ретроспективном прохождении нового gate.
+
+| ID | Проверяющие тесты | Evidence |
+|---|---|---|
+| HOURS-001 | `tests/unit/test_workload.py::test_norm_deducts_union_of_working_absences_only`, `tests/unit/test_hour_consumers.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| HOURS-002 | `tests/unit/test_workload.py::test_full_norm_choice_is_period_specific`, `tests/unit/test_planning_rules.py::test_full_norm_after_short_absence_proposes_individual_r_confirmation` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| HOURS-003 | `tests/unit/test_planning_rules.py::test_individual_workday_requires_exact_confirmation`, `tests/integration/test_pipeline_hour_compatibility.py::test_legacy_pipeline_preserves_short_day_and_confirmed_individual_hours`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| HOURS-004 | `tests/unit/test_planning_rules.py::test_legacy_priority_does_not_change_agreed_greedy_quality_order`, `tests/unit/test_planning_rules.py::test_off_duty_quality_balances_only_available_employees`, `tests/unit/test_planning_rules.py::test_solver_off_duty_balance_ignores_weekday_only_duty_role`, `tests/unit/test_whatif_service.py::test_quality_is_proportional_to_selected_hours`, `tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |

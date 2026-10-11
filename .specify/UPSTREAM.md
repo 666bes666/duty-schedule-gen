@@ -25,3 +25,8 @@ temporary directory, compare the generated diff, and reapply local adaptations.
 Do not run `init --force` or `integration upgrade --force` over local customizations
 without reviewing what will be replaced. No global CLI installation is required;
 use `uvx --from specify-cli==1.1.3 specify ...` for management commands.
+
+Audit012 (2026-10-11): constitution1.1.0, exact file scope, staged snapshot gate,
+bidirectional requirement IDs, collectable test selectors, per-ID evidence and
+deterministic project index/cold start. Bundled Bash scripts remain unmodified;
+Spec Kit version remains1.1.3. Generated hashes still identify upstream originals.

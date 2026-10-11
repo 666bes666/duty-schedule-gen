@@ -20,3 +20,15 @@ project.py реализует формат1, неизменяемые snapshots 
 ## 2026-10-11T00:37:32+03:00 — завершение локальной реализации
 
 Критерии проверены связанными тестами: общий прогон750passed, coverage85.73%, браузер7passed, независимые review fixes закрыты. Реальные команды и границы доказательств находятся в [общем evidence](../011-delivery-assurance/evidence.md). Задачи T001–T005 закрыты; статус complete относится к реализации этих требований, не к публикации релиза.
+
+## 2026-10-11 — миграция к строгому SDD и явная приёмка
+
+Область `files` восстановлена из плана и реальных файлов. Это актуализация
+живого контракта, а не утверждение о ретроспективном прохождении нового gate.
+
+| ID | Проверяющие тесты | Evidence |
+|---|---|---|
+| REV-001 | `tests/unit/test_project.py`, `tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| REV-002 | `tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours`, `tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project`, `tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| REV-003 | `tests/unit/test_project.py::test_edit_pins_both_changed_participants`, `tests/unit/test_ui_workflow.py::test_ui_range_preserves_configuration_and_manual_pins_of_each_period`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| REV-004 | `tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported`, `tests/unit/test_cli_project.py`, `tests/ui/test_project_journey.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |

@@ -46,10 +46,6 @@ def _duty_only(emp: Employee) -> bool:
     return emp.on_duty and (emp.morning_only or emp.evening_only or emp.always_on_duty)
 
 
-def _shift_limit_reached(emp: Employee, state: EmployeeState, shift: ShiftType) -> bool:
-    return False
-
-
 def _consecutive_shift_count_at(
     emp_name: str, idx: int, days: list[DaySchedule], shift_attr: str
 ) -> int:

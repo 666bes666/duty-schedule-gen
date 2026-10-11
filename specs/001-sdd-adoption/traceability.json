@@ -2,11 +2,105 @@
   "kind": "change",
   "status": "complete",
   "requirements": [
-    {"id": "SDD-001", "tests": ["tests/unit/test_sdd.py"]},
-    {"id": "SDD-002", "tests": ["tests/unit/test_sdd.py"]},
-    {"id": "SDD-003", "tests": ["tests/unit/test_sdd.py"]},
-    {"id": "SDD-004", "tests": ["tests/unit/test_sdd.py"]},
-    {"id": "SDD-005", "tests": ["tests/contract/test_openapi_snapshot.py"]},
-    {"id": "SDD-006", "tests": ["tests/unit/test_sdd.py"]}
+    {
+      "id": "SDD-001",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "SDD-002",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "SDD-003",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "SDD-004",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "SDD-005",
+      "tests": [
+        "tests/contract/test_openapi_snapshot.py"
+      ]
+    },
+    {
+      "id": "SDD-006",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    }
+  ],
+  "files": [
+    ".agents/skills/speckit-analyze/SKILL.md",
+    ".agents/skills/speckit-checklist/SKILL.md",
+    ".agents/skills/speckit-clarify/SKILL.md",
+    ".agents/skills/speckit-constitution/SKILL.md",
+    ".agents/skills/speckit-converge/SKILL.md",
+    ".agents/skills/speckit-implement/SKILL.md",
+    ".agents/skills/speckit-plan/SKILL.md",
+    ".agents/skills/speckit-specify/SKILL.md",
+    ".agents/skills/speckit-tasks/SKILL.md",
+    ".agents/skills/speckit-taskstoissues/SKILL.md",
+    ".claude/skills/speckit-analyze/SKILL.md",
+    ".claude/skills/speckit-checklist/SKILL.md",
+    ".claude/skills/speckit-clarify/SKILL.md",
+    ".claude/skills/speckit-constitution/SKILL.md",
+    ".claude/skills/speckit-converge/SKILL.md",
+    ".claude/skills/speckit-implement/SKILL.md",
+    ".claude/skills/speckit-plan/SKILL.md",
+    ".claude/skills/speckit-specify/SKILL.md",
+    ".claude/skills/speckit-tasks/SKILL.md",
+    ".claude/skills/speckit-taskstoissues/SKILL.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/sdd.yml",
+    ".pre-commit-config.yaml",
+    ".specify/.gitignore",
+    ".specify/LICENSE",
+    ".specify/UPSTREAM.md",
+    ".specify/init-options.json",
+    ".specify/integration.json",
+    ".specify/integrations/claude.manifest.json",
+    ".specify/integrations/codex.manifest.json",
+    ".specify/integrations/speckit.manifest.json",
+    ".specify/memory/.constitution-template.json",
+    ".specify/memory/constitution.md",
+    ".specify/scripts/bash/check-prerequisites.sh",
+    ".specify/scripts/bash/common.sh",
+    ".specify/scripts/bash/create-new-feature.sh",
+    ".specify/scripts/bash/resolve-template.sh",
+    ".specify/scripts/bash/setup-plan.sh",
+    ".specify/scripts/bash/setup-tasks.sh",
+    ".specify/templates/checklist-template.md",
+    ".specify/templates/constitution-template.md",
+    ".specify/templates/evidence-template.md",
+    ".specify/templates/plan-template.md",
+    ".specify/templates/spec-template.md",
+    ".specify/templates/tasks-template.md",
+    ".specify/templates/traceability-template.json",
+    ".specify/workflows/speckit/workflow.yml",
+    ".specify/workflows/workflow-registry.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "docs/sdd.md",
+    "scripts/check_sdd.py",
+    "scripts/export_openapi.py",
+    "specs/001-sdd-adoption/evidence.md",
+    "specs/001-sdd-adoption/plan.md",
+    "specs/001-sdd-adoption/spec.md",
+    "specs/001-sdd-adoption/tasks.md",
+    "specs/001-sdd-adoption/traceability.json",
+    "tests/contract/test_openapi_snapshot.py",
+    "tests/unit/test_sdd.py"
   ]
 }

@@ -26,7 +26,7 @@ def _filter_sensitive(
 
 
 class _LazyStderrFactory:
-    def __call__(self, *args: object, **kwargs: object) -> structlog.PrintLogger:
+    def __call__(self, *args: object, **_kwargs: object) -> structlog.PrintLogger:
         return structlog.PrintLogger(sys.stderr)
 
 

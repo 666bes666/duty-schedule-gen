@@ -140,3 +140,12 @@ not tooling boilerplate. Preserve the direct `dev → test → main` delivery fl
 - [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
 - [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
 - [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+
+## Mandatory project SDD gate
+
+All changes, including tests, dependencies, CI, docs, cleanup and hotfix, require
+this contract before implementation. Keep exact paths in traceability `files`,
+map every requirement ID and use unique T-IDs. Complete requires executed checks
+and per-ID acceptance in evidence. Validate staged snapshot before commit and
+scoped diff before push; regenerate/check docs/project-index.* when it changes.
+A baseline or unrelated feature cannot authorize implementation.

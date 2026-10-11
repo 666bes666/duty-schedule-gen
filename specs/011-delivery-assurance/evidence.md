@@ -128,3 +128,15 @@ GitHub reviewDecision=REVIEW_REQUIRED и mergeStateStatus=BLOCKED: продви�
 Ruff check, Ruff format (164 файла), mypy (65 файлов), `git diff --check` — pass.
 После общего прогона 750 tests / coverage 85.73% runtime source не изменялся;
 финальный diff содержит только семь файлов спецификации, evidence и руководства.
+
+## 2026-10-11 — миграция к строгому SDD и явная приёмка
+
+Область `files` восстановлена из плана и реальных файлов. Это актуализация
+живого контракта, а не утверждение о ретроспективном прохождении нового gate.
+
+| ID | Проверяющие тесты | Evidence |
+|---|---|---|
+| DEL-001 | `tests/unit/test_delivery_workflows.py::test_required_test_report_rejects_missing_or_unexecuted_tests`, `tests/unit/test_solver.py`, `tests/unit/test_planning_rules.py`, `tests/unit/test_search_outcomes.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| DEL-002 | `tests/unit/test_delivery_workflows.py::test_packaged_smoke_payload_generates_ready`, `tests/ui/test_project_journey.py`, `tests/unit/test_cli_project.py`, `tests/e2e/test_cli_workflow.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| DEL-003 | `tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit`, `tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates`, `tests/performance/test_scheduler_benchmark.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+| DEL-004 | `tests/unit/test_delivery_workflows.py::test_release_verifies_same_sha_version_and_bytes`, `tests/unit/test_delivery_workflows.py::test_release_rejects_existing_tag_for_other_sha`, `tests/unit/test_delivery_workflows.py::test_release_graph_requires_all_verified_artifact_gates` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |

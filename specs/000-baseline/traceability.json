@@ -66,8 +66,8 @@
       "tests": [
         "tests/system/test_business_rules.py::TestBusinessRules::test_moscow_employees_not_on_night",
         "tests/system/test_business_rules.py::TestBusinessRules::test_khabarovsk_employees_not_on_morning_evening",
-        "tests/unit/test_constraints.py::TestBuildDay::test_night_only_khabarovsk",
-        "tests/unit/test_constraints.py::TestBuildDay::test_khabarovsk_workday_on_non_night_day",
+        "tests/unit/test_constraints.py::TestBuildCandidate::test_night_only_khabarovsk",
+        "tests/unit/test_constraints.py::TestBuildCandidate::test_khabarovsk_has_one_assignment_per_day",
         "tests/unit/test_solver.py::test_solver_respects_city"
       ]
     },
@@ -124,7 +124,7 @@
     {
       "id": "SCH-008",
       "tests": [
-        "tests/unit/test_constraints.py::TestBuildDay::test_no_night_khabarovsk_fails",
+        "tests/unit/test_constraints.py::TestBuildCandidate::test_no_night_pool_returns_failed_candidate_without_fabricated_coverage",
         "tests/unit/test_failure_modes.py::TestSolverUnavailable::test_no_ortools_raises_solver_unavailable",
         "tests/unit/test_solver.py::test_solver_produces_schedule",
         "tests/unit/test_solver.py::test_solver_covers_shifts"
