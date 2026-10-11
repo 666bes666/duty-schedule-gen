@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from duty_schedule.api import create_app
 from duty_schedule.api.settings import ApiSettings, get_settings
 from duty_schedule.models import City, Employee, ScheduleType
+from tests.contract.conftest import config_payload, production_calendar
 
 JSON_HEADERS = {"Content-Type": "application/json"}
 
@@ -26,19 +27,7 @@ def _emp(
 
 
 def _baseline() -> dict:
-    return {
-        "month": 3,
-        "year": 2025,
-        "seed": 42,
-        "employees": [
-            _emp("Иванов Иван"),
-            _emp("Петров Пётр"),
-            _emp("Сидоров Сидор"),
-            _emp("Козлов Коля"),
-            _emp("Дальнев Дмитрий", City.KHABAROVSK),
-            _emp("Востоков Виктор", City.KHABAROVSK),
-        ],
-    }
+    return config_payload()
 
 
 @pytest.fixture
@@ -57,8 +46,8 @@ async def client(app):
 
 def _patch_fetch():
     return patch(
-        "duty_schedule.api.routes.whatif.fetch_holidays",
-        return_value=(SAMPLE_HOLIDAYS, SAMPLE_SHORT_DAYS),
+        "duty_schedule.api.routes.whatif.fetch_production_calendar",
+        return_value=production_calendar(),
     )
 
 
@@ -159,8 +148,9 @@ class TestWhatIfCompare:
             "baseline": _baseline(),
             "variants": [{"name": "x", "patch": {"seed": 1}}],
         }
+        body["baseline"].pop("production_calendar")
         with patch(
-            "duty_schedule.api.routes.whatif.fetch_holidays",
+            "duty_schedule.api.routes.whatif.fetch_production_calendar",
             side_effect=CalendarError("service down"),
         ):
             resp = await client.post(

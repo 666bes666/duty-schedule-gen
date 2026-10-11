@@ -13,6 +13,7 @@ from duty_schedule.models import (
 )
 from duty_schedule.scheduler import generate_schedule
 from duty_schedule.xls_import import parse_carry_over_from_xls
+from tests.conftest import complete_config
 
 
 def _make_employees() -> list[Employee]:
@@ -29,7 +30,7 @@ class TestGenerateExportImportGenerate:
     def test_full_roundtrip_no_violations(self):
         employees = _make_employees()
         config1 = Config(month=1, year=2025, seed=42, employees=employees)
-        schedule1 = generate_schedule(config1, set())
+        schedule1 = generate_schedule(complete_config(config1), set())
 
         with tempfile.TemporaryDirectory() as tmpdir:
             xls_path = export_xls(schedule1, Path(tmpdir))
@@ -45,7 +46,9 @@ class TestGenerateExportImportGenerate:
             employees=employees,
             carry_over=carry_over_list,
         )
+        config2 = complete_config(config2).model_copy(update={"carry_over": carry_over_list})
         schedule2 = generate_schedule(config2, set())
+        assert schedule2.status == "ready"
 
         for day in schedule2.days:
             assert day.is_covered(), f"Day {day.date} is not fully covered"

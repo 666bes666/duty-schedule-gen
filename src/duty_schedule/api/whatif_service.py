@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from typing import Any
 
 from pydantic import ValidationError
@@ -15,10 +16,11 @@ from duty_schedule.api.schemas import (
     VariantResult,
     WhatIfResponse,
 )
+from duty_schedule.calendar import calendar_for_config
 from duty_schedule.logging import get_logger
-from duty_schedule.models import Config, Schedule
-from duty_schedule.scheduler.constraints import _calc_production_days
-from duty_schedule.scheduler.core import ScheduleError, generate_schedule
+from duty_schedule.models import City, Config, Schedule, ShiftType
+from duty_schedule.scheduler.core import generate_schedule
+from duty_schedule.scheduler.postprocess.quality import eligible_duty_names
 from duty_schedule.stats import EmployeeStats, build_assignments, compute_stats
 
 logger = get_logger(__name__)
@@ -46,26 +48,7 @@ def apply_patch(baseline: Config, patch: dict[str, Any]) -> Config:
 
 
 def _stats_to_schema(s: EmployeeStats) -> EmployeeStatsSchema:
-    return EmployeeStatsSchema(
-        name=s.name,
-        city=s.city,
-        total_working=s.total_working,
-        target=s.target,
-        morning=s.morning,
-        evening=s.evening,
-        night=s.night,
-        workday=s.workday,
-        day_off=s.day_off,
-        vacation=s.vacation,
-        weekend_work=s.weekend_work,
-        holiday_work=s.holiday_work,
-        max_streak_work=s.max_streak_work,
-        max_streak_rest=s.max_streak_rest,
-        isolated_off=s.isolated_off,
-        paired_off=s.paired_off,
-        total_hours=s.total_hours,
-        cost_hours=s.cost_hours,
-    )
+    return EmployeeStatsSchema(**asdict(s))
 
 
 def generate_scenario(
@@ -75,44 +58,65 @@ def generate_scenario(
 ) -> tuple[list[EmployeeStatsSchema], SummaryMetrics, Schedule]:
     schedule = generate_schedule(config, holidays)
     assignments = build_assignments(schedule)
-    production_days = _calc_production_days(config.year, config.month, holidays)
+    calendar = calendar_for_config(schedule.config, holidays)
+    production_days = sum(calendar.is_working(day.date) for day in calendar.days)
     raw_stats = compute_stats(schedule, assignments, production_days, short_days=short_days)
     stats_schemas = [_stats_to_schema(s) for s in raw_stats]
     summary = compute_summary(raw_stats, schedule)
     return stats_schemas, summary, schedule
 
 
+def _target_hours(stat: EmployeeStats | EmployeeStatsSchema) -> int:
+    if stat.calendar_hours > 0 or stat.selected_hours > 0:
+        return stat.selected_hours
+    return stat.target * 8
+
+
 def compute_summary(stats: list[EmployeeStats], schedule: Schedule) -> SummaryMetrics:
-    duty_stats = [s for s in stats if s.total_working > 0 or s.target > 0]
-
-    if not duty_stats:
-        return SummaryMetrics(
-            fairness_score=0.0,
-            workload_stddev=0.0,
-            coverage_gaps=0,
-            isolated_off_total=0,
-            weekend_balance_stddev=0.0,
-        )
-
-    deviations = [s.total_working - s.target for s in duty_stats]
-    fairness_score = statistics.pstdev(deviations) if len(deviations) > 1 else 0.0
-
-    workloads = [s.total_working for s in duty_stats]
-    workload_stddev = statistics.pstdev(workloads) if len(workloads) > 1 else 0.0
-
-    coverage_gaps = sum(1 for day in schedule.days if not day.is_covered())
-
-    isolated_off_total = sum(s.isolated_off for s in duty_stats)
-
-    weekends = [s.weekend_work for s in duty_stats]
-    weekend_balance_stddev = statistics.pstdev(weekends) if len(weekends) > 1 else 0.0
-
+    employees = {employee.name: employee for employee in schedule.config.employees}
+    duty_stats = [
+        stat
+        for stat in stats
+        if stat.name in employees and employees[stat.name].on_duty and _target_hours(stat) > 0
+    ]
+    fairness = 0.0
+    calendar = calendar_for_config(schedule.config)
+    dates = [record.date for record in calendar.days]
+    for city, field, shift in (
+        (City.MOSCOW, "evening", ShiftType.EVENING),
+        (City.KHABAROVSK, "night", ShiftType.NIGHT),
+    ):
+        eligible = eligible_duty_names(schedule.config, calendar, dates, (shift,))
+        pool = [
+            stat
+            for stat in duty_stats
+            if employees[stat.name].city == city and stat.name in eligible
+        ]
+        rates = [getattr(stat, field) / _target_hours(stat) for stat in pool]
+        if len(rates) > 1:
+            fairness += statistics.pstdev(rates)
+    weekend_balance = 0.0
+    off_eligible = eligible_duty_names(
+        schedule.config,
+        calendar,
+        sorted(calendar.off_dates()),
+        (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT),
+    )
+    for city in City:
+        rates = [
+            stat.weekend_work / _target_hours(stat)
+            for stat in duty_stats
+            if employees[stat.name].city == city and stat.name in off_eligible
+        ]
+        if len(rates) > 1:
+            weekend_balance += statistics.pstdev(rates)
+    deviations = [stat.total_hours - _target_hours(stat) for stat in stats]
     return SummaryMetrics(
-        fairness_score=round(fairness_score, 4),
-        workload_stddev=round(workload_stddev, 4),
-        coverage_gaps=coverage_gaps,
-        isolated_off_total=isolated_off_total,
-        weekend_balance_stddev=round(weekend_balance_stddev, 4),
+        fairness_score=round(fairness, 4),
+        workload_stddev=round(statistics.pstdev(deviations), 4) if len(deviations) > 1 else 0.0,
+        coverage_gaps=sum(1 for day in schedule.days if not day.is_covered()),
+        isolated_off_total=sum(stat.isolated_off for stat in stats),
+        weekend_balance_stddev=round(weekend_balance, 4),
     )
 
 
@@ -160,6 +164,11 @@ def compute_deltas(
         "isolated_off",
         "paired_off",
         "total_hours",
+        "sick_leave",
+        "calendar_hours",
+        "adjusted_hours",
+        "selected_hours",
+        "hours_delta",
     ]
 
     result = []
@@ -172,7 +181,13 @@ def compute_deltas(
             v_val = getattr(v, field)
             delta = v_val - b_val
 
-            if field == "total_working":
+            if field == "total_hours":
+                b_dev = abs(b_val - _target_hours(b))
+                v_dev = abs(v_val - _target_hours(v))
+                direction = (
+                    "improved" if v_dev < b_dev else "worsened" if v_dev > b_dev else "unchanged"
+                )
+            elif field == "total_working":
                 b_target = _b_targets.get(name, b.target)
                 v_target = _v_targets.get(name, v.target)
                 b_dev = abs(b_val - b_target)
@@ -205,7 +220,13 @@ def run_whatif(
     baseline_stats, baseline_summary, baseline_schedule = generate_scenario(
         baseline_config, holidays, short_days
     )
-    baseline_result = ScenarioResult(stats=baseline_stats, summary=baseline_summary)
+    baseline_result = ScenarioResult(
+        stats=baseline_stats,
+        summary=baseline_summary,
+        status=baseline_schedule.status,
+        diagnostics=baseline_schedule.diagnostics,
+        schedule=baseline_schedule,
+    )
     baseline_targets = {s.name: s.target for s in baseline_stats}
 
     variant_results: list[VariantResult] = []
@@ -218,16 +239,18 @@ def run_whatif(
             return VariantResult(name=name, status="error", error=str(exc))
 
         try:
-            v_stats, v_summary, _ = generate_scenario(variant_config, holidays, short_days)
-        except (ScheduleError, Exception) as exc:
+            v_stats, v_summary, v_schedule = generate_scenario(variant_config, holidays, short_days)
+        except Exception as exc:
             logger.warning("whatif_variant_generation_error", variant=name, error=str(exc))
-            return VariantResult(name=name, status="error", error=str(exc))
+            return VariantResult(name=name, status="error", error="Не удалось построить вариант")
 
         variant_targets = {s.name: s.target for s in v_stats}
         deltas = compute_deltas(baseline_stats, v_stats, baseline_targets, variant_targets)
         return VariantResult(
             name=name,
-            status="success",
+            status="success" if v_schedule.status == "ready" else "diagnostic",
+            diagnostics=v_schedule.diagnostics,
+            schedule=v_schedule,
             stats=v_stats,
             summary=v_summary,
             deltas=deltas,

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [test]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-test-${{ github.ref }}
   cancel-in-progress: true
@@ -17,9 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
-      - run: uv run ruff check src/ tests/
-      - run: uv run ruff format --check src/ tests/
-      - run: uv run mypy src/
+      - run: uv run ruff check src/ tests/ scripts/
+      - run: uv run ruff format --check src/ tests/ scripts/
+      - run: uv run mypy src/ scripts/
 
   test-matrix:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
@@ -36,12 +39,17 @@ jobs:
       - uses: ./.github/actions/setup-python
         with:
           python-version: ${{ matrix.python }}
+          extras: solver
       - run: uv run pytest tests/unit tests/integration tests/contract -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
       - uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  solver-tests:
+    name: Required Solver
+    uses: ./.github/workflows/solver-tests.yml
 
   security:
     name: Security Scan
@@ -57,34 +65,39 @@ jobs:
   performance:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
         with:
           extra-groups: ci-perf
-      - name: Restore benchmark baseline
+          extras: solver
+      - name: Restore previously successful benchmark baseline
         id: bench-cache
         uses: actions/cache/restore@v4
         with:
           path: .benchmarks/
-          key: benchmark-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            benchmark-${{ runner.os }}-
-      - name: Run benchmarks
+          key: benchmark-v2-${{ runner.os }}-py312-${{ github.sha }}
+          restore-keys: benchmark-v2-${{ runner.os }}-py312-
+      - name: Compare restored baseline and run benchmarks
+        env:
+          DUTY_CURRENT_SHA: ${{ github.sha }}
+          DUTY_MATCHED_KEY: ${{ steps.bench-cache.outputs.cache-matched-key }}
         run: |
-          EXTRA="--benchmark-save=baseline"
-          if [ "${{ steps.bench-cache.outputs.cache-hit }}" = "true" ] && \
-             ls .benchmarks/Linux/*.json 2>/dev/null | head -1 > /dev/null 2>&1; then
-            PREV=$(ls .benchmarks/Linux/*.json | head -1 | xargs basename | sed 's/\.json$//')
-            EXTRA="--benchmark-save=baseline --benchmark-compare=$PREV --benchmark-compare-fail=mean:110%"
+          duty_benchmark_args=(--benchmark-save=baseline --benchmark-min-rounds=2 --benchmark-max-time=15)
+          if [ -n "$DUTY_MATCHED_KEY" ]; then
+            DUTY_PREVIOUS_BENCHMARK=$(uv run python scripts/benchmark_baseline.py .benchmarks --current-sha "$DUTY_CURRENT_SHA")
+            if [ -n "$DUTY_PREVIOUS_BENCHMARK" ]; then
+              duty_benchmark_args+=(--benchmark-compare="$DUTY_PREVIOUS_BENCHMARK" --benchmark-compare-fail=mean:10%)
+            fi
           fi
-          uv run pytest tests/performance -q --benchmark-only $EXTRA
-      - name: Save benchmark baseline
-        uses: actions/cache/save@v4
-        if: always()
+          uv run pytest tests/performance -q --benchmark-only "${duty_benchmark_args[@]}"
+      - name: Retain candidate after successful comparison
+        uses: actions/upload-artifact@v4
         with:
+          name: benchmark-candidate
           path: .benchmarks/
-          key: benchmark-${{ runner.os }}-${{ github.sha }}
+          include-hidden-files: true
 
   streamlit-smoke:
     name: Streamlit Smoke
@@ -92,5 +105,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
-      - name: Streamlit healthcheck
-        uses: ./.github/actions/streamlit-smoke
+      - uses: ./.github/actions/streamlit-smoke
+
+  promote-benchmark:
+    name: Promote Verified Benchmark
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test'
+    needs: [lint, test-matrix, security, solver-tests, performance, streamlit-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: benchmark-candidate
+          path: .benchmarks/
+      - uses: actions/cache/save@v4
+        with:
+          path: .benchmarks/
+          key: benchmark-v2-${{ runner.os }}-py312-${{ github.sha }}

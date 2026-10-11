@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from duty_schedule.models import Config, Schedule, ScheduleDiagnostic
 
 
 class ConfigValidationResponse(BaseModel):
@@ -38,11 +40,22 @@ class EmployeeStatsSchema(BaseModel):
     paired_off: int
     total_hours: int
     cost_hours: float = 0.0
+    sick_leave: int = 0
+    calendar_hours: int = 0
+    absence_reduction_hours: int = 0
+    adjusted_hours: int = 0
+    selected_hours: int = 0
+    target_hours: int = 0
+    hours_delta: int = 0
 
 
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
+class ScheduleNotReadyResponse(ErrorResponse):
+    diagnostics: list[ScheduleDiagnostic]
 
 
 class VariantPatch(BaseModel):
@@ -95,6 +108,9 @@ class SummaryMetrics(BaseModel):
 class ScenarioResult(BaseModel):
     stats: list[EmployeeStatsSchema]
     summary: SummaryMetrics
+    status: str = "ready"
+    diagnostics: list[ScheduleDiagnostic] = []
+    schedule: Schedule | None = None
 
 
 class VariantResult(BaseModel):
@@ -104,6 +120,8 @@ class VariantResult(BaseModel):
     stats: list[EmployeeStatsSchema] | None = None
     summary: SummaryMetrics | None = None
     deltas: list[EmployeeDelta] | None = None
+    diagnostics: list[ScheduleDiagnostic] = []
+    schedule: Schedule | None = None
 
 
 class WhatIfResponse(BaseModel):
@@ -112,11 +130,11 @@ class WhatIfResponse(BaseModel):
 
 
 class MultiMonthRequest(BaseModel):
-    config: dict[str, Any]
+    config: Config
     start_month: int
-    start_year: int
+    start_year: int = Field(ge=2024, le=9999)
     end_month: int
-    end_year: int
+    end_year: int = Field(ge=2024, le=9999)
 
     @field_validator("start_month", "end_month")
     @classmethod
@@ -125,6 +143,12 @@ class MultiMonthRequest(BaseModel):
             raise ValueError("Месяц должен быть от 1 до 12")
         return v
 
+    @model_validator(mode="after")
+    def valid_order(self) -> MultiMonthRequest:
+        if (self.end_year, self.end_month) < (self.start_year, self.start_month):
+            raise ValueError("Конец диапазона должен быть не раньше начала")
+        return self
+
 
 class MultiMonthResponse(BaseModel):
-    schedules: list[dict[str, Any]]
+    schedules: list[Schedule]

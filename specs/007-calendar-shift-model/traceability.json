@@ -1,0 +1,32 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "TIME-001",
+      "tests": [
+        "tests/unit/test_calendar_model.py::test_calendar_preserves_working_saturday_and_short_day",
+        "tests/unit/test_calendar_model.py::test_calendar_rejects_unknown_codes",
+        "tests/unit/test_calendar_model.py::test_calendar_requires_complete_unique_month",
+        "tests/unit/test_calendar_model.py::test_calendar_uses_only_verified_saved_requested_period",
+        "tests/unit/test_calendar_model.py::test_wrong_saved_period_does_not_replace_calendar"
+      ]
+    },
+    {
+      "id": "TIME-002",
+      "tests": [
+        "tests/unit/test_calendar_model.py::test_calendar_preserves_working_saturday_and_short_day",
+        "tests/unit/test_hour_consumers.py",
+        "tests/unit/test_workload.py::test_assignment_hours_share_short_and_individual_workday_model"
+      ]
+    },
+    {
+      "id": "TIME-003",
+      "tests": [
+        "tests/unit/test_export_time_model.py",
+        "tests/unit/test_ics_per_employee.py",
+        "tests/ui/test_project_journey.py"
+      ]
+    }
+  ]
+}

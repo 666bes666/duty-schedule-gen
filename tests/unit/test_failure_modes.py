@@ -56,12 +56,14 @@ def _minimal_schedule() -> Schedule:
 
 
 class TestWeasyPrintUnavailable:
-    def test_oserror_raises_runtime_error(self) -> None:
+    def test_oserror_raises_runtime_error(self, planning_config) -> None:
         import builtins
 
         from duty_schedule.export.pdf import generate_schedule_pdf
+        from duty_schedule.scheduler import generate_schedule
 
-        schedule = _minimal_schedule()
+        schedule = generate_schedule(planning_config)
+        assert schedule.status == "ready"
 
         _real_import = builtins.__import__
 

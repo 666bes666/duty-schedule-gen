@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from icalendar import Calendar
 
-from duty_schedule.export.ics import generate_employee_ics_bytes
+from duty_schedule.export.ics import _render_employee_ics_bytes as generate_employee_ics_bytes
 from duty_schedule.models import (
     City,
     Config,
@@ -119,7 +119,7 @@ class TestGenerateEmployeeIcsBytes:
         assert str(dt_start.tzinfo) == "Asia/Vladivostok"
         assert dt_start.hour == 9
 
-    def test_night_shift_ends_next_day(self):
+    def test_night_shift_ends_same_day(self):
         days = [
             _day(date(2025, 3, 2), night=["Иванов"]),
         ]
@@ -133,10 +133,10 @@ class TestGenerateEmployeeIcsBytes:
         assert dt_end > dt_start
         assert dt_start.date() == date(2025, 3, 2)
         assert dt_start.hour == 0 and dt_start.minute == 0
-        assert dt_end.date() == date(2025, 3, 3)
+        assert dt_end.date() == date(2025, 3, 2)
         assert dt_end.hour == 8 and dt_end.minute == 0
 
-    def test_night_shift_rollover_across_year_boundary(self):
+    def test_night_shift_stays_in_year_on_december_31(self):
         config = Config(
             month=12,
             year=2025,
@@ -155,5 +155,5 @@ class TestGenerateEmployeeIcsBytes:
         dt_end = events[0]["DTEND"].dt
         assert dt_end > dt_start
         assert dt_start.date() == date(2025, 12, 31)
-        assert dt_end.date() == date(2026, 1, 1)
+        assert dt_end.date() == date(2025, 12, 31)
         assert dt_end.hour == 8 and dt_end.minute == 0

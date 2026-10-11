@@ -12,7 +12,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
-RUN uv sync --frozen --no-dev --extra solver
+RUN uv sync --frozen --no-dev --no-editable --extra solver
 
 
 FROM python:3.12-slim AS runtime
@@ -30,7 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/src /app/src
 
 COPY app.py ./
 COPY config.example.yaml ./

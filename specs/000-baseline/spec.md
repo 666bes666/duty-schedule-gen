@@ -8,6 +8,25 @@
 
 Связи требований с существующими тестами находятся в [traceability.json](traceability.json). Тестовая связь означает конкретное свидетельство, а не исчерпывающее доказательство требования. Для UI это особенно существенно: браузерные тесты проверяют загрузку страницы и видимость кнопки, но не весь пользовательский сценарий. Снимок [OpenAPI](contracts/openapi.json) фиксирует генерируемую схему; его ограничения описаны отдельно.
 
+## Проверенные изменения — 2026-10-11
+
+Разделы ниже сохраняют историческое наблюдение исходного коммита. Версия5 меняет
+часть этого поведения по подтверждённым требованиям изменений003–011:
+
+| Baseline ID | Проверенный текущий факт | Живой контракт |
+|---|---|---|
+| CFG-001..004 | Полный календарь/история, sick_leave, ID, подтверждения и выбор нормы; типизированные imports | [VALID](../004-scheduling-validity/spec.md), [UIC](../010-ui-configuration/spec.md) |
+| SCH-001..007, SCH-011 | Оба алгоритма имеют общий validator; ready требует покрытия и hard rules, иначе diagnostic | [VALID](../004-scheduling-validity/spec.md), [POST](../005-postprocess-integrity/spec.md) |
+| SCH-005, SCH-008..010 | Точная выбранная норма часов; фиксированный порядок качества и доступный пропорциональный пул | [HOURS](../008-workload-quality/spec.md) |
+| SCH-006, SCH-007 | Ручные пины сохраняются в range; перенос зависит от всей текущей цепочки месяцев | [HIST](../006-month-continuity/spec.md), [REV](../009-schedule-revisions/spec.md) |
+| EXP-001..004 | Публичные экспорты повторно проверяют график; ночь ICS8h, индивидуальный R без фиксированного конца, PDF без ресурсов | [TIME](../007-calendar-shift-model/spec.md), [SEC](../003-secure-api-exports/spec.md) |
+| API-001..003 | Plan/revision endpoints, native422, typed409/400, документированные media types и версия5 OpenAPI | [SEC](../003-secure-api-exports/spec.md), [REV](../009-schedule-revisions/spec.md) |
+| CLI-001..002, UI-001 | Portable project, edit/check/download/reopen и range проверены реальными сценариями | [UIC](../010-ui-configuration/spec.md), [DEL](../011-delivery-assurance/spec.md) |
+
+Результаты и ограничения приведены в [evidence](../011-delivery-assurance/evidence.md).
+Исторические ID сохраняются; изменённые критерии, источник истины для разработки
+и новые runtime тесты находятся в указанных feature-спецификациях.
+
 ## Конфигурация
 
 ### CFG-001 — Модели и формат конфигурации

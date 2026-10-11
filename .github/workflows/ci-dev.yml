@@ -17,8 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
-      - run: uv run ruff check src/ tests/
-      - run: uv run ruff format --check src/ tests/
+      - run: uv run ruff check src/ tests/ scripts/
+      - run: uv run ruff format --check src/ tests/ scripts/
 
   unit-tests:
     name: Unit Tests
@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
+        with:
+          extras: solver
       - run: uv run pytest tests/unit tests/integration -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
 
   pip-audit:

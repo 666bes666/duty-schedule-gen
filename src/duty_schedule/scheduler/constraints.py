@@ -6,8 +6,8 @@ from datetime import date
 from duty_schedule.constants import (
     MAX_CONSECUTIVE_OFF_DEFAULT,
     MAX_CONSECUTIVE_WORKING_DEFAULT,
-    MAX_CONSECUTIVE_WORKING_FLEX,
 )
+from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_FLEX as MAX_CONSECUTIVE_WORKING_FLEX
 from duty_schedule.models import (
     DaySchedule,
     Employee,
@@ -21,21 +21,11 @@ MAX_CONSECUTIVE_OFF = MAX_CONSECUTIVE_OFF_DEFAULT
 
 
 def _max_cw(emp: Employee) -> int:
-    if emp.max_consecutive_working is not None:
-        return emp.max_consecutive_working
-    return MAX_CONSECUTIVE_WORKING
+    return min(emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING, MAX_CONSECUTIVE_WORKING)
 
 
 def _max_cw_postprocess(emp: Employee) -> int:
-    if emp.max_consecutive_working is not None:
-        return emp.max_consecutive_working
-    if (
-        emp.schedule_type == ScheduleType.FLEXIBLE
-        and emp.on_duty
-        and not (emp.morning_only or emp.evening_only or emp.always_on_duty)
-    ):
-        return MAX_CONSECUTIVE_WORKING_FLEX
-    return MAX_CONSECUTIVE_WORKING
+    return _max_cw(emp)
 
 
 def _max_co(emp: Employee) -> int:

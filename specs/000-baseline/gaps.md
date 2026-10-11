@@ -2,6 +2,21 @@
 
 Зафиксированы при аудите исходного коммита `949b6bc53ba649d496d130545acb81a8dc6f656d` от 2026-10-10. Это реестр расхождений и границ свидетельств, а не список принятых требований к новому поведению.
 
+## Перепроверка — 2026-10-11
+
+Исторические пункты ниже сохранены. Изменения003–011 закрывают мягкие обязательные
+запреты/несогласованные серии, различия правил алгоритмов и carry-over, ошибочную
+ночь32h, потери рабочих суббот/часов, расхождения редактора и экспортов, непроверенные
+range/error/PDF/media type пути и отсутствие настоящего project browser journey.
+Общий validator, API runtime тесты, installed wheel/native PDF smoke и браузерные
+сценарии зафиксированы в [evidence](../011-delivery-assurance/evidence.md).
+
+Ограничения пункта7 сохраняются: Excel2016 не запускался, формулы проверялись
+openpyxl; визуальная пригодность PDF для любых составов команды и правовое
+соответствие модели стоимости не утверждаются. Лимитер остаётся в памяти процесса.
+Аутентификация по умолчанию и префикс API исправлены в README. Локальный Docker
+daemon недоступен; функциональная проверка контейнера вынесена в обязательный CI.
+
 1. **Разные лимиты рабочих серий.** Исходный README заявлял значение по умолчанию 5. Модель хранит `None`, планирование использует 6, а часть стадий greedy-постпроцессинга — 5. Это явно закреплено в [test_max_consecutive_constants.py](../../tests/unit/test_max_consecutive_constants.py). Превышения в финальной проверке мягкие. Источник: [constraints.py](../../src/duty_schedule/scheduler/constraints.py), [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py).
 
 2. **Отличия CP-SAT от greedy.** CP-SAT не читает `config.seed`, `carry_over`, `optimization_priority`, `always_on_duty` и не возвращает carry-over metadata. При FEASIBLE решение принимается без доказательства оптимальности. Тесты solver проверяют построение, покрытие и города; greedy-тесты воспроизводимости и межмесячной непрерывности не доказывают аналогичного поведения solver. Источник: [solver.py](../../src/duty_schedule/scheduler/solver.py), [test_solver.py](../../tests/unit/test_solver.py), [test_determinism.py](../../tests/system/test_determinism.py).

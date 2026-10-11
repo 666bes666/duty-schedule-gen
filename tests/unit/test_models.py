@@ -163,8 +163,10 @@ class TestConfig:
             Config(month=13, year=2025, employees=self._make_employees(4, 2))
 
     def test_invalid_year(self):
-        with pytest.raises(ValidationError, match="Год"):
+        with pytest.raises(ValidationError) as exc:
             Config(month=3, year=2023, employees=self._make_employees(4, 2))
+        assert exc.value.errors()[0]["type"] == "greater_than_equal"
+        assert exc.value.errors()[0]["loc"] == ("year",)
 
     def test_non_duty_not_counted_as_duty(self):
         emps = self._make_employees(4, 2)
@@ -236,7 +238,14 @@ class TestCollectConfigIssues:
 
     def test_duplicate_names(self):
         emps = self._make_employees()
-        emps.append(Employee(name="М0", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE))
+        emps.append(
+            Employee(
+                name="М0",
+                employee_id="distinct_employee_id",
+                city=City.MOSCOW,
+                schedule_type=ScheduleType.FLEXIBLE,
+            )
+        )
         cfg = Config(month=3, year=2025, employees=emps)
         errors, _ = collect_config_issues(cfg)
         assert any("М0" in e for e in errors)

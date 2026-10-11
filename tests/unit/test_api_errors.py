@@ -51,3 +51,7 @@ class TestExceptionHandlers:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.get("/test-internal-error")
         assert resp.status_code == 500
+        assert resp.json() == {
+            "error": "internal_error",
+            "detail": "An internal error occurred",
+        }

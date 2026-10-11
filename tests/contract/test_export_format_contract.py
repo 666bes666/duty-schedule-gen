@@ -10,11 +10,12 @@ from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
 from duty_schedule.models import Schedule
 from duty_schedule.scheduler import generate_schedule
+from tests.conftest import complete_config
 
 
 def _generate(config) -> Schedule:
     holidays = set()
-    return generate_schedule(config, holidays)
+    return generate_schedule(complete_config(config), holidays)
 
 
 class TestXlsFormatContract:

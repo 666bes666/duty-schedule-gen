@@ -128,7 +128,7 @@ class TestBlockedDates:
         vs = validate_schedule(days, employees, set())
         blocked = [v for v in vs if v.constraint == "blocked_date"]
         assert len(blocked) == 1
-        assert blocked[0].severity == "soft"
+        assert blocked[0].severity == "hard"
 
 
 class TestPinnedAssignment:
@@ -156,8 +156,8 @@ class TestValidateOrRaise:
         with pytest.raises(ScheduleError, match="Hard constraint"):
             validate_schedule_or_raise(days, employees, set())
 
-    def test_soft_only_returns(self):
+    def test_unconfirmed_streak_raises(self):
         days = [_day(i, morning=["A"], evening=["B"], night=["C"]) for i in range(1, 9)]
         employees = [_emp("A", max_consecutive_working=5), _emp("B"), _emp("C")]
-        result = validate_schedule_or_raise(days, employees, set())
-        assert len(result) > 0
+        with pytest.raises(ScheduleError, match="Hard constraint violations"):
+            validate_schedule_or_raise(days, employees, set())

@@ -19,7 +19,7 @@ ERROR_FIELDS = {"error", "detail"}
 
 class TestErrorContract:
     @pytest.mark.asyncio
-    async def test_400_format(self, client) -> None:
+    async def test_generation_failure_is_diagnostic_409(self, client) -> None:
         with (
             patch_schedule_holidays(),
             patch(
@@ -32,8 +32,9 @@ class TestErrorContract:
                 json=config_payload(),
                 headers=JSON_HEADERS,
             )
-        assert resp.status_code == 400
-        assert set(resp.json().keys()) == ERROR_FIELDS
+        assert resp.status_code == 409
+        assert resp.json()["error"] == "schedule_not_ready"
+        assert resp.json()["diagnostics"]
 
     @pytest.mark.asyncio
     async def test_401_format(self, app_with_auth, client_with_auth) -> None:

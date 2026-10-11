@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import time
 from dataclasses import dataclass
 from datetime import date
@@ -7,9 +8,11 @@ from typing import Protocol, runtime_checkable
 
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
+    Config,
     DaySchedule,
     Employee,
     OptimizationPriority,
+    Schedule,
     ShiftType,
 )
 from duty_schedule.scheduler.changelog import ChangeLog
@@ -29,6 +32,7 @@ class PipelineContext:
     carry_over_last_shift: dict[str, ShiftType]
     states: dict[str, EmployeeState]
     changelog: ChangeLog
+    config: Config | None = None
 
 
 @runtime_checkable
@@ -277,42 +281,139 @@ class Pipeline:
 
     def run(self, ctx: PipelineContext) -> list[DaySchedule]:
         from .metrics import compute_snapshot
+        from .validation import validate_schedule
 
-        target_working = {emp.name: ctx.states[emp.name].effective_target for emp in ctx.employees}
-        for stage in self.stages:
-            before = compute_snapshot(
-                ctx.days,
+        targets = {e.name: ctx.states[e.name].effective_target for e in ctx.employees}
+
+        def validity(days: list[DaySchedule]) -> set[tuple[str, str | None, object]]:
+            if ctx.config:
+                from duty_schedule.scheduler.validation import validate_schedule_result
+
+                checked = validate_schedule_result(Schedule(config=ctx.config, days=days))
+                return {
+                    (item.code, item.employee_name, item.date)
+                    for item in checked.diagnostics
+                    if item.code
+                    not in {
+                        "calendar_unverified",
+                        "history_missing",
+                        "history_stale",
+                        "history_unverified",
+                        "monthly_hours",
+                    }
+                }
+            violations = validate_schedule(
+                days, ctx.employees, ctx.holidays, carry_over_cw=ctx.carry_over_cw
+            )
+            return {
+                (item.constraint, item.employee, item.date)
+                for item in violations
+                if item.severity == "hard"
+            }
+
+        def quality(days: list[DaySchedule]) -> tuple[int, ...]:
+            if ctx.config:
+                from duty_schedule.calendar import calendar_for_config
+                from duty_schedule.scheduler.postprocess.quality import quality_key
+                from duty_schedule.workload import assignment_hours, calculate_monthly_targets
+
+                calendar = calendar_for_config(ctx.config)
+                monthly = calculate_monthly_targets(ctx.config, calendar)
+                deficit = sum(
+                    abs(
+                        sum(assignment_hours(day, name, calendar) for day in days)
+                        - target.selected_hours
+                    )
+                    for name, target in monthly.items()
+                )
+                return (deficit, *quality_key(Schedule(config=ctx.config, days=days)))
+            snapshot = compute_snapshot(
+                days,
                 ctx.employees,
                 ctx.holidays,
-                target_working=target_working,
+                target_working=targets,
                 carry_over_cw=ctx.carry_over_cw,
             )
-            pre_changes = len(ctx.changelog.entries)
-            t0 = time.monotonic()
+            return (
+                snapshot.norm_deviation_total,
+                snapshot.isolated_off_total,
+                snapshot.max_streak,
+                snapshot.evening_balance,
+                snapshot.weekend_balance,
+            )
+
+        for stage in self.stages:
+            original_validity = validity(ctx.days)
+            before = quality(ctx.days)
+            candidate = copy.deepcopy(ctx)
+            started = time.monotonic()
             try:
-                ctx.days = stage.run(ctx)
+                candidate.days = stage.run(candidate)
             except ScheduleError:
                 raise
             except Exception:
                 logger.exception("postprocess_stage_failed", stage=stage.name)
                 continue
-            stage_duration_ms = round((time.monotonic() - t0) * 1000, 1)
-            after = compute_snapshot(
-                ctx.days,
-                ctx.employees,
-                ctx.holidays,
-                target_working=target_working,
-                carry_over_cw=ctx.carry_over_cw,
+            pin_preserved = [day.date for day in candidate.days] == [
+                day.date for day in ctx.days
+            ] and all(
+                next(
+                    (
+                        shift
+                        for shift in (
+                            "morning",
+                            "evening",
+                            "night",
+                            "workday",
+                            "day_off",
+                            "vacation",
+                            "sick_leave",
+                        )
+                        if name in getattr(day, shift)
+                    ),
+                    None,
+                )
+                == next(
+                    (
+                        shift
+                        for shift in (
+                            "morning",
+                            "evening",
+                            "night",
+                            "workday",
+                            "day_off",
+                            "vacation",
+                            "sick_leave",
+                        )
+                        if name in getattr(candidate_day, shift)
+                    ),
+                    None,
+                )
+                and day.workday_hours.get(name) == candidate_day.workday_hours.get(name)
+                for day in ctx.days
+                for candidate_day in candidate.days
+                if day.date == candidate_day.date
+                for pinned_date, name in ctx.pinned_on
+                if day.date == pinned_date
             )
+            after = quality(candidate.days)
+            if (
+                not pin_preserved
+                or not validity(candidate.days) <= original_validity
+                or after > before
+            ):
+                logger.debug("postprocess_stage_rejected", stage=stage.name)
+                continue
+            ctx.days = candidate.days
+            ctx.states = candidate.states
+            ctx.changelog = candidate.changelog
             logger.debug(
                 "postprocess_stage_done",
                 stage=stage.name,
-                duration_ms=stage_duration_ms,
-                changes=len(ctx.changelog.entries) - pre_changes,
-                score_before=round(before.score(), 1),
-                score_after=round(after.score(), 1),
-                iso_off_delta=(after.isolated_off_total - before.isolated_off_total),
-                evening_bal_delta=(after.evening_balance - before.evening_balance),
+                duration_ms=round((time.monotonic() - started) * 1000, 1),
+                changes=len(candidate.changelog.entries),
+                quality_before=before,
+                quality_after=after,
             )
         return ctx.days
 

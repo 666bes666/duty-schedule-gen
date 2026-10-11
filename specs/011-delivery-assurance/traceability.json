@@ -1,0 +1,40 @@
+{
+  "kind": "change",
+  "status": "in-progress",
+  "requirements": [
+    {
+      "id": "DEL-001",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_required_test_report_rejects_missing_or_unexecuted_tests",
+        "tests/unit/test_solver.py",
+        "tests/unit/test_planning_rules.py",
+        "tests/unit/test_search_outcomes.py"
+      ]
+    },
+    {
+      "id": "DEL-002",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_packaged_smoke_payload_generates_ready",
+        "tests/ui/test_project_journey.py",
+        "tests/unit/test_cli_project.py",
+        "tests/e2e/test_cli_workflow.py"
+      ]
+    },
+    {
+      "id": "DEL-003",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit",
+        "tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates",
+        "tests/performance/test_scheduler_benchmark.py"
+      ]
+    },
+    {
+      "id": "DEL-004",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_release_verifies_same_sha_version_and_bytes",
+        "tests/unit/test_delivery_workflows.py::test_release_rejects_existing_tag_for_other_sha",
+        "tests/unit/test_delivery_workflows.py::test_release_graph_requires_all_verified_artifact_gates"
+      ]
+    }
+  ]
+}

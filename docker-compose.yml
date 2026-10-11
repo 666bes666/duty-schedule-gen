@@ -22,12 +22,11 @@ services:
 
   api:
     build: .
-    command: uv run uvicorn api_main:app --host 0.0.0.0 --port 8000
+    command: /app/.venv/bin/duty-schedule-api
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      - ./api_main.py:/app/api_main.py
-      - ./src:/app/src
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
     environment:
       - DUTY_API_AUTH_ENABLED=false
       - DUTY_API_KEYS=

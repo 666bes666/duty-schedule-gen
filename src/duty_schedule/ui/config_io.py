@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import contextlib
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 import yaml  # type: ignore[import-untyped]
+from pydantic import ValidationError
 
-from duty_schedule.models import ShiftType
+from duty_schedule._errors_fmt import format_validation_errors
+from duty_schedule.models import Config, Employee, PinnedAssignment, VacationPeriod
 from duty_schedule.ui.mappings import (
     _CITY_TO_RU,
-    _DEFAULT_ROWS,
     _EMPTY_PIN_ROW,
     _RU_TO_CITY,
     _RU_TO_SHIFT,
@@ -22,31 +23,216 @@ from duty_schedule.ui.mappings import (
 )
 
 
-def _emp_dates_to_yaml_fields(name: str) -> tuple[list[dict], list[str]]:
-    cfg = st.session_state["employee_dates"].get(name, {})
-    vac_yaml = [{"start": s.isoformat(), "end": e.isoformat()} for s, e in cfg.get("vacations", [])]
-    unavail_yaml = [d.isoformat() for d in cfg.get("unavailable", [])]
-    return vac_yaml, unavail_yaml
+@dataclass
+class ConfigTables:
+    employees: pd.DataFrame
+    pins: pd.DataFrame
+    employee_dates: dict[str, _EmployeeDates]
+
+
+def _text(value: Any) -> str:
+    return "" if value is None or pd.isna(value) else str(value).strip()
+
+
+def _optional_number(value: Any) -> Any:
+    return None if not _text(value) else value
+
+
+def parse_config_yaml(raw: str) -> Config:
+    try:
+        return Config.model_validate(yaml.safe_load(raw))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Ошибка разбора YAML: {exc}") from exc
+    except ValidationError as exc:
+        raise ValueError("\n".join(format_validation_errors(exc))) from exc
+
+
+def dump_config_yaml(config: Config) -> str:
+    return str(yaml.safe_dump(config.model_dump(mode="json"), allow_unicode=True, sort_keys=False))
 
 
 def _emp_dates_from_yaml(emp: dict) -> _EmployeeDates:
-    vacations = []
-    for v in emp.get("vacations", []):
-        try:
-            s = date.fromisoformat(str(v["start"]))
-            e = date.fromisoformat(str(v["end"]))
-            vacations.append((s, e))
-        except (ValueError, KeyError):
-            pass
-    unavailable = []
-    for d in emp.get("unavailable_dates", []):
-        with contextlib.suppress(ValueError):
-            unavailable.append(date.fromisoformat(str(d)))
-    days_off_weekly = []
-    for d in emp.get("days_off_weekly", []) or []:
-        with contextlib.suppress(ValueError, TypeError):
-            days_off_weekly.append(int(d))
-    return {"vacations": vacations, "unavailable": unavailable, "days_off_weekly": days_off_weekly}
+    return {
+        "vacations": [
+            (VacationPeriod.model_validate(v).start, VacationPeriod.model_validate(v).end)
+            for v in emp.get("vacations", [])
+        ],
+        "sick_leaves": [
+            (VacationPeriod.model_validate(v).start, VacationPeriod.model_validate(v).end)
+            for v in emp.get("sick_leaves", [])
+        ],
+        "unavailable": [date.fromisoformat(str(d)) for d in emp.get("unavailable_dates", [])],
+        "days_off_weekly": list(emp.get("days_off_weekly", [])),
+    }
+
+
+def config_to_tables(config: Config) -> ConfigTables:
+    rows = []
+    employee_dates = {}
+    for employee in config.employees:
+        rows.append(
+            {
+                "ID": employee.employee_id,
+                "Имя": employee.name,
+                "Город": _CITY_TO_RU[employee.city],
+                "График": _STYPE_TO_RU[employee.schedule_type],
+                "Дежурный": employee.on_duty,
+                "Всегда на деж.": employee.always_on_duty,
+                "Только утро": employee.morning_only,
+                "Только вечер": employee.evening_only,
+                "Предпочт. смена": (
+                    _SHIFT_TO_RU.get(employee.preferred_shift, "")
+                    if employee.preferred_shift is not None
+                    else ""
+                ),
+                "Макс. подряд": employee.max_consecutive_working,
+            }
+        )
+        employee_dates[employee.employee_id] = _emp_dates_from_yaml(
+            employee.model_dump(mode="json")
+        )
+    frame = pd.DataFrame(rows)
+    frame.attrs["config"] = config.model_dump(mode="json")
+    return ConfigTables(
+        frame,
+        _pins_list_to_df([p.model_dump(mode="json") for p in config.pins], config.year),
+        employee_dates,
+    )
+
+
+def employees_from_table(
+    df: pd.DataFrame, employee_dates: dict | None = None, base_config: Config | None = None
+) -> list[Employee]:
+    by_id = {e.employee_id: e for e in base_config.employees} if base_config else {}
+    by_name = {e.name: e for e in base_config.employees} if base_config else {}
+    result = []
+    for _, row in df.iterrows():
+        name = _text(row.get("Имя"))
+        if not name:
+            continue
+        employee_id = _text(row.get("ID"))
+        previous = by_id.get(employee_id) or by_name.get(name)
+        data = previous.model_dump(mode="json") if previous else {}
+        data.update(
+            {
+                "name": name,
+                "employee_id": employee_id or (previous.employee_id if previous else ""),
+                "city": _RU_TO_CITY.get(_text(row.get("Город")), _text(row.get("Город"))),
+                "schedule_type": _RU_TO_STYPE.get(
+                    _text(row.get("График")), _text(row.get("График"))
+                ),
+            }
+        )
+        for column, field, default in (
+            ("Дежурный", "on_duty", True),
+            ("Всегда на деж.", "always_on_duty", False),
+            ("Только утро", "morning_only", False),
+            ("Только вечер", "evening_only", False),
+        ):
+            value = row.get(column, default)
+            data[field] = default if not _text(value) else value
+        preference = _text(row.get("Предпочт. смена"))
+        data["preferred_shift"] = _RU_TO_SHIFT.get(preference, preference) if preference else None
+        data["max_consecutive_working"] = _optional_number(row.get("Макс. подряд"))
+        dates = employee_dates or {}
+        periods = dates.get(employee_id, dates.get(name))
+        if periods is not None:
+            for field in ("vacations", "sick_leaves"):
+                if field in periods:
+                    data[field] = [
+                        {"start": start.isoformat(), "end": end.isoformat()}
+                        for start, end in periods[field]
+                    ]
+            if "unavailable" in periods:
+                data["unavailable_dates"] = [d.isoformat() for d in periods["unavailable"]]
+            if "days_off_weekly" in periods:
+                data["days_off_weekly"] = list(periods["days_off_weekly"])
+        result.append(Employee.model_validate(data))
+    return result
+
+
+def config_from_tables(
+    df: pd.DataFrame,
+    base_config: Config,
+    employee_dates: dict | None = None,
+    pins_df: pd.DataFrame | None = None,
+) -> Config:
+    employees = employees_from_table(df, employee_dates, base_config)
+    names_by_id = {employee.employee_id: employee.name for employee in employees}
+    rename = {
+        employee.name: names_by_id.get(employee.employee_id, employee.name)
+        for employee in base_config.employees
+    }
+    data = base_config.model_dump(mode="json")
+    data["employees"] = [employee.model_dump(mode="json") for employee in employees]
+    if pins_df is not None:
+        data["pins"] = _pins_df_to_list(pins_df, base_config.year)
+    for field in ("pins", "carry_over", "norm_choices", "approvals"):
+        for item in data[field]:
+            item["employee_name"] = names_by_id.get(
+                item.get("employee_id"), rename.get(item["employee_name"], item["employee_name"])
+            )
+    return Config.model_validate(data)
+
+
+def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
+    result = []
+    for _, row in pins_df.iterrows():
+        raw_date = row.get("Дата")
+        employee_name = _text(row.get("Сотрудник"))
+        shift_ru = _text(row.get("Смена"))
+        if not _text(raw_date) and not employee_name:
+            continue
+        if not _text(raw_date) or not employee_name or not shift_ru:
+            raise ValueError("Для закрепления нужны дата, сотрудник и смена")
+        if isinstance(raw_date, date):
+            day = raw_date
+        else:
+            text = _text(raw_date)
+            day = (
+                date.fromisoformat(text)
+                if len(text) == 10
+                else datetime.strptime(f"{text}.{year}", "%d.%m.%Y").date()
+            )
+        shift = _RU_TO_SHIFT.get(shift_ru)
+        if shift is None:
+            raise ValueError(f"Неизвестная смена: {shift_ru}")
+        pin = PinnedAssignment(
+            date=day,
+            employee_name=employee_name,
+            shift=shift,
+            working_hours=_optional_number(row.get("Часы «Р»")),
+        )
+        result.append(pin.model_dump(mode="json"))
+    return result
+
+
+def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
+    rows = []
+    for item in pins:
+        pin = PinnedAssignment.model_validate(item)
+        rows.append(
+            {
+                "Дата": pin.date,
+                "Сотрудник": pin.employee_name,
+                "Смена": _SHIFT_TO_RU[pin.shift],
+                "Часы «Р»": pin.working_hours,
+            }
+        )
+    if not rows:
+        rows = [{**_EMPTY_PIN_ROW, "Часы «Р»": None}]
+    return pd.DataFrame(rows)
+
+
+def _emp_dates_to_yaml_fields(name: str) -> tuple[list[dict], list[str]]:
+    settings = st.session_state["employee_dates"].get(name, {})
+    return (
+        [
+            {"start": start.isoformat(), "end": end.isoformat()}
+            for start, end in settings.get("vacations", [])
+        ],
+        [day.isoformat() for day in settings.get("unavailable", [])],
+    )
 
 
 def _df_to_yaml(
@@ -59,124 +245,28 @@ def _df_to_yaml(
     carry_over: list[dict] | None = None,
     optimization_priority: str | None = None,
 ) -> str:
-    ed = employee_dates or {}
-    employees = []
-
-    for _, row in df.iterrows():
-        name = str(row["Имя"]).strip()
-        if not name:
-            continue
-
-        _emp_cfg = ed.get(name, {"vacations": [], "unavailable": []})
-        vac_yaml = [
-            {"start": s.isoformat(), "end": e.isoformat()} for s, e in _emp_cfg.get("vacations", [])
-        ]
-        unavail_yaml = [d.isoformat() for d in _emp_cfg.get("unavailable", [])]
-
-        pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
-        pref_shift = _RU_TO_SHIFT.get(pref_shift_ru)
-
-        days_off_weekly: list[int] = _emp_cfg.get("days_off_weekly", [])
-
-        def _parse_limit(val: Any) -> int | None:
-            try:
-                v = int(val)  # type: ignore[arg-type]
-                return v if v > 0 else None
-            except (ValueError, TypeError):
-                return None
-
-        max_cw = _parse_limit(row.get("Макс. подряд"))
-
-        emp: dict = {
-            "name": name,
-            "city": _RU_TO_CITY.get(str(row["Город"]), "moscow"),
-            "schedule_type": _RU_TO_STYPE.get(str(row["График"]), "flexible"),
-            "on_duty": bool(row["Дежурный"]),
-            "always_on_duty": bool(row.get("Всегда на деж.", False)),
-            "morning_only": bool(row["Только утро"]),
-            "evening_only": bool(row["Только вечер"]),
+    source = df.attrs.get("config")
+    if source is None:
+        source = {
+            "month": month,
+            "year": year,
+            "employees": [
+                e.model_dump(mode="json") for e in employees_from_table(df, employee_dates)
+            ],
         }
-        if vac_yaml:
-            emp["vacations"] = vac_yaml
-        if unavail_yaml:
-            emp["unavailable_dates"] = unavail_yaml
-        if pref_shift is not None:
-            emp["preferred_shift"] = str(pref_shift)
-        if days_off_weekly:
-            emp["days_off_weekly"] = days_off_weekly
-        if max_cw is not None:
-            emp["max_consecutive_working"] = max_cw
-        employees.append(emp)
-
-    config_dict: dict = {
-        "month": int(month),
-        "year": int(year),
-        "seed": int(seed),
-        "employees": employees,
-    }
-    if pins_df is not None:
-        pins_list = _pins_df_to_list(pins_df, year)
-        if pins_list:
-            config_dict["pins"] = pins_list
-    if carry_over:
-        config_dict["carry_over"] = carry_over
-    if optimization_priority is not None:
-        config_dict["optimization_priority"] = optimization_priority
-    result: str = yaml.dump(
-        config_dict,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=False,
+    base = Config.model_validate(source)
+    config = config_from_tables(df, base, employee_dates, pins_df)
+    data = config.model_dump(mode="json")
+    data.update(
+        {"month": month, "year": year, "seed": seed, "optimization_priority": optimization_priority}
     )
-    return result
-
-
-def _pins_df_to_list(pins_df: pd.DataFrame, year: int) -> list[dict]:
-    result = []
-    for _, row in pins_df.iterrows():
-        raw_date = row.get("Дата")
-        emp_name = str(row.get("Сотрудник", "")).strip()
-        shift_ru = str(row.get("Смена", "")).strip()
-        if not raw_date or not emp_name or not shift_ru:
-            continue
-        if isinstance(raw_date, date):
-            d = raw_date
-        else:
-            try:
-                d = datetime.strptime(f"{str(raw_date).strip()}.{year}", "%d.%m.%Y").date()
-            except ValueError:
-                continue
-        shift = _RU_TO_SHIFT.get(shift_ru)
-        if shift is None:
-            continue
-        result.append({"date": d.isoformat(), "employee_name": emp_name, "shift": str(shift)})
-    return result
-
-
-def _pins_list_to_df(pins: list[dict], year: int) -> pd.DataFrame:
-    rows = []
-    for p in pins:
-        try:
-            d = date.fromisoformat(str(p["date"]))
-        except (ValueError, KeyError):
-            continue
-        if d.year != year:
-            continue
-        shift_str = str(p.get("shift", ""))
-        shift_ru = _SHIFT_TO_RU.get(ShiftType(shift_str), "Утро") if shift_str else "Утро"
-        rows.append(
-            {
-                "Дата": d,
-                "Сотрудник": str(p.get("employee_name", "")),
-                "Смена": shift_ru,
-            }
-        )
-    return pd.DataFrame(rows) if rows else pd.DataFrame([_EMPTY_PIN_ROW])
+    if carry_over is not None:
+        data["carry_over"] = carry_over
+    return dump_config_yaml(Config.model_validate(data))
 
 
 def _yaml_to_df(
-    raw_yaml: str,
-    year: int,
+    raw_yaml: str, year: int
 ) -> tuple[
     pd.DataFrame | None,
     pd.DataFrame | None,
@@ -189,55 +279,18 @@ def _yaml_to_df(
     str | None,
 ]:
     try:
-        data = yaml.safe_load(raw_yaml)
-    except yaml.YAMLError as e:
-        return None, None, [], 0, 0, 42, {}, f"Ошибка разбора YAML: {e}", None
-
-    if not isinstance(data, dict):
-        return None, None, [], 0, 0, 42, {}, "Неверный формат файла конфигурации.", None
-
-    month = int(data.get("month", date.today().month))
-    year_val = int(data.get("year", year))
-    seed = int(data.get("seed", 42))
-
-    rows = []
-    employee_dates: dict = {}
-    for emp in data.get("employees", []):
-        name = emp.get("name", "")
-
-        employee_dates[name] = _emp_dates_from_yaml(emp)
-
-        pref_shift_raw = emp.get("preferred_shift", "") or ""
-        pref_shift_ru = _SHIFT_TO_RU.get(ShiftType(pref_shift_raw), "") if pref_shift_raw else ""
-
-        rows.append(
-            {
-                "Имя": name,
-                "Город": _CITY_TO_RU.get(emp.get("city", "moscow"), "Москва"),
-                "График": _STYPE_TO_RU.get(emp.get("schedule_type", "flexible"), "Гибкий"),
-                "Дежурный": bool(emp.get("on_duty", True)),
-                "Всегда на деж.": bool(emp.get("always_on_duty", False)),
-                "Только утро": bool(emp.get("morning_only", False)),
-                "Только вечер": bool(emp.get("evening_only", False)),
-                "Предпочт. смена": pref_shift_ru,
-                "Макс. подряд": emp.get("max_consecutive_working"),
-            }
-        )
-
-    if not rows:
-        rows = _DEFAULT_ROWS.copy()
-
-    pins_df = _pins_list_to_df(data.get("pins", []), year_val)
-    carry_over = data.get("carry_over", [])
-    opt_priority = data.get("optimization_priority") or None
+        config = parse_config_yaml(raw_yaml)
+        tables = config_to_tables(config)
+    except (ValueError, TypeError) as exc:
+        return None, None, [], 0, 0, 42, {}, str(exc), None
     return (
-        pd.DataFrame(rows),
-        pins_df,
-        carry_over,
-        month,
-        year_val,
-        seed,
-        employee_dates,
+        tables.employees,
+        tables.pins,
+        [carry.model_dump(mode="json") for carry in config.carry_over],
+        config.month,
+        config.year,
+        config.seed,
+        tables.employee_dates,
         None,
-        opt_priority,
+        config.optimization_priority,
     )

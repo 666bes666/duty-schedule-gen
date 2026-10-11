@@ -3,7 +3,12 @@ from __future__ import annotations
 import os
 import sys
 from datetime import date
+from html import escape
 from io import BytesIO
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from weasyprint.urls import URLFetcher
 
 if sys.platform == "darwin":
     for _brew_lib in ("/opt/homebrew/lib", "/usr/local/lib"):
@@ -30,6 +35,7 @@ SHIFT_LABELS = {
     "workday": "Р",
     "day_off": "–",
     "vacation": "О",
+    "sick_leave": "Б",
 }
 
 DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -161,18 +167,20 @@ def _build_schedule_html(
         city_bg = "#E8F5E9" if emp.city == City.MOSCOW else "#D6E4F0"
 
         cells = [
-            f'<td class="name-cell">{emp.name}</td>',
+            f'<td class="name-cell">{escape(emp.name)}</td>',
             f'<td class="city-cell" style="background:{city_bg}">{city_label}</td>',
         ]
         work_count = 0
         for day in days:
             shift_key = emp_days.get(day.date, "day_off")
             label = SHIFT_LABELS.get(shift_key, "?")
+            if shift_key == "workday" and emp.name in day.workday_hours:
+                label = f"Р ({day.workday_hours[emp.name]}ч)"
             color = SHIFT_COLORS_CELL.get(shift_key, "FFFFFF")
             if day.is_holiday:
                 color = _darken(color)
             cells.append(f'<td style="background:#{color}">{label}</td>')
-            if shift_key not in ("day_off", "vacation"):
+            if shift_key not in ("day_off", "vacation", "sick_leave"):
                 work_count += 1
 
         s = stats_map.get(emp.name)
@@ -191,15 +199,19 @@ def _build_schedule_html(
         "Сотрудник",
         "Г.",
         "Раб",
-        "Норма",
-        "±",
+        "Цель ч",
+        "± ч",
         "Часов",
+        "Кал. ч",
+        "Корр. ч",
+        "Отс. ч",
         "У",
         "В",
         "Н",
         "Р",
         "Вых",
         "Отп",
+        "Бол",
         "Вых.раб",
         "Празд",
         "С.раб",
@@ -215,22 +227,26 @@ def _build_schedule_html(
         if not s:
             continue
         city_label = "М" if s.city == "Москва" else "Х"
-        delta = s.total_working - s.target
+        delta = s.hours_delta
         delta_str = f"+{delta}" if delta > 0 else str(delta)
         stats_rows.append(
             f"<tr>"
-            f'<td style="text-align:left;font-weight:bold">{s.name}</td>'
+            f'<td style="text-align:left;font-weight:bold">{escape(s.name)}</td>'
             f"<td>{city_label}</td>"
             f"<td>{s.total_working}</td>"
-            f"<td>{s.target}</td>"
+            f"<td>{s.target_hours}</td>"
             f"<td>{delta_str}</td>"
             f"<td>{s.total_hours}</td>"
+            f"<td>{s.calendar_hours}</td>"
+            f"<td>{s.adjusted_hours}</td>"
+            f"<td>{s.absence_reduction_hours}</td>"
             f"<td>{s.morning}</td>"
             f"<td>{s.evening}</td>"
             f"<td>{s.night}</td>"
             f"<td>{s.workday}</td>"
             f"<td>{s.day_off}</td>"
             f"<td>{s.vacation}</td>"
+            f"<td>{s.sick_leave}</td>"
             f"<td>{s.weekend_work}</td>"
             f"<td>{s.holiday_work}</td>"
             f"<td>{s.max_streak_work}</td>"
@@ -247,11 +263,12 @@ def _build_schedule_html(
     )
 
     legend_items = [
-        ("У", SHIFT_COLORS_HEADER["morning"], "Утро 08–17"),
-        ("В", SHIFT_COLORS_HEADER["evening"], "Вечер 15–00"),
-        ("Н", SHIFT_COLORS_HEADER["night"], "Ночь 00–08"),
-        ("Р", SHIFT_COLORS_HEADER["workday"], "Рабочий день"),
+        ("У", SHIFT_COLORS_HEADER["morning"], "Утро 08–17 МСК"),
+        ("В", SHIFT_COLORS_HEADER["evening"], "Вечер 15–00 МСК"),
+        ("Н", SHIFT_COLORS_HEADER["night"], "Ночь 00–08 МСК"),
+        ("Р", SHIFT_COLORS_HEADER["workday"], "Рабочий день с 09 местного времени"),
         ("О", SHIFT_COLORS_HEADER["vacation"], "Отпуск"),
+        ("Б", SHIFT_COLORS_HEADER.get("sick_leave", "A6A6A6"), "Больничный"),
         ("–", SHIFT_COLORS_HEADER["day_off"], "Выходной"),
     ]
     legend_parts = []
@@ -267,11 +284,20 @@ def _build_schedule_html(
     return schedule_table + stats_table + legend
 
 
+def _safe_url_fetcher() -> URLFetcher:
+    from weasyprint.urls import URLFetcher
+
+    return URLFetcher(allowed_protocols=())
+
+
 def generate_schedule_pdf(
     schedule: Schedule,
     page_size: str = "A3",
     short_days: set[date] | None = None,
 ) -> bytes:
+    from duty_schedule.project import ensure_exportable
+
+    schedule = ensure_exportable(schedule)
     employees = _sort_employees(schedule.config.employees)
     assignments = build_assignments(schedule)
     production_days = schedule.metadata.get("production_working_days", 21)
@@ -288,5 +314,5 @@ def generate_schedule_pdf(
         raise RuntimeError("weasyprint unavailable: system libraries missing") from None
 
     buf = BytesIO()
-    HTML(string=html_str).write_pdf(buf)
+    HTML(string=html_str, url_fetcher=_safe_url_fetcher()).write_pdf(buf)
     return buf.getvalue()

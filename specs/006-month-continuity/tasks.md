@@ -1,0 +1,16 @@
+# Задачи: Достоверная история между месяцами
+
+## US1 — Проверяемое поведение
+
+- [x] T001 [US1] Регрессии HIST-001..004 в tests/unit/test_history.py, tests/unit/test_multimonth.py.
+- [x] T002 [US1] Реализация требований в src/duty_schedule/scheduler/multimonth.py, src/duty_schedule/scheduler/postprocess/carry_over_calc.py, src/duty_schedule/xls_import.py.
+- [x] T003 [US1] Интеграция общих моделей и совместимость по specs/006-month-continuity/plan.md.
+- [x] T004 [US1] Проверка критериев и независимое ревью затронутых файлов.
+- [x] T005 Evidence, traceability и фактически выполненные общие gates в specs/006-month-continuity/evidence.md.
+
+## Порядок
+
+T001 -> T002 -> T003 -> T004 -> T005. Независимые тесты можно выполнять параллельно;
+мутации одного файла координируются одним владельцем. Нет непроверенных завершённых
+задач. Модель/контракт предшествуют адаптерам, финальная проверка — экспорту.
+

@@ -1,17 +1,23 @@
 from __future__ import annotations
 
-import calendar
 from datetime import date
+from typing import Any
 
+from duty_schedule.calendar import calendar_for_config
 from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.logging import get_logger
-from duty_schedule.models import (
-    City,
-    Config,
-    DaySchedule,
-    Schedule,
-    ScheduleType,
+from duty_schedule.models import Config, DaySchedule, Schedule, ShiftType
+from duty_schedule.scheduler.postprocess.quality import eligible_duty_names
+from duty_schedule.scheduler.rules import (
+    ALL_SHIFTS,
+    WORKING_SHIFTS,
+    approval_for,
+    can_assign_work,
+    carry_for_employee,
+    matches_employee,
+    normal_streak_limit,
 )
+from duty_schedule.workload import calculate_monthly_targets
 
 logger = get_logger(__name__)
 
@@ -22,8 +28,7 @@ try:
 except ImportError:
     _HAS_ORTOOLS = False
 
-
-SOLVER_TIMEOUT_S = 30
+SOLVER_TIMEOUT_S = 10
 
 
 class SolverUnavailableError(Exception):
@@ -32,241 +37,331 @@ class SolverUnavailableError(Exception):
 
 def solve_schedule(
     config: Config,
-    holidays: set[date],
+    holidays: set[date] | None = None,
     timeout: int = SOLVER_TIMEOUT_S,
+    allow_pending: bool = False,
 ) -> Schedule:
     if not _HAS_ORTOOLS:
-        raise SolverUnavailableError("OR-Tools не установлен. Установите: pip install ortools")
+        raise SolverUnavailableError("OR-Tools не установлен. Установите: uv sync --extra solver")
+    from duty_schedule.scheduler.validation import validate_schedule_result
 
-    _, ndays = calendar.monthrange(config.year, config.month)
-    dates = [date(config.year, config.month, d) for d in range(1, ndays + 1)]
-
+    calendar = calendar_for_config(config, holidays)
+    config = config.model_copy(deep=True, update={"production_calendar": calendar})
+    dates = sorted(record.date for record in calendar.days)
     employees = config.employees
-    emp_idx = {e.name: i for i, e in enumerate(employees)}
-
-    moscow_duty = [e for e in employees if e.city == City.MOSCOW and e.on_duty]
-    khab_duty = [e for e in employees if e.city == City.KHABAROVSK and e.on_duty]
-
-    shifts = ["morning", "evening", "night", "workday", "day_off", "vacation"]
-
-    logger.info("solver_start", employees=len(employees), days=ndays, timeout=timeout)
-
+    targets = calculate_monthly_targets(config, calendar)
     model = cp_model.CpModel()
+    variables: dict[tuple[int, int, ShiftType], Any] = {}
+    work: dict[tuple[int, int], Any] = {}
+    r_hours: dict[tuple[int, int], Any] = {}
+    streaks: dict[tuple[int, int], Any] = {}
+    pins = {(pin.date, pin.employee_name): pin for pin in config.pins}
+    pending_terms: list[Any] = []
+    isolated_terms: list[Any] = []
+    streak_terms: list[Any] = []
+    fairness_terms: list[Any] = []
+    weekend_terms: list[Any] = []
+    logger.info("solver_start", employees=len(employees), days=len(dates), timeout=timeout)
 
-    x = {}
-    for d_idx in range(len(dates)):
-        for e_idx in range(len(employees)):
-            for s in shifts:
-                x[(d_idx, e_idx, s)] = model.new_bool_var(f"x_{d_idx}_{e_idx}_{s}")
-
-    for d_idx in range(len(dates)):
-        for e_idx in range(len(employees)):
-            model.add_exactly_one(x[(d_idx, e_idx, s)] for s in shifts)
-
-    for d_idx, d in enumerate(dates):
-        for e_idx, emp in enumerate(employees):
-            if emp.is_on_vacation(d):
-                model.add(x[(d_idx, e_idx, "vacation")] == 1)
-            elif emp.is_blocked(d) or emp.is_day_off_weekly(d):
-                model.add(x[(d_idx, e_idx, "day_off")] == 1)
-
-    for d_idx, d in enumerate(dates):
-        is_weekend = d.weekday() >= 5 or d in holidays
-        for e_idx, emp in enumerate(employees):
-            if emp.schedule_type == ScheduleType.FIVE_TWO and is_weekend:
-                model.add(x[(d_idx, e_idx, "day_off")] == 1)
-
-    for d_idx in range(len(dates)):
-        for e_idx, emp in enumerate(employees):
-            if emp.city == City.MOSCOW:
-                model.add(x[(d_idx, e_idx, "night")] == 0)
-            if emp.city == City.KHABAROVSK:
-                model.add(x[(d_idx, e_idx, "morning")] == 0)
-                model.add(x[(d_idx, e_idx, "evening")] == 0)
-
-    for d_idx in range(len(dates)):
-        for e_idx, emp in enumerate(employees):
-            if not emp.on_duty:
-                model.add(x[(d_idx, e_idx, "morning")] == 0)
-                model.add(x[(d_idx, e_idx, "evening")] == 0)
-                model.add(x[(d_idx, e_idx, "night")] == 0)
-            if emp.morning_only:
-                model.add(x[(d_idx, e_idx, "evening")] == 0)
-            if emp.evening_only:
-                model.add(x[(d_idx, e_idx, "morning")] == 0)
-
-    for d_idx, d in enumerate(dates):
-        morning_vars = [
-            x[(d_idx, emp_idx[e.name], "morning")]
-            for e in moscow_duty
-            if not employees[emp_idx[e.name]].is_blocked(d)
-            and not employees[emp_idx[e.name]].is_on_vacation(d)
-        ]
-        evening_vars = [
-            x[(d_idx, emp_idx[e.name], "evening")]
-            for e in moscow_duty
-            if not employees[emp_idx[e.name]].is_blocked(d)
-            and not employees[emp_idx[e.name]].is_on_vacation(d)
-        ]
-        night_vars = [
-            x[(d_idx, emp_idx[e.name], "night")]
-            for e in khab_duty
-            if not employees[emp_idx[e.name]].is_blocked(d)
-            and not employees[emp_idx[e.name]].is_on_vacation(d)
-        ]
-
-        if morning_vars:
-            model.add(sum(morning_vars) >= 1)
-        if evening_vars:
-            model.add(sum(evening_vars) >= 1)
-        if night_vars:
-            model.add(sum(night_vars) >= 1)
-
-    for d_idx in range(len(dates) - 1):
-        for e_idx in range(len(employees)):
+    for employee_index, employee in enumerate(employees):
+        carry = carry_for_employee(config, employee)
+        previous_streak: Any = carry.consecutive_working if carry else 0
+        previous_evening: Any = int(carry is not None and carry.last_shift == ShiftType.EVENING)
+        employee_hours = []
+        for day_index, day in enumerate(dates):
+            for shift in ALL_SHIFTS:
+                variables[day_index, employee_index, shift] = model.new_bool_var(
+                    f"assignment_{day_index}_{employee_index}_{shift.value}"
+                )
+            model.add_exactly_one(variables[day_index, employee_index, s] for s in ALL_SHIFTS)
+            w = model.new_bool_var(f"working_{day_index}_{employee_index}")
+            work[day_index, employee_index] = w
+            model.add(w == sum(variables[day_index, employee_index, s] for s in WORKING_SHIFTS))
+            absent = None
+            if employee.is_on_sick_leave(day):
+                absent = ShiftType.SICK_LEAVE
+            elif employee.is_on_vacation(day):
+                absent = ShiftType.VACATION
+            for shift in (ShiftType.VACATION, ShiftType.SICK_LEAVE):
+                model.add(variables[day_index, employee_index, shift] == int(shift == absent))
+            for shift in WORKING_SHIFTS:
+                if not can_assign_work(
+                    config, calendar, employee, day, shift, None, 0, allow_pending=True
+                ):
+                    model.add(variables[day_index, employee_index, shift] == 0)
+            if employee.is_day_off_weekly(day) and not approval_for(
+                config, employee, day, "weekly_day_off"
+            ):
+                if allow_pending:
+                    pending_terms.append(w)
+                else:
+                    model.add(w == 0)
+            current_streak = model.new_int_var(0, 7, f"streak_{day_index}_{employee_index}")
+            streaks[day_index, employee_index] = current_streak
+            model.add(current_streak == previous_streak + 1).only_enforce_if(w)
+            model.add(current_streak == 0).only_enforce_if(w.negated())
+            normal = min(normal_streak_limit(employee), MAX_CONSECUTIVE_WORKING_DEFAULT)
+            approved_limit = max(
+                (
+                    item.value
+                    for item in config.approvals
+                    if item.rule == "working_streak"
+                    and item.date == day
+                    and item.value is not None
+                    and matches_employee(item.employee_name, item.employee_id, employee)
+                ),
+                default=normal,
+            )
+            limit = max(normal, approved_limit)
+            if allow_pending:
+                violation = model.new_bool_var(f"streak_confirmation_{day_index}_{employee_index}")
+                model.add(current_streak > limit).only_enforce_if(violation)
+                model.add(current_streak <= limit).only_enforce_if(violation.negated())
+                pending_terms.append(violation)
+            else:
+                model.add(current_streak <= limit)
             model.add(
-                x[(d_idx, e_idx, "evening")]
-                + x[(d_idx + 1, e_idx, "morning")]
-                + x[(d_idx + 1, e_idx, "workday")]
-                <= 1
+                previous_evening + variables[day_index, employee_index, ShiftType.MORNING] <= 1
             )
+            model.add(
+                previous_evening + variables[day_index, employee_index, ShiftType.WORKDAY] <= 1
+            )
+            previous_streak = current_streak
+            previous_evening = variables[day_index, employee_index, ShiftType.EVENING]
+            squared = model.new_int_var(0, 49, f"streak_cost_{day_index}_{employee_index}")
+            model.add_multiplication_equality(squared, [current_streak, current_streak])
+            streak_terms.append(squared)
+            base_hours = calendar.hours(day) or 8
+            pin = pins.get((day, employee.name))
+            if pin:
+                model.add(variables[day_index, employee_index, pin.shift] == 1)
+            allowed_hours = {0, base_hours}
+            allowed_hours.update(
+                item.value
+                for item in config.approvals
+                if item.rule == "individual_workday"
+                and item.date == day
+                and item.value is not None
+                and item.value <= base_hours
+                and approval_for(config, employee, day, "individual_workday", item.value)
+            )
+            if pin and pin.working_hours is not None:
+                allowed_hours.add(pin.working_hours)
+            if allow_pending:
+                allowed_hours.update(range(1, base_hours + 1))
+            hours = model.new_int_var_from_domain(
+                cp_model.Domain.from_values(sorted(allowed_hours)),
+                f"workday_hours_{day_index}_{employee_index}",
+            )
+            r_hours[day_index, employee_index] = hours
+            r = variables[day_index, employee_index, ShiftType.WORKDAY]
+            model.add(hours == 0).only_enforce_if(r.negated())
+            model.add(hours >= 1).only_enforce_if(r)
+            model.add(hours <= base_hours)
+            if pin and pin.working_hours is not None:
+                model.add(hours == pin.working_hours)
+            if allow_pending:
+                individual = model.new_bool_var(f"individual_{day_index}_{employee_index}")
+                explicit = pin is not None and pin.working_hours is not None
+                model.add_allowed_assignments(
+                    [hours, individual],
+                    [
+                        (
+                            value,
+                            int(
+                                value > 0
+                                and (value != base_hours or explicit)
+                                and approval_for(config, employee, day, "individual_workday", value)
+                                is None
+                            ),
+                        )
+                        for value in allowed_hours
+                    ],
+                )
+                pending_terms.append(individual)
+            employee_hours.append(
+                hours
+                + base_hours
+                * sum(
+                    variables[day_index, employee_index, s]
+                    for s in (
+                        ShiftType.MORNING,
+                        ShiftType.EVENING,
+                        ShiftType.NIGHT,
+                    )
+                )
+            )
+        model.add(sum(employee_hours) == targets[employee.name].selected_hours)
+        for day_index in range(len(dates)):
+            current_off = 1 - work[day_index, employee_index]
+            previous_work = (
+                work[day_index - 1, employee_index]
+                if day_index
+                else int(carry is not None and carry.last_shift in WORKING_SHIFTS)
+            )
+            next_work = work[day_index + 1, employee_index] if day_index + 1 < len(dates) else 0
+            isolated = model.new_bool_var(f"isolated_{day_index}_{employee_index}")
+            model.add(isolated <= current_off)
+            model.add(isolated <= previous_work)
+            model.add(isolated <= next_work)
+            model.add(isolated >= current_off + previous_work + next_work - 2)
+            isolated_terms.append(isolated)
 
-    for e_idx, emp in enumerate(employees):
-        max_cw = emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
-        for start in range(len(dates) - max_cw):
-            window = range(start, start + max_cw + 1)
-            if start + max_cw >= len(dates):
-                break
-            work_vars = []
-            for d_idx in window:
-                for s in ["morning", "evening", "night", "workday"]:
-                    work_vars.append(x[(d_idx, e_idx, s)])
-            model.add(sum(work_vars) <= max_cw)
-
-    for pin in config.pins:
-        d_idx_pin = (pin.date - dates[0]).days
-        if 0 <= d_idx_pin < len(dates):
-            e_idx_pin = emp_idx.get(pin.employee_name)
-            if e_idx_pin is not None:
-                model.add(x[(d_idx_pin, e_idx_pin, pin.shift.value)] == 1)
-
-    production_days = sum(1 for d in dates if d.weekday() < 5 and d not in holidays)
-
-    objective_terms = []
-
-    for e_idx, _emp in enumerate(employees):
-        target = production_days
-        work_total = sum(
-            x[(d, e_idx, s)]
-            for d in range(len(dates))
-            for s in ["morning", "evening", "night", "workday"]
+    for day_index, _day in enumerate(dates):
+        for shift in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT):
+            model.add(sum(variables[day_index, e, shift] for e in range(len(employees))) >= 1)
+    for shift in (ShiftType.EVENING, ShiftType.NIGHT):
+        eligible_names = eligible_duty_names(
+            config, calendar, dates, (shift,), allow_pending=allow_pending
         )
-        dev = model.new_int_var(0, len(dates), f"dev_{e_idx}")
-        model.add(work_total - target <= dev)
-        model.add(target - work_total <= dev)
-        objective_terms.append(dev * 10)
-
-    for e_idx in range(len(employees)):
-        for d_idx in range(1, len(dates) - 1):
-            is_off = x[(d_idx, e_idx, "day_off")]
-            prev_work = sum(
-                x[(d_idx - 1, e_idx, s)] for s in ["morning", "evening", "night", "workday"]
+        eligible = [
+            e
+            for e, employee in enumerate(employees)
+            if targets[employee.name].selected_hours > 0 and employee.name in eligible_names
+        ]
+        total_target = sum(targets[employees[e].name].selected_hours for e in eligible)
+        total_count = sum(variables[d, e, shift] for d in range(len(dates)) for e in eligible)
+        for e in eligible:
+            count = sum(variables[d, e, shift] for d in range(len(dates)))
+            deviation = model.new_int_var(
+                0, len(dates) * max(total_target, 1) * len(employees), f"balance_{shift.value}_{e}"
             )
-            next_work = sum(
-                x[(d_idx + 1, e_idx, s)] for s in ["morning", "evening", "night", "workday"]
+            model.add_abs_equality(
+                deviation,
+                count * total_target - total_count * targets[employees[e].name].selected_hours,
             )
-            isolated = model.new_bool_var(f"iso_{e_idx}_{d_idx}")
-            model.add(is_off >= 1).only_enforce_if(isolated)
-            model.add(prev_work >= 1).only_enforce_if(isolated)
-            model.add(next_work >= 1).only_enforce_if(isolated)
-            model.add(is_off == 0).only_enforce_if(isolated.negated())
-            objective_terms.append(isolated * 5)
-
-    for e_idx, emp in enumerate(employees):
-        if emp.preferred_shift is None:
-            continue
-        pref = emp.preferred_shift.value
-        if pref not in ("morning", "evening", "night"):
-            continue
-        for d_idx in range(len(dates)):
-            for s in ("morning", "evening", "night"):
-                if s != pref:
-                    objective_terms.append(x[(d_idx, e_idx, s)] * 3)
-
-    model.minimize(sum(objective_terms))
-
-    proto = model.Proto()
-    logger.debug(
-        "solver_model_built",
-        num_variables=len(proto.variables),
-        num_constraints=len(proto.constraints),
+            fairness_terms.append(deviation)
+    off_duty_names = eligible_duty_names(
+        config,
+        calendar,
+        sorted(calendar.off_dates()),
+        (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT),
+        allow_pending=allow_pending,
     )
+    for city in {employee.city for employee in employees}:
+        eligible = [
+            e
+            for e, employee in enumerate(employees)
+            if employee.city == city
+            and employee.name in off_duty_names
+            and targets[employee.name].selected_hours > 0
+        ]
+        total_target = sum(targets[employees[e].name].selected_hours for e in eligible)
+        counts = {
+            e: sum(
+                variables[d, e, shift]
+                for d, day in enumerate(dates)
+                if not calendar.is_working(day)
+                for shift in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT)
+            )
+            for e in eligible
+        }
+        total_count = sum(counts.values())
+        for e in eligible:
+            deviation = model.new_int_var(
+                0,
+                len(dates) * max(total_target, 1) * len(employees),
+                f"weekend_balance_{city.value}_{e}",
+            )
+            model.add_abs_equality(
+                deviation,
+                counts[e] * total_target - total_count * targets[employees[e].name].selected_hours,
+            )
+            weekend_terms.append(deviation)
 
+    longest = model.new_int_var(0, 7, "longest_working_streak")
+    model.add_max_equality(longest, list(streaks.values()))
+    layers = [
+        sum(pending_terms),
+        sum(isolated_terms),
+        longest * 100000 + sum(streak_terms),
+        sum(fairness_terms),
+        sum(weekend_terms),
+    ]
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = timeout
-    status = solver.solve(model)
-
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        from duty_schedule.scheduler.core import ScheduleError
-
-        logger.error("solver_no_solution", status=solver.status_name(status))
-        raise ScheduleError(
-            f"CP-SAT solver не нашёл решения (статус: {solver.status_name(status)})"
+    solver.parameters.max_time_in_seconds = max(timeout / 5, 0.01)
+    solver.parameters.random_seed = config.seed
+    solver.parameters.num_search_workers = 1
+    best_days: list[DaySchedule] | None = None
+    final_status = "timeout"
+    objective_values: list[int] = []
+    elapsed = 0.0
+    for layer in layers:
+        model.minimize(layer)
+        status = solver.solve(model)
+        elapsed += solver.wall_time
+        if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            if best_days is None:
+                final_status = (
+                    "infeasible"
+                    if status == cp_model.INFEASIBLE
+                    else "model_invalid"
+                    if status == cp_model.MODEL_INVALID
+                    else "timeout"
+                )
+            break
+        best_days = []
+        for d, day in enumerate(dates):
+            schedule_day = DaySchedule(date=day, is_holiday=not calendar.is_working(day))
+            for e, employee in enumerate(employees):
+                for shift in ALL_SHIFTS:
+                    if solver.value(variables[d, e, shift]):
+                        getattr(schedule_day, shift.value).append(employee.name)
+                        if shift == ShiftType.WORKDAY:
+                            calculated_hours = solver.value(r_hours[d, e])
+                            pin = pins.get((day, employee.name))
+                            if (
+                                calculated_hours != (calendar.hours(day) or 8)
+                                or pin
+                                and pin.working_hours is not None
+                            ):
+                                schedule_day.workday_hours[employee.name] = calculated_hours
+            best_days.append(schedule_day)
+        final_status = "optimal" if status == cp_model.OPTIMAL else "feasible"
+        objective_values.append(round(solver.objective_value))
+        if status != cp_model.OPTIMAL:
+            break
+        model.add(layer == round(solver.objective_value))
+    if best_days is not None and len(objective_values) < len(layers):
+        final_status = "feasible"
+    if best_days is None:
+        best_days = []
+        for day in dates:
+            schedule_day = DaySchedule(date=day, is_holiday=not calendar.is_working(day))
+            for employee in employees:
+                shift = (
+                    ShiftType.SICK_LEAVE
+                    if employee.is_on_sick_leave(day)
+                    else ShiftType.VACATION
+                    if employee.is_on_vacation(day)
+                    else ShiftType.DAY_OFF
+                )
+                pin = pins.get((day, employee.name))
+                if pin:
+                    shift = pin.shift
+                    if pin.working_hours is not None:
+                        schedule_day.workday_hours[employee.name] = pin.working_hours
+                getattr(schedule_day, shift.value).append(employee.name)
+            best_days.append(schedule_day)
+    result = validate_schedule_result(
+        Schedule(
+            config=config,
+            days=best_days,
+            search_status=final_status,
+            metadata={
+                "solver": "cpsat",
+                "solver_status": final_status.upper(),
+                "objective_values": objective_values,
+                "duration_ms": round(elapsed * 1000, 1),
+            },
         )
-
-    duration_ms = round(solver.wall_time * 1000, 1)
-    timed_out = status == cp_model.FEASIBLE and solver.wall_time >= timeout * 0.95
+    )
+    if allow_pending and any(d.code == "approval_required" for d in result.diagnostics):
+        result.search_status = "pending_approval"
     logger.info(
         "solver_finished",
-        status=solver.status_name(status),
-        objective=solver.objective_value,
-        duration_ms=duration_ms,
-        timed_out=timed_out,
+        status=final_status,
+        duration_ms=round(elapsed * 1000, 1),
+        ready=result.status == "ready",
     )
-
-    days: list[DaySchedule] = []
-    for d_idx, d in enumerate(dates):
-        morning_names: list[str] = []
-        evening_names: list[str] = []
-        night_names: list[str] = []
-        workday_names: list[str] = []
-        day_off_names: list[str] = []
-        vacation_names: list[str] = []
-
-        for e_idx, emp in enumerate(employees):
-            for s, lst in [
-                ("morning", morning_names),
-                ("evening", evening_names),
-                ("night", night_names),
-                ("workday", workday_names),
-                ("day_off", day_off_names),
-                ("vacation", vacation_names),
-            ]:
-                if solver.value(x[(d_idx, e_idx, s)]):
-                    lst.append(emp.name)
-
-        days.append(
-            DaySchedule(
-                date=d,
-                is_holiday=d in holidays,
-                morning=morning_names,
-                evening=evening_names,
-                night=night_names,
-                workday=workday_names,
-                day_off=day_off_names,
-                vacation=vacation_names,
-            )
-        )
-
-    metadata: dict = {
-        "solver": "cpsat",
-        "solver_status": solver.status_name(status),
-        "objective_value": solver.objective_value,
-        "production_working_days": production_days,
-        "holidays_count": sum(1 for d in dates if d in holidays),
-        "total_mornings": sum(len(d.morning) for d in days),
-        "total_evenings": sum(len(d.evening) for d in days),
-        "total_nights": sum(len(d.night) for d in days),
-    }
-
-    return Schedule(config=config, days=days, metadata=metadata)
+    return result

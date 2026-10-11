@@ -97,11 +97,11 @@
         "tests/unit/test_max_consecutive_constants.py::TestExplicitConstants::test_default_is_six",
         "tests/unit/test_max_consecutive_constants.py::TestExplicitConstants::test_flex_is_five",
         "tests/unit/test_max_consecutive_constants.py::TestGreedyPlanningUsesDefault::test_explicit_override_respected",
-        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesFlex::test_flex_duty_returns_flex",
-        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesFlex::test_morning_only_returns_default",
+        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesMandatoryLimit::test_flex_duty_keeps_soft_five_separate_from_mandatory_six",
+        "tests/unit/test_max_consecutive_constants.py::TestPostprocessUsesMandatoryLimit::test_morning_only_returns_default",
         "tests/unit/test_max_consecutive_constants.py::TestRealScheduleGreedyRespectsDefault::test_greedy_streaks_respect_default",
         "tests/unit/test_validation_postprocess.py::TestMaxConsecutive::test_streak_exceeds_limit",
-        "tests/unit/test_validation_postprocess.py::TestValidateOrRaise::test_soft_only_returns"
+        "tests/unit/test_validation_postprocess.py::TestValidateOrRaise::test_unconfirmed_streak_raises"
       ]
     },
     {
@@ -183,8 +183,8 @@
         "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_has_categories",
         "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_has_color",
         "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_khabarovsk_timezone",
-        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_ends_next_day",
-        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_rollover_across_year_boundary"
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_ends_same_day",
+        "tests/unit/test_ics_per_employee.py::TestGenerateEmployeeIcsBytes::test_night_shift_stays_in_year_on_december_31"
       ]
     },
     {
@@ -202,7 +202,7 @@
         "tests/unit/test_xls_import.py::TestParseBasic::test_parse_roundtrip",
         "tests/unit/test_xls_import.py::TestParseEmptyFile::test_empty_bytes",
         "tests/unit/test_xls_import.py::TestParseEmptyFile::test_random_bytes",
-        "tests/unit/test_xls_import.py::TestUnknownLabels::test_unknown_label_becomes_day_off",
+        "tests/unit/test_xls_import.py::TestUnknownLabels::test_unknown_label_is_rejected",
         "tests/unit/test_xls_import.py::TestConsecutiveWorkingAtEnd::test_4_working_days_at_end",
         "tests/unit/test_xls_import.py::TestConsecutiveOffAtEnd::test_2_off_at_end",
         "tests/unit/test_xls_import.py::TestConsecutiveSameShift::test_3_evenings_at_end",

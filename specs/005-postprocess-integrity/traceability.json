@@ -1,0 +1,27 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "POST-001",
+      "tests": [
+        "tests/unit/test_pipeline_integrity.py::test_failed_pass_rolls_back_days_states_and_changelog"
+      ]
+    },
+    {
+      "id": "POST-002",
+      "tests": [
+        "tests/unit/test_pipeline_integrity.py::test_pass_cannot_hide_blocked_work_by_modifying_employee_input",
+        "tests/integration/test_pipeline_hour_compatibility.py"
+      ]
+    },
+    {
+      "id": "POST-003",
+      "tests": [
+        "tests/integration/test_randomized_schedules.py",
+        "tests/unit/test_planning_rules.py::test_legacy_priority_does_not_change_agreed_greedy_quality_order",
+        "tests/unit/test_search_outcomes.py"
+      ]
+    }
+  ]
+}

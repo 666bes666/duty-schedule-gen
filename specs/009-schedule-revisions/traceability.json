@@ -1,0 +1,39 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "REV-001",
+      "tests": [
+        "tests/unit/test_project.py",
+        "tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "REV-002",
+      "tests": [
+        "tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours",
+        "tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project",
+        "tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "REV-003",
+      "tests": [
+        "tests/unit/test_project.py::test_edit_pins_both_changed_participants",
+        "tests/unit/test_ui_workflow.py::test_ui_range_preserves_configuration_and_manual_pins_of_each_period",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "REV-004",
+      "tests": [
+        "tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported",
+        "tests/unit/test_cli_project.py",
+        "tests/ui/test_project_journey.py"
+      ]
+    }
+  ]
+}

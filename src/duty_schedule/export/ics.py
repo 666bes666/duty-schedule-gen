@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -57,7 +57,7 @@ def _shift_times(shift: ShiftType, day: date, tz: ZoneInfo) -> tuple[datetime, d
     eh, em = SHIFT_END[shift]
     dt_start = _make_datetime(day, sh, sm, tz)
 
-    if shift in (ShiftType.EVENING, ShiftType.NIGHT):
+    if shift == ShiftType.EVENING:
         dt_end = _make_datetime(day + timedelta(days=1), eh, em, tz)
     else:
         dt_end = _make_datetime(day, eh, em, tz)
@@ -84,7 +84,7 @@ def _employees_on_shift(day: DaySchedule, shift: ShiftType) -> list[str]:
     }[shift]
 
 
-def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
+def _write_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
     """
     Сгенерировать отдельный ICS-файл для каждого типа смены.
 
@@ -95,7 +95,7 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
         Список путей к созданным файлам.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    msk_tz = ZoneInfo(schedule.config.timezone)
+    msk_tz = ZoneInfo(DEFAULT_TZ)
     khb_tz = ZoneInfo(CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ))
     year = schedule.config.year
     month = schedule.config.month
@@ -119,17 +119,29 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
                     tz_label = CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ)
                 else:
                     dt_start, dt_end = _shift_times(shift, day.date, msk_tz)
-                    tz_label = schedule.config.timezone
+                    tz_label = DEFAULT_TZ
+
+                local_tz = ZoneInfo(CITY_TZ[employee_city[name]])
+                dt_start = dt_start.astimezone(local_tz)
+                dt_end = dt_end.astimezone(local_tz)
+                individual = shift == ShiftType.WORKDAY and name in day.workday_hours
+                calendar = schedule.config.production_calendar
+                hours = day.workday_hours.get(
+                    name, (calendar.hours(day.date) or 8) if calendar else 8
+                )
 
                 event = Event()
                 event.add("SUMMARY", vText(f"Дежурство: {SHIFT_NAMES_RU[shift]} — {name}"))
                 event.add("DTSTART", dt_start)
-                event.add("DTEND", dt_end)
+                if not individual:
+                    event.add("DTEND", dt_end)
+                event.add("DTSTAMP", datetime.now(UTC))
                 event.add(
                     "DESCRIPTION",
                     vText(
                         f"Смена: {SHIFT_NAMES_RU[shift]}\n"
                         f"Часовой пояс: {tz_label}\n"
+                        f"Рабочих часов: {hours}\n"
                         f"Все на смене: {', '.join(names)}"
                     ),
                 )
@@ -157,18 +169,20 @@ def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
     return output_files
 
 
-def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes:
-    msk_tz = ZoneInfo(schedule.config.timezone)
+def _render_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes:
+    msk_tz = ZoneInfo(DEFAULT_TZ)
     khb_tz = ZoneInfo(CITY_TZ.get(City.KHABAROVSK, DEFAULT_TZ))
     year = schedule.config.year
     month = schedule.config.month
 
     employee_city = {emp.name: emp.city for emp in schedule.config.employees}
+    if employee_name not in employee_city:
+        raise ValueError("Сотрудник не найден")
 
     cal = Calendar()
     cal.add("PRODID", "-//Duty Schedule Generator//RU")
     cal.add("VERSION", "2.0")
-    cal.add("X-WR-CALNAME", f"Расписание: {employee_name}")
+    cal.add("X-WR-CALNAME", vText(f"Расписание: {employee_name}"), parameters={"VALUE": "TEXT"})
     cal.add("CALSCALE", "GREGORIAN")
     cal.add("METHOD", "PUBLISH")
 
@@ -186,10 +200,24 @@ def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes
             else:
                 dt_start, dt_end = _shift_times(shift, day.date, msk_tz)
 
+            local_tz = ZoneInfo(CITY_TZ[employee_city[employee_name]])
+            dt_start = dt_start.astimezone(local_tz)
+            dt_end = dt_end.astimezone(local_tz)
+            individual = shift == ShiftType.WORKDAY and employee_name in day.workday_hours
+            calendar = schedule.config.production_calendar
+            hours = day.workday_hours.get(
+                employee_name, (calendar.hours(day.date) or 8) if calendar else 8
+            )
+
             event = Event()
             event.add("SUMMARY", vText(SHIFT_NAMES_RU[shift]))
             event.add("DTSTART", dt_start)
-            event.add("DTEND", dt_end)
+            if not individual:
+                event.add("DTEND", dt_end)
+            event.add(
+                "DESCRIPTION", vText(f"Рабочих часов: {hours}\nНачало работы: {dt_start:%H:%M}")
+            )
+            event.add("DTSTAMP", datetime.now(UTC))
             event.add("CATEGORIES", [SHIFT_NAMES_RU[shift]])
             event.add("COLOR", _SHIFT_ICS_COLORS[shift])
             event.add(
@@ -201,3 +229,15 @@ def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes
             cal.add_component(event)
 
     return bytes(cal.to_ical())
+
+
+def export_ics(schedule: Schedule, output_dir: Path) -> list[Path]:
+    from duty_schedule.project import ensure_exportable
+
+    return _write_ics(ensure_exportable(schedule), output_dir)
+
+
+def generate_employee_ics_bytes(schedule: Schedule, employee_name: str) -> bytes:
+    from duty_schedule.project import ensure_exportable
+
+    return _render_employee_ics_bytes(ensure_exportable(schedule), employee_name)

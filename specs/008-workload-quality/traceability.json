@@ -1,0 +1,38 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "HOURS-001",
+      "tests": [
+        "tests/unit/test_workload.py::test_norm_deducts_union_of_working_absences_only",
+        "tests/unit/test_hour_consumers.py"
+      ]
+    },
+    {
+      "id": "HOURS-002",
+      "tests": [
+        "tests/unit/test_workload.py::test_full_norm_choice_is_period_specific",
+        "tests/unit/test_planning_rules.py::test_full_norm_after_short_absence_proposes_individual_r_confirmation"
+      ]
+    },
+    {
+      "id": "HOURS-003",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_individual_workday_requires_exact_confirmation",
+        "tests/integration/test_pipeline_hour_compatibility.py::test_legacy_pipeline_preserves_short_day_and_confirmed_individual_hours",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "HOURS-004",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_legacy_priority_does_not_change_agreed_greedy_quality_order",
+        "tests/unit/test_planning_rules.py::test_off_duty_quality_balances_only_available_employees",
+        "tests/unit/test_planning_rules.py::test_solver_off_duty_balance_ignores_weekday_only_duty_role",
+        "tests/unit/test_whatif_service.py::test_quality_is_proportional_to_selected_hours",
+        "tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool"
+      ]
+    }
+  ]
+}
