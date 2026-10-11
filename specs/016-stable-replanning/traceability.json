@@ -2,6 +2,8 @@
   "kind": "change",
   "status": "planned",
   "files": [
+    "docs/project-index.json",
+    "docs/project-index.md",
     "specs/016-stable-replanning/evidence.md",
     "specs/016-stable-replanning/plan.md",
     "specs/016-stable-replanning/spec.md",

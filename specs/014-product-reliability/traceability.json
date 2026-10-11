@@ -2,6 +2,8 @@
   "kind": "change",
   "status": "planned",
   "files": [
+    "docs/project-index.json",
+    "docs/project-index.md",
     "specs/000-baseline/contracts/openapi.json",
     "specs/014-product-reliability/evidence.md",
     "specs/014-product-reliability/plan.md",
@@ -50,7 +52,8 @@
       "id": "DATA-004",
       "tests": [
         "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
-        "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically"
+        "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically",
+        "tests/unit/test_product_integrity.py::test_ui_period_switch_selects_matching_calendar_before_validation"
       ]
     },
     {

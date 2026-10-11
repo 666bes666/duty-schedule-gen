@@ -6133,7 +6133,8 @@
           "id": "DATA-004",
           "tests": [
             "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
-            "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically"
+            "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically",
+            "tests/unit/test_product_integrity.py::test_ui_period_switch_selects_matching_calendar_before_validation"
           ]
         },
         {
@@ -6145,6 +6146,8 @@
         }
       ],
       "files": [
+        "docs/project-index.json",
+        "docs/project-index.md",
         "specs/000-baseline/contracts/openapi.json",
         "specs/014-product-reliability/evidence.md",
         "specs/014-product-reliability/plan.md",
@@ -6201,6 +6204,8 @@
       ],
       "files": [
         "app.py",
+        "docs/project-index.json",
+        "docs/project-index.md",
         "specs/015-guided-authoring/evidence.md",
         "specs/015-guided-authoring/plan.md",
         "specs/015-guided-authoring/spec.md",
@@ -6240,6 +6245,8 @@
         }
       ],
       "files": [
+        "docs/project-index.json",
+        "docs/project-index.md",
         "specs/016-stable-replanning/evidence.md",
         "specs/016-stable-replanning/plan.md",
         "specs/016-stable-replanning/spec.md",
@@ -6287,6 +6294,8 @@
         }
       ],
       "files": [
+        "docs/project-index.json",
+        "docs/project-index.md",
         "specs/000-baseline/contracts/openapi.json",
         "specs/017-two-month-quality/evidence.md",
         "specs/017-two-month-quality/plan.md",

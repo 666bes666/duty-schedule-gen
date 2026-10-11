@@ -3,6 +3,8 @@
   "status": "planned",
   "files": [
     "app.py",
+    "docs/project-index.json",
+    "docs/project-index.md",
     "specs/015-guided-authoring/evidence.md",
     "specs/015-guided-authoring/plan.md",
     "specs/015-guided-authoring/spec.md",

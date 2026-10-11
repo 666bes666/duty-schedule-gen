@@ -2,6 +2,8 @@
   "kind": "change",
   "status": "planned",
   "files": [
+    "docs/project-index.json",
+    "docs/project-index.md",
     "specs/000-baseline/contracts/openapi.json",
     "specs/017-two-month-quality/evidence.md",
     "specs/017-two-month-quality/plan.md",
