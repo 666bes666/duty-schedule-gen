@@ -30,8 +30,8 @@ SPECIFY_FEATURE_NO_PERSIST=1; чужие изменения сохраняютс
    actual source и живым контрактам. Зафиксировать retained adapters в audit.md.
 8. Сверить GitHub branch protections с реальными check runs. Добавить SDD на
    dev/test/main и actual renamed main checks; preserve approvals, запреты force
-   push/deletion и остальные настройки. Merge через GitHub после CI; blockers
-   фиксировать честно, без обхода review policy.
+   push/deletion и остальные настройки. По уточнению пользователя завершить
+   commit/push и CI в dev; продвижение test/main отложить до отдельного поручения.
 
 ## Проверки
 

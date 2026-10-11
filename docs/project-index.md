@@ -40,7 +40,7 @@
 | [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | complete | REV-001, REV-002, REV-003, REV-004 |
 | [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | complete | UIC-001, UIC-002, UIC-003, UIC-004 |
 | [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | complete | DEL-001, DEL-002, DEL-003, DEL-004 |
-| [specs/012-project-audit](../specs/012-project-audit/spec.md) | in-progress | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
+| [specs/012-project-audit](../specs/012-project-audit/spec.md) | complete | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
 
 ## API операции
 

@@ -60,7 +60,17 @@ journeys проверяются pytest/Playwright отдельно. Excel2016 н
 Rate limiting — process-local; публичные docs не отключают auth бизнес-endpoints.
 
 Direct-dev flow сохранён. GitHub admin enforcement существующей политики выключен;
-администратор технически может override, но правила разработки запрещают обход
-review/checks и этот аудит его не выполняет. Для test/main нужен approving review.
-CI старого SHA не является evidence нового. Доставка остаётся открытой до реальных
-новых CI/merge; её актуальный исход записывается в evidence, а не выводится из обещания.
+администратор технически может override. Direct dev push этого аудита получил
+штатное admin allowance для ещё ожидаемых remote checks; локальные gates перед
+push выполнены. Административный merge не выполнялся. Для test/main нужен review.
+CI старого SHA не является evidence нового. Пользователь уточнил поставку только
+в dev: test/main отложены. Complete012 требует dev CI и evidence опубликованного
+коммита; будущее продвижение остаётся отдельным поручением.
+
+## Приёмка согласованной поставки в dev
+
+78требований/13каталогов, все задачи аудита закрыты. Runtime794tests, UI7,
+packaged2, cold70, application coverage87.64%, tooling91.25%; независимые reviewers
+APPROVE. Sourcea069b94: Dev/SDD/Test CI success,4platform jobs исполнены.
+Подробные даты/команды/ограничения: evidence.md. В main/test код не продвигался
+по уточнению пользователя; прежняя review policy остаётся для будущего поручения.

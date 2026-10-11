@@ -5731,7 +5731,7 @@
     {
       "path": "specs/012-project-audit",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "AUD-001",

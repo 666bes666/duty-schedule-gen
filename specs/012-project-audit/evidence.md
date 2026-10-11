@@ -138,3 +138,49 @@ solver, packaged-runtime, release performance и SDD обязательны. str
 Текущий PR66 и старый CI не являются evidence нового audit SHA.
 T001–T007 закрыты проверками. T008 и status in-progress остаются до фактической
 доставки; это честное состояние, а не пропущенный артефакт.
+
+## 2026-10-11T09:41:01+03:00 — опубликованный SHA, CI и согласованный dev-only итог
+
+Основной коммит: a069b949c3945589fadab7deaa69347378f0fd98
+(`feat: enforce strict SDD and reproducible project onboarding`), опубликован в
+origin/dev сразу после коммита. Дерево основной копии после push было чистым.
+Обязательные SDD/Ruff/format/mypy выполнены перед коммитом/push; full794 runtime
+проверял ровно окончательные исходники. После него менялись только артефакты/планы.
+В основной копии установлены pre-commit и commit-msg hooks.
+
+GitHub verified тот же SHA:
+- [CI Dev](https://github.com/666bes666/duty-schedule-gen/actions/runs/38118357487): success.
+- [SDD push](https://github.com/666bes666/duty-schedule-gen/actions/runs/38118357439): success.
+- [SDD PR](https://github.com/666bes666/duty-schedule-gen/actions/runs/38118360463): success.
+- [CI Test](https://github.com/666bes666/duty-schedule-gen/actions/runs/38118360470): success;
+  Ubuntu/Windows Python3.12/3.13, security, requiredsolver, performance, lint и smoke.
+  Benchmark promotion skipped на PR ожидаем, не пропуск обязательного теста.
+
+Первый direct dev push получил серверное сообщение `Bypassed rule violations:
+5 of 5 required status checks are expected`. Это существующая admin allowance
+для принятого direct-dev flow: remote CI ещё не мог выполниться до push. Правила
+защиты не ослаблялись и не выключались; все5checks затем завершились success.
+Нельзя описывать этот push как технически невозможный до remote gates; обязательные
+локальные gates, CI и защищённое будущее продвижение разделены явно.
+Административный merge/обход approving review не выполнялся.
+
+Дополнительный настоящий cold start из GitHub:
+`git clone --depth1 --branch dev https://github.com/666bes666/duty-schedule-gen.git
+/tmp/duty-audit-github-cold-a069b94`. HEAD точно a069b949c3945589fadab7deaa69347378f0fd98.
+Новая .venv: `uv sync --locked --dev --extra solver` pass102packages.
+Context/SDD/index checks pass; cold pytest selection70passed/0failures/0errors/0skips
+(`/tmp/duty-audit-github-cold-tests.xml`). `git status --short` пусто.
+Это проверка опубликованного source SHA, дополняющая ранний staged snapshot.
+
+После предложения завершить promotion пользователь прямо уточнил:
+«пока не несём в main. продолжаем на dev». Spec/plan/tasks обновлены до закрытия
+T008: AUD-007 завершает поставку в dev с verified CI; test/main отложены и не являются
+оставшимся требованием аудита. PR66 остаётся открытым, его описание отражает dev-only
+объём; approving review не получен и не подменён. В test/main код не продвигался;
+новых тегов/релизов нет. T008 закрыт commit/push/CI и этим evidence. Status complete
+относится к согласованной поставке в dev. Это явное изменение объёма, а не ложная
+приёмка первоначально запланированных merge.
+
+Финальная запись/статусы/индекс будут опубликованы отдельным docs-коммитом;
+его собственные CI проверяются после push. Runtime/code/tests/lock от a069b94
+не меняются, поэтому исторические794tests/coverage относятся к тем же исходникам.
