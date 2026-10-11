@@ -5499,7 +5499,7 @@
     {
       "path": "specs/003-secure-api-exports",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "SEC-001",
@@ -5750,7 +5750,7 @@
     {
       "path": "specs/006-month-continuity",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "HIST-001",
@@ -5878,7 +5878,7 @@
     {
       "path": "specs/008-workload-quality",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "HOURS-001",
@@ -5954,7 +5954,7 @@
     {
       "path": "specs/009-schedule-revisions",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "REV-001",
@@ -6069,7 +6069,7 @@
     {
       "path": "specs/010-ui-configuration",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "UIC-001",
@@ -6469,7 +6469,7 @@
     {
       "path": "specs/014-product-reliability",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "DATA-001",
@@ -6549,7 +6549,7 @@
     {
       "path": "specs/015-guided-authoring",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "FLOW-001",
@@ -6606,7 +6606,7 @@
     {
       "path": "specs/016-stable-replanning",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "REPAIR-001",
@@ -6651,7 +6651,7 @@
     {
       "path": "specs/017-two-month-quality",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "QUALITY-001",

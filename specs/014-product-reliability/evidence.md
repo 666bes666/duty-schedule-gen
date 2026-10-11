@@ -36,3 +36,9 @@ DATA-003 намеренно меняет unknown-field/invalid merged variant re
 - Independent Santa cycles нашли и закрыли runtime defects; лимит3циклов потребовал разрешения владельца. Владелец явно разрешил дополнительное независимое ревью и доставку. Итог semantic_review_g PASS (47targeted tests), semantic_review_h PASS (42targeted tests). Связанные fixes проверены повторно обоими ревьюерами.
 
 Фактические ограничения: browser storage относится к тому же origin/браузеру; JSON backup остаётся переносимым. Greedy/bounded поиск не доказывает global optimum. PDF требует system libraries. GitHub test/main promotion зависит от CI и одного required approving review; локальные PASS не означают promotion. Dev delivery SHA и результат добавляются после push.
+
+## 2026-10-11 — dev delivery и закрытие контракта
+
+Реализация: `922b0c09dfc96698e62e1db414b794f07ba11576` (`feat: deliver reliable authoring, stable repair and two-month quality`). `git push origin dev` прошёл; локальный HEAD и origin/dev совпали, рабочее дерево чистое. До коммита `check_sdd.py --staged` и hooks прошли; перед push `check_sdd.py --base HEAD~1` и project_context --check прошли. Все критерии/задачи текущего контракта проверены; status complete означает реализацию и dev delivery.
+
+[PR66 dev→test](https://github.com/666bes666/duty-schedule-gen/pull/66) обновляется автоматически новым dev head. CI на новом SHA запущен; test/main promotion не выполнен и требует зелёного CI и одного required approving review. Это ограничение доставки релиза, а не непроверенное поведение закрытого контракта.
