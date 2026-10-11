@@ -84,3 +84,47 @@ pass, Ruff check: pass, format:164files pass, mypy:65sourcefiles pass.
 Git diff --check: pass; ветка dev и origin/dev до коммита совпадают.
 Исходники после финального прогона750tests больше не менялись; менялись только
 планы, traceability, evidence и пользовательская документация.
+
+## 2026-10-11T08:24:11+03:00 — контейнерный runtime и CI: ограничение закрыто
+
+Установленный Docker Desktop запущен без дополнительных разрешений; docker server29.8.1.
+`docker build -t duty-schedule-sdd:8247ddb .` завершился0. Runtime imagearm64:
+`sha256:ccc17dff0a928eb6c53fbf8fccd161ee48fc904df5282e4c3a66a63816dcec9e`.
+Сборка из committed source8247ddbdc8efe23dc389e17cf4d23922719552c9.
+
+- `uv run --no-sync python scripts/container_smoke.py --image duty-schedule-sdd:8247ddb`: exit0; реальная генерация/API/XLS/ICS/PDF и отказ forged-ready без source mounts.
+- `docker run --rm -d --name duty-sdd-ui-8247ddb -p 127.0.0.1:0:8501 duty-schedule-sdd:8247ddb`: штатный packaged UI, healthhealthy.
+- `scripts/container_smoke.py --ui-url http://<observed-loopback-port>`: exit0.
+- `DUTY_TEST_STREAMLIT_URL=http://<observed-loopback-port> uv run --no-sync pytest tests/ui/test_project_journey.py -q --no-cov --junitxml=/tmp/duty-packaged-ui.xml --tb=short -o addopts=''`: 2passed,14.17s; реальная правка/проверка/скачивание/повторное открытие и atomic failed import.
+- `scripts/check_junit.py /tmp/duty-packaged-ui.xml`: verified2executedtests без skips.
+
+Логи: /tmp/duty-docker-build.log, /tmp/duty-container-api.log, /tmp/duty-packaged-ui.log.
+Оба созданных smoke-контейнера удалены после проверки; образ оставлен для повторения.
+Локальный runtime теперь подтверждён; предыдущая запись о недоступном daemon выше
+сохраняется как исторический исход, не текущее ограничение.
+
+GitHub на том же sourceSHA:
+[CI Dev](https://github.com/666bes666/duty-schedule-gen/actions/runs/38113681686),
+[SDD Gate](https://github.com/666bes666/duty-schedule-gen/actions/runs/38113683368),
+[CI Test](https://github.com/666bes666/duty-schedule-gen/actions/runs/38113683396): success.
+Последний включает Ubuntu/Windows Python3.12/3.13, security, performance, requiredsolver
+без skips, lint/mypy и Streamlit. Benchmark promotion skipped на pull_request ожидаем.
+
+T003/T005 закрыты фактическими runtime/CI результатами. Все DEL-001..004 реализованы
+и проверены; complete относится к разработке и проверкам. PR66 вtest обновлён.
+GitHub reviewDecision=REVIEW_REQUIRED и mergeStateStatus=BLOCKED: продвижение
+веток/публикация ещё не выполнены; approving review требуется правилами GitHub.
+Это отдельный шаг доставки, не незавершённая реализация требования.
+
+## 2026-10-11T08:33:08+03:00 — итоговое ревью документов
+
+Независимое содержательное ревью одобрило 33 уникальных требования изменений
+003–011: ссылки на тесты существуют, критерии согласованы с реализацией,
+незакрытых задач и замечаний CRITICAL/HIGH/MEDIUM нет. Уточнено руководство:
+таблица UI «История» задаёт последний статус и рабочую серию; дополнительные
+счётчики доступны через YAML/XLS и сохраняются в проекте.
+
+Повторные проверки текущего дерева: SDD `--base f4326134433c9b1e8daca0a598cd88698920b9a0`,
+Ruff check, Ruff format (164 файла), mypy (65 файлов), `git diff --check` — pass.
+После общего прогона 750 tests / coverage 85.73% runtime source не изменялся;
+финальный diff содержит только семь файлов спецификации, evidence и руководства.

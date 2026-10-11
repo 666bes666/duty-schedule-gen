@@ -14,6 +14,7 @@
       "tests": [
         "tests/contract/test_revision_api.py::test_bad_range_is_native_422_before_generation",
         "tests/contract/test_revision_api.py::test_unknown_employee_quotes_and_newline_produce_json",
+        "tests/contract/test_api_strict_validation.py",
         "tests/unit/test_api_errors.py"
       ]
     },
