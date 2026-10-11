@@ -6653,7 +6653,7 @@
     {
       "path": "specs/017-two-month-quality",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "QUALITY-001",

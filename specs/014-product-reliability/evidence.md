@@ -42,3 +42,7 @@ DATA-003 намеренно меняет unknown-field/invalid merged variant re
 Реализация: `922b0c09dfc96698e62e1db414b794f07ba11576` (`feat: deliver reliable authoring, stable repair and two-month quality`). `git push origin dev` прошёл; локальный HEAD и origin/dev совпали, рабочее дерево чистое. До коммита `check_sdd.py --staged` и hooks прошли; перед push `check_sdd.py --base HEAD~1` и project_context --check прошли. Все критерии/задачи текущего контракта проверены; status complete означает реализацию и dev delivery.
 
 [PR66 dev→test](https://github.com/666bes666/duty-schedule-gen/pull/66) обновляется автоматически новым dev head. CI на новом SHA запущен; test/main promotion не выполнен и требует зелёного CI и одного required approving review. Это ограничение доставки релиза, а не непроверенное поведение закрытого контракта.
+
+## 2026-10-11 — итог runtime/platform после переносимого PDF contract test
+
+Полный локальный повтор:850passed,coverage88.20%; native PDF/security+quality41passed. Runtime неизменен; единственная тестовая правка изолирует renderer от DLL. Dev62cbecc; CI Dev/CI Test/обаSDD SUCCESS на этомSHA, Windows3.12/3.13 подтверждены. [Точные результаты и сохранённый исход Windows failure](../017-two-month-quality/evidence.md).

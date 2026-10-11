@@ -38,3 +38,7 @@ CI Test38162559093 на2ed33ce: Ubuntu3.12/3.13, CP-SAT, security, performance �
 ### Portable full local verification
 
 `UV_PROJECT_ENVIRONMENT=/tmp/duty-specs-20261011 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib uv run pytest tests/ -o addopts='' -q --ignore=tests/ui --cov=duty_schedule --cov-fail-under=80 --tb=short`: **850 passed,7warnings274.73s;coverage88.20%**. Ruff lint/format181files, mypy69files, SDD scoped/index checks прошли. T008 остаётся открытой до current-SHA Windows CI.
+
+## 2026-10-11 — portable исправление проверено на GitHub
+
+Исправление доставлено в dev commit `62cbecc0d9325dcaf24a353108afb0993c4a84b8`; первая push попытка остановилась на временной DNS ошибке, повторная прошла. На этом точном SHA [CI Test38163833907](https://github.com/666bes666/duty-schedule-gen/actions/runs/38163833907) SUCCESS: Ubuntu/Windows, Python3.12/3.13, обязательный CP-SAT без skips, security, performance и Streamlit smoke. [CI Dev38163830423](https://github.com/666bes666/duty-schedule-gen/actions/runs/38163830423) SUCCESS; SDD38163833813/38163830439 SUCCESS. Новый HTML contract test прошёл на Windows без native library и без skip; production PDF не менялся. T008 закрыта, status complete. Следующий commit изменяет только SDD evidence/status и автоматически обновлённый индекс; этот результат относится именно к62cbecc и не выдаётся за результат нового SHA. PR66 всё ещё требует одного approving review; test/main promotion не выполнен.
