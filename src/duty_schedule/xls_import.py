@@ -155,13 +155,22 @@ def parse_carry_over_from_xls(file_bytes: bytes) -> list[CarryOverState]:
             raise XlsImportError(f"Неверный период XLS: {exc}") from exc
     results: list[CarryOverState] = []
     row = 3
-    while True:
+    expected_names = set(metadata.get("employee_ids", {}))
+    while row <= ws.max_row:
         name_val = ws.cell(row=row, column=1).value
         if name_val is None or str(name_val).strip() == "":
-            break
-        name = str(name_val).strip()
-        if name.startswith("'"):
+            if any(
+                ws.cell(row=row, column=col).value is not None
+                for col in range(start_col, end_col + 1)
+            ):
+                raise XlsImportError(f"Строка {row}: пустое имя сотрудника")
+            row += 1
+            continue
+        name = str(name_val)
+        if name not in expected_names and name.startswith("'") and name[1:] in expected_names:
             name = name[1:]
+        if expected_names and name not in expected_names:
+            raise XlsImportError(f"Строка {row}: неизвестное имя {name!r}")
 
         shifts: list[ShiftType] = []
         for col in range(start_col, end_col + 1):
@@ -191,4 +200,6 @@ def parse_carry_over_from_xls(file_bytes: bytes) -> list[CarryOverState]:
         results.append(_build_carry_over(name, shifts, employee_id, as_of, initial))
         row += 1
 
+    if expected_names and {item.employee_name for item in results} != expected_names:
+        raise XlsImportError("XLS содержит неполный состав сотрудников")
     return results

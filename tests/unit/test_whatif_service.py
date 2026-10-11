@@ -43,7 +43,13 @@ def test_equal_hour_norms_do_not_hide_unbalanced_evening_duties() -> None:
     )
     first = replace(first, evening=0, selected_hours=160, target_hours=160)
     second = replace(second, evening=20, selected_hours=160, target_hours=160)
-    summary = compute_summary([first, second], Schedule(config=config, days=[]))
+    from duty_schedule.models import DaySchedule
+
+    days = [
+        DaySchedule(date=date(config.year, config.month, n), evening=[config.employees[1].name])
+        for n in range(1, 21)
+    ]
+    summary = compute_summary([first, second], Schedule(config=config, days=days))
     assert summary.fairness_score > 0
 
 
@@ -188,18 +194,20 @@ class TestComputeSummary:
             [20, 20],
             [20, 20],
         )
+        cfg = _make_config()
+        cfg.month = 2
+        cfg.production_calendar = None
+        names = [employee.name for employee in cfg.employees if employee.city == City.MOSCOW]
+        nights = [employee.name for employee in cfg.employees if employee.city == City.KHABAROVSK]
         days = [
             DaySchedule(
-                date=date(2025, 3, d),
-                morning=["A"],
-                evening=["B"],
-                night=["X"],
+                date=date(2025, 2, d),
+                morning=[names[d % 4]],
+                evening=[names[(d + 1) % 4]],
+                night=[nights[d % 2]],
             )
-            for d in range(1, 32)
+            for d in range(1, 29)
         ]
-        cfg = _make_config()
-        cfg.employees[0].name = "A"
-        cfg.employees[1].name = "B"
         schedule = Schedule(config=cfg, days=days)
         summary = compute_summary(stats, schedule)
         assert summary.fairness_score == 0.0

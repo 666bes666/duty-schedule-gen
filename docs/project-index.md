@@ -1,7 +1,7 @@
 # Индекс проекта
 
 Генерируется `uv run python scripts/project_context.py --write`; ручные изменения запрещены.
-Версия приложения: 5.0.0. Файлов: 342. Полные symbols/imports/traceability: [JSON](project-index.json).
+Версия приложения: 5.0.0. Файлов: 358. Полные symbols/imports/traceability: [JSON](project-index.json).
 
 Холодный старт: [руководство](cold-start.md). Правила: [AGENTS](../AGENTS.md), [SDD](sdd.md), [конституция](../.specify/memory/constitution.md).
 
@@ -14,15 +14,15 @@
 | codex_instructions | 10 |
 | delivery | 10 |
 | documentation | 5 |
-| domain | 13 |
+| domain | 15 |
 | export | 5 |
 | project | 20 |
 | scheduler | 19 |
 | sdd_contract | 96 |
 | sdd_toolkit | 25 |
-| tests | 100 |
+| tests | 112 |
 | tooling | 8 |
-| ui | 7 |
+| ui | 9 |
 
 ## Спецификации и требования
 
@@ -31,21 +31,21 @@
 | [specs/000-baseline](../specs/000-baseline/spec.md) | recorded | CFG-001, CFG-002, CFG-003, CFG-004, SCH-001, SCH-002, SCH-003, SCH-004, SCH-005, SCH-006, SCH-007, SCH-008, SCH-009, SCH-010, SCH-011, EXP-001, EXP-002, EXP-003, EXP-004, EXP-005, CLI-001, CLI-002, UI-001, UI-002, API-001, API-002, API-003 |
 | [specs/001-sdd-adoption](../specs/001-sdd-adoption/spec.md) | complete | SDD-001, SDD-002, SDD-003, SDD-004, SDD-005, SDD-006 |
 | [specs/002-dependency-update](../specs/002-dependency-update/spec.md) | complete | DEP-001, DEP-002, DEP-003, DEP-004, DEP-005 |
-| [specs/003-secure-api-exports](../specs/003-secure-api-exports/spec.md) | planned | SEC-001, SEC-002, SEC-003 |
+| [specs/003-secure-api-exports](../specs/003-secure-api-exports/spec.md) | in-progress | SEC-001, SEC-002, SEC-003 |
 | [specs/004-scheduling-validity](../specs/004-scheduling-validity/spec.md) | complete | VALID-001, VALID-002, VALID-003, VALID-004 |
 | [specs/005-postprocess-integrity](../specs/005-postprocess-integrity/spec.md) | complete | POST-001, POST-002, POST-003 |
-| [specs/006-month-continuity](../specs/006-month-continuity/spec.md) | planned | HIST-001, HIST-002, HIST-003, HIST-004 |
+| [specs/006-month-continuity](../specs/006-month-continuity/spec.md) | in-progress | HIST-001, HIST-002, HIST-003, HIST-004 |
 | [specs/007-calendar-shift-model](../specs/007-calendar-shift-model/spec.md) | complete | TIME-001, TIME-002, TIME-003 |
-| [specs/008-workload-quality](../specs/008-workload-quality/spec.md) | planned | HOURS-001, HOURS-002, HOURS-003, HOURS-004, HOURS-005 |
-| [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | planned | REV-001, REV-002, REV-003, REV-004, REV-005 |
-| [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | planned | UIC-001, UIC-002, UIC-003, UIC-004, UIC-005, UIC-006 |
+| [specs/008-workload-quality](../specs/008-workload-quality/spec.md) | in-progress | HOURS-001, HOURS-002, HOURS-003, HOURS-004, HOURS-005 |
+| [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | in-progress | REV-001, REV-002, REV-003, REV-004, REV-005 |
+| [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | in-progress | UIC-001, UIC-002, UIC-003, UIC-004, UIC-005, UIC-006 |
 | [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | complete | DEL-001, DEL-002, DEL-003, DEL-004 |
 | [specs/012-project-audit](../specs/012-project-audit/spec.md) | complete | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
 | [specs/013-product-logic-audit](../specs/013-product-logic-audit/spec.md) | complete | PAUD-001, PAUD-002, PAUD-003, PAUD-004, PAUD-005 |
-| [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | planned | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
-| [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | planned | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
-| [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | planned | REPAIR-001, REPAIR-002 |
-| [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | planned | QUALITY-001, QUALITY-002, QUALITY-003 |
+| [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | in-progress | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
+| [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | in-progress | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
+| [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | in-progress | REPAIR-001, REPAIR-002 |
+| [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | in-progress | QUALITY-001, QUALITY-002, QUALITY-003 |
 
 ## API операции
 
@@ -277,9 +277,11 @@
 | [src/duty_schedule/export/ics.py](../src/duty_schedule/export/ics.py) | export |
 | [src/duty_schedule/export/pdf.py](../src/duty_schedule/export/pdf.py) | export |
 | [src/duty_schedule/export/xls.py](../src/duty_schedule/export/xls.py) | export |
+| [src/duty_schedule/input_validation.py](../src/duty_schedule/input_validation.py) | domain |
 | [src/duty_schedule/logging.py](../src/duty_schedule/logging.py) | domain |
 | [src/duty_schedule/models.py](../src/duty_schedule/models.py) | domain |
 | [src/duty_schedule/project.py](../src/duty_schedule/project.py) | domain |
+| [src/duty_schedule/quality_history.py](../src/duty_schedule/quality_history.py) | domain |
 | [src/duty_schedule/scheduler/__init__.py](../src/duty_schedule/scheduler/__init__.py) | scheduler |
 | [src/duty_schedule/scheduler/changelog.py](../src/duty_schedule/scheduler/changelog.py) | scheduler |
 | [src/duty_schedule/scheduler/constraints.py](../src/duty_schedule/scheduler/constraints.py) | scheduler |
@@ -301,6 +303,8 @@
 | [src/duty_schedule/scheduler/validation.py](../src/duty_schedule/scheduler/validation.py) | scheduler |
 | [src/duty_schedule/stats.py](../src/duty_schedule/stats.py) | domain |
 | [src/duty_schedule/ui/__init__.py](../src/duty_schedule/ui/__init__.py) | ui |
+| [src/duty_schedule/ui/autosave.py](../src/duty_schedule/ui/autosave.py) | ui |
+| [src/duty_schedule/ui/autosave_component/index.html](../src/duty_schedule/ui/autosave_component/index.html) | ui |
 | [src/duty_schedule/ui/builders.py](../src/duty_schedule/ui/builders.py) | ui |
 | [src/duty_schedule/ui/components.py](../src/duty_schedule/ui/components.py) | ui |
 | [src/duty_schedule/ui/config_io.py](../src/duty_schedule/ui/config_io.py) | ui |
@@ -325,6 +329,8 @@
 | [tests/contract/test_export_format_contract.py](../tests/contract/test_export_format_contract.py) | tests |
 | [tests/contract/test_model_contracts.py](../tests/contract/test_model_contracts.py) | tests |
 | [tests/contract/test_openapi_snapshot.py](../tests/contract/test_openapi_snapshot.py) | tests |
+| [tests/contract/test_product_inputs.py](../tests/contract/test_product_inputs.py) | tests |
+| [tests/contract/test_quality_context.py](../tests/contract/test_quality_context.py) | tests |
 | [tests/contract/test_revision_api.py](../tests/contract/test_revision_api.py) | tests |
 | [tests/e2e/__init__.py](../tests/e2e/__init__.py) | tests |
 | [tests/e2e/conftest.py](../tests/e2e/conftest.py) | tests |
@@ -344,6 +350,8 @@
 | [tests/integration/test_pipeline_hour_compatibility.py](../tests/integration/test_pipeline_hour_compatibility.py) | tests |
 | [tests/integration/test_priority_integration.py](../tests/integration/test_priority_integration.py) | tests |
 | [tests/integration/test_randomized_schedules.py](../tests/integration/test_randomized_schedules.py) | tests |
+| [tests/integration/test_replanning.py](../tests/integration/test_replanning.py) | tests |
+| [tests/integration/test_two_month_quality.py](../tests/integration/test_two_month_quality.py) | tests |
 | [tests/integration/test_whatif_endpoint.py](../tests/integration/test_whatif_endpoint.py) | tests |
 | [tests/integration/test_xls_roundtrip.py](../tests/integration/test_xls_roundtrip.py) | tests |
 | [tests/performance/__init__.py](../tests/performance/__init__.py) | tests |
@@ -357,8 +365,12 @@
 | [tests/ui/conftest.py](../tests/ui/conftest.py) | tests |
 | [tests/ui/fixtures.py](../tests/ui/fixtures.py) | tests |
 | [tests/ui/test_export_download.py](../tests/ui/test_export_download.py) | tests |
+| [tests/ui/test_first_month_journey.py](../tests/ui/test_first_month_journey.py) | tests |
 | [tests/ui/test_page_load.py](../tests/ui/test_page_load.py) | tests |
+| [tests/ui/test_product_recovery.py](../tests/ui/test_product_recovery.py) | tests |
 | [tests/ui/test_project_journey.py](../tests/ui/test_project_journey.py) | tests |
+| [tests/ui/test_quality_journey.py](../tests/ui/test_quality_journey.py) | tests |
+| [tests/ui/test_replanning_journey.py](../tests/ui/test_replanning_journey.py) | tests |
 | [tests/ui/test_schedule_generation.py](../tests/ui/test_schedule_generation.py) | tests |
 | [tests/unit/__init__.py](../tests/unit/__init__.py) | tests |
 | [tests/unit/test_api_auth.py](../tests/unit/test_api_auth.py) | tests |
@@ -395,14 +407,18 @@
 | [tests/unit/test_planning_rules.py](../tests/unit/test_planning_rules.py) | tests |
 | [tests/unit/test_postprocess.py](../tests/unit/test_postprocess.py) | tests |
 | [tests/unit/test_postprocess_priority.py](../tests/unit/test_postprocess_priority.py) | tests |
+| [tests/unit/test_product_integrity.py](../tests/unit/test_product_integrity.py) | tests |
 | [tests/unit/test_project.py](../tests/unit/test_project.py) | tests |
 | [tests/unit/test_project_context.py](../tests/unit/test_project_context.py) | tests |
+| [tests/unit/test_replanning.py](../tests/unit/test_replanning.py) | tests |
 | [tests/unit/test_schedule_diff.py](../tests/unit/test_schedule_diff.py) | tests |
 | [tests/unit/test_scheduler.py](../tests/unit/test_scheduler.py) | tests |
 | [tests/unit/test_sdd.py](../tests/unit/test_sdd.py) | tests |
 | [tests/unit/test_search_outcomes.py](../tests/unit/test_search_outcomes.py) | tests |
 | [tests/unit/test_solver.py](../tests/unit/test_solver.py) | tests |
 | [tests/unit/test_stats.py](../tests/unit/test_stats.py) | tests |
+| [tests/unit/test_two_month_quality.py](../tests/unit/test_two_month_quality.py) | tests |
+| [tests/unit/test_ui_autosave.py](../tests/unit/test_ui_autosave.py) | tests |
 | [tests/unit/test_ui_validation.py](../tests/unit/test_ui_validation.py) | tests |
 | [tests/unit/test_ui_workflow.py](../tests/unit/test_ui_workflow.py) | tests |
 | [tests/unit/test_validation.py](../tests/unit/test_validation.py) | tests |

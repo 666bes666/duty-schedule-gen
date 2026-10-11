@@ -96,6 +96,7 @@ class EmployeeState:
 def generate_schedule(
     config: Config,
     holidays: set[date] | None = None,
+    baseline: Schedule | None = None,
 ) -> Schedule:
     ctx_vars = structlog.contextvars.get_contextvars()
     owns_context = "request_id" not in ctx_vars and "operation_id" not in ctx_vars
@@ -103,7 +104,48 @@ def generate_schedule(
         structlog.contextvars.bind_contextvars(operation_id=uuid.uuid4().hex[:8])
 
     try:
-        return _generate_schedule_impl(config, holidays)
+        if baseline is not None:
+            from duty_schedule.scheduler.postprocess.quality import changed_cells, repair_metadata
+            from duty_schedule.scheduler.validation import validate_schedule_result
+
+            names = {e.employee_id: e.name for e in config.employees}
+            rename = {e.name: names.get(e.employee_id, e.name) for e in baseline.config.employees}
+            preserved = baseline.model_copy(deep=True)
+            preserved.config = config.model_copy(deep=True)
+            for day in preserved.days:
+                for shift in ShiftType:
+                    setattr(
+                        day,
+                        shift.value,
+                        [rename.get(name, name) for name in getattr(day, shift.value)],
+                    )
+                day.workday_hours = {
+                    rename.get(name, name): hours for name, hours in day.workday_hours.items()
+                }
+            preserved = validate_schedule_result(preserved)
+            if preserved.status == "ready" and not changed_cells(baseline, preserved):
+                from duty_schedule.scheduler.postprocess.quality import optimization_provenance
+
+                preserved.search_status = "preserved_baseline"
+                preserved.metadata["repair"] = repair_metadata(baseline, preserved, "proven_zero")
+                preserved.metadata["optimization"] = optimization_provenance(
+                    baseline, preserved, "preserved_baseline"
+                )
+                from duty_schedule.quality_history import quality_report
+
+                preserved.metadata["quality"] = quality_report(preserved)
+                return preserved
+        result = _generate_schedule_impl(config, holidays, baseline)
+        if baseline is not None:
+            from duty_schedule.scheduler.postprocess.quality import repair_metadata
+
+            result.metadata["repair"] = repair_metadata(
+                baseline, result, result.metadata.get("repair_optimality", "heuristic")
+            )
+        from duty_schedule.quality_history import quality_report
+
+        result.metadata["quality"] = quality_report(result)
+        return result
     finally:
         if owns_context:
             structlog.contextvars.unbind_contextvars("operation_id")
@@ -112,6 +154,7 @@ def generate_schedule(
 def _generate_schedule_impl(
     config: Config,
     holidays: set[date] | None = None,
+    baseline: Schedule | None = None,
 ) -> Schedule:
     from duty_schedule.calendar import calendar_for_config
     from duty_schedule.scheduler.greedy import build_candidate
@@ -160,14 +203,14 @@ def _generate_schedule_impl(
         pending = sum(item.code == "approval_required" for item in schedule.diagnostics)
         return errors, deficit, pending
 
-    if config.solver == "cpsat":
+    if config.solver == "cpsat" or baseline is not None:
         from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
 
         try:
-            result = solve_schedule(working_config)
+            result = solve_schedule(working_config, baseline=baseline)
             candidates.append(result)
             if not acceptable(result) and result.search_status == "infeasible":
-                pending = solve_schedule(working_config, allow_pending=True)
+                pending = solve_schedule(working_config, allow_pending=True, baseline=baseline)
                 candidates.append(pending)
                 if acceptable(pending, pending=True):
                     result = pending
@@ -188,6 +231,7 @@ def _generate_schedule_impl(
                 calendar,
                 config.seed + attempt * 1009,
                 allow_pending,
+                baseline,
             )
             candidate = validate_schedule_result(
                 Schedule(
@@ -227,7 +271,7 @@ def _generate_schedule_impl(
     if acceptable(best):
         from duty_schedule.scheduler.postprocess.quality import optimize_candidate
 
-        best = optimize_candidate(best)
+        best = optimize_candidate(best, baseline=baseline)
     logger.info(
         "greedy_phase_done",
         duration_ms=round((time.monotonic() - started) * 1000, 1),

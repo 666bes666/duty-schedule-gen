@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "planned",
+  "status": "in-progress",
   "requirements": [
     {
       "id": "HOURS-001",
@@ -40,7 +40,7 @@
       "id": "HOURS-005",
       "tests": [
         "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
-        "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance"
+        "tests/unit/test_product_integrity.py::test_optimizer_without_changelog_reports_changes_and_quality"
       ]
     }
   ],

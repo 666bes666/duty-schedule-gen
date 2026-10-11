@@ -10,6 +10,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from duty_schedule._errors_fmt import format_validation_errors
+from duty_schedule.input_validation import migrate_legacy_config
 from duty_schedule.models import Config, Employee, PinnedAssignment, VacationPeriod
 from duty_schedule.ui.mappings import (
     _CITY_TO_RU,
@@ -40,7 +41,7 @@ def _optional_number(value: Any) -> Any:
 
 def parse_config_yaml(raw: str) -> Config:
     try:
-        return Config.model_validate(yaml.safe_load(raw))
+        return Config.model_validate(migrate_legacy_config(yaml.safe_load(raw)))
     except yaml.YAMLError as exc:
         raise ValueError(f"Ошибка разбора YAML: {exc}") from exc
     except ValidationError as exc:
@@ -107,8 +108,13 @@ def employees_from_table(
     by_name = {e.name: e for e in base_config.employees} if base_config else {}
     result = []
     for _, row in df.iterrows():
-        name = _text(row.get("Имя"))
-        if not name:
+        value = row.get("Имя")
+        name = "" if value is None or pd.isna(value) else str(value)
+        if not name.strip():
+            if _text(row.get("ID")) or any(
+                _text(row.get(column)) for column in ("Город", "График")
+            ):
+                raise ValueError("Имя сотрудника не должно быть пустым")
             continue
         employee_id = _text(row.get("ID"))
         previous = by_id.get(employee_id) or by_name.get(name)

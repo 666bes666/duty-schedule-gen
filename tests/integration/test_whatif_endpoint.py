@@ -119,7 +119,7 @@ class TestWhatIfCompare:
         assert resp.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_partial_failure_variant(self, client) -> None:
+    async def test_invalid_variant_rejected_before_generation(self, client) -> None:
         bad_employees = [_emp("Один Один")]
         body = {
             "baseline": _baseline(),
@@ -134,11 +134,8 @@ class TestWhatIfCompare:
                 json=body,
                 headers=JSON_HEADERS,
             )
-        assert resp.status_code == 200
-        data = resp.json()
-        statuses = {v["name"]: v["status"] for v in data["variants"]}
-        assert statuses["good"] == "success"
-        assert statuses["bad"] == "error"
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["loc"][:4] == ["body", "variants", 1, "patch"]
 
     @pytest.mark.asyncio
     async def test_calendar_error_502(self, client) -> None:

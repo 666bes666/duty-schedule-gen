@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "planned",
+  "status": "in-progress",
   "files": [
     "docs/project-index.json",
     "docs/project-index.md",
@@ -21,37 +21,50 @@
     "src/duty_schedule/scheduler/core.py",
     "src/duty_schedule/scheduler/greedy.py",
     "src/duty_schedule/scheduler/multimonth.py",
+    "src/duty_schedule/scheduler/postprocess/pipeline.py",
     "src/duty_schedule/scheduler/postprocess/quality.py",
     "src/duty_schedule/scheduler/solver.py",
     "src/duty_schedule/stats.py",
     "src/duty_schedule/ui/components.py",
     "src/duty_schedule/ui/views.py",
+    "tests/contract/test_api_response_schema_contract.py",
     "tests/contract/test_quality_context.py",
     "tests/integration/test_two_month_quality.py",
     "tests/ui/test_quality_journey.py",
-    "tests/unit/test_two_month_quality.py"
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_two_month_quality.py",
+    "tests/unit/test_whatif_service.py"
   ],
   "requirements": [
     {
       "id": "QUALITY-001",
       "tests": [
+        "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months",
+        "tests/integration/test_two_month_quality.py::test_changed_role_receives_only_eligible_period_weight",
         "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
-        "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+        "tests/unit/test_two_month_quality.py::test_new_and_departed_employee_do_not_invent_previous_counts"
       ]
     },
     {
       "id": "QUALITY-002",
       "tests": [
         "tests/unit/test_two_month_quality.py::test_missing_and_stale_history_are_not_zero",
-        "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source"
+        "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source",
+        "tests/unit/test_two_month_quality.py::test_project_invalidates_old_quality_source_and_reload",
+        "tests/unit/test_two_month_quality.py::test_rebinding_updated_previous_revision_reenables_quality",
+        "tests/unit/test_two_month_quality.py::test_whatif_preserves_trusted_quality_context",
+        "tests/unit/test_two_month_quality.py::test_year_boundary_checks_adjacent_period_without_fabricating_history",
+        "tests/unit/test_two_month_quality.py::test_config_save_cannot_resurrect_stale_quality_source"
       ]
     },
     {
       "id": "QUALITY-003",
       "tests": [
-        "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
         "tests/contract/test_quality_context.py::test_standalone_api_reports_month_only_quality",
-        "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window"
+        "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window",
+        "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+        "tests/unit/test_two_month_quality.py::test_pdf_renderer_receives_month_and_boundary_series",
+        "tests/unit/test_two_month_quality.py::test_xls_external_quality_source_id_is_plain_text"
       ]
     }
   ]

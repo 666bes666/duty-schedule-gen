@@ -17,6 +17,7 @@ from duty_schedule._errors_fmt import format_validation_errors
 from duty_schedule.calendar import CalendarError, fetch_production_calendar
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
+from duty_schedule.input_validation import migrate_legacy_config
 from duty_schedule.logging import get_logger, setup_logging
 from duty_schedule.models import City, Config, Schedule, collect_config_issues
 from duty_schedule.project import (
@@ -46,7 +47,7 @@ def _load_config(config_path: Path) -> Config:
     try:
         with config_path.open(encoding="utf-8") as f:
             raw = yaml.safe_load(f)
-        return Config.model_validate(raw)
+        return Config.model_validate(migrate_legacy_config(raw))
     except yaml.YAMLError as exc:
         raise typer.BadParameter(f"Ошибка разбора YAML: {exc}") from exc
     except ValidationError as exc:

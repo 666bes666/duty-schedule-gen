@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import tempfile
+import warnings
 from collections.abc import MutableMapping
 from datetime import date, timedelta
 from pathlib import Path
@@ -17,6 +18,7 @@ from duty_schedule.models import (
     CarryOverState,
     City,
     Config,
+    DaySchedule,
     Employee,
     NormChoice,
     PinnedAssignment,
@@ -82,7 +84,10 @@ def _set_project(state: MutableMapping[Any, Any], project: ScheduleProject) -> N
 
 
 def import_config_into_state(state: MutableMapping[Any, Any], content: str) -> Config:
-    config = parse_config_yaml(content)
+    with warnings.catch_warnings(record=True) as notices:
+        warnings.simplefilter("always", UserWarning)
+        config = parse_config_yaml(content)
+    state["ui_migration_notices"] = [str(notice.message) for notice in notices]
     previous = state.get("project")
     project = (
         update_config(previous, config)
@@ -133,17 +138,21 @@ def _config_for_period(project: ScheduleProject, year: int, month: int) -> Confi
     )
     if previous is not None and previous.status == "ready":
         checked = ensure_exportable(previous)
+        config._quality_state = "available"
+        config._quality_origin = "project"
+        config.previous_schedule = checked.model_copy(deep=True)
+        config.previous_schedule.config.previous_schedule = None
         config.carry_over = [
             CarryOverState.model_validate(item) for item in checked.metadata.get("carry_over", [])
         ]
+    else:
+        config.previous_schedule = None
     return config
 
 
 def _generate_range_project(
-    project: ScheduleProject, start: tuple[int, int], end: tuple[int, int]
+    project: ScheduleProject, start: tuple[int, int], end: tuple[int, int], rebuild: bool = False
 ) -> ScheduleProject:
-    from duty_schedule.scheduler.multimonth import generate_multimonth
-
     date(*start, 1)
     date(*end, 1)
     if end < start:
@@ -152,13 +161,12 @@ def _generate_range_project(
     year, month = start
     while (year, month) <= end:
         config = _config_for_period(result, year, month)
-        calendars = list(result.calendars)
-        if config.production_calendar is not None:
-            calendars.append(config.production_calendar)
-        schedule = generate_multimonth(config, month, year, month, year, saved_calendars=calendars)[
-            0
-        ]
-        result = add_revision(result, schedule)
+        target = result.model_copy(deep=True)
+        target.config = config
+        target.selected_period = f"{year:04d}-{month:02d}"
+        result = generate_project(target, rebuild=rebuild)
+        if result.repair_candidate is not None:
+            break
         active = current_schedule(result)
         if active is None or active.status != "ready":
             break
@@ -171,15 +179,18 @@ def generate_project(
     project: ScheduleProject,
     start: tuple[int, int] | None = None,
     end: tuple[int, int] | None = None,
+    rebuild: bool = False,
 ) -> ScheduleProject:
     if start is not None and end is not None:
-        return _generate_range_project(project, start, end)
+        return _generate_range_project(project, start, end, rebuild)
     config = _config_for_period(project, project.config.year, project.config.month)
     if config.production_calendar is None:
         with contextlib.suppress(CalendarError):
             config.production_calendar = fetch_production_calendar(config.year, config.month)
     try:
-        schedule = generate_schedule(config)
+        schedule = generate_schedule(
+            config, baseline=None if rebuild else current_schedule(project)
+        )
     except ScheduleError as exc:
         schedule = Schedule(
             config=config,
@@ -187,7 +198,11 @@ def generate_project(
             status="diagnostic",
             diagnostics=[ScheduleDiagnostic(code="generation_failed", detail=str(exc))],
         )
-    return add_revision(project, schedule)
+    if current_schedule(project) is not None and schedule.status != "ready" and not rebuild:
+        return project.model_copy(update={"repair_candidate": schedule}, deep=True)
+    result = add_revision(project, schedule)
+    result.repair_candidate = None
+    return result
 
 
 def _commit(config: Config) -> None:
@@ -223,6 +238,8 @@ def _sidebar(project: ScheduleProject) -> None:
                         st.session_state[f"loaded_{label}"] = token
                         st.session_state["ui_import_notice"] = f"Загружено: {uploaded.name}"
                         st.rerun()
+        for notice in st.session_state.get("ui_migration_notices", []):
+            st.warning(notice)
         if st.session_state.get("ui_import_notice"):
             st.text(st.session_state["ui_import_notice"])
         st.download_button(
@@ -276,9 +293,12 @@ def _basic_configuration(project: ScheduleProject) -> None:
             format_func=lambda value: MONTHS_RU[value - 1],
         )
         year = c2.number_input("Год", min_value=2024, value=config.year, step=1)
-        seed = c3.number_input("Seed", min_value=0, value=config.seed, step=1)
-        solver = st.selectbox("Алгоритм", ["greedy", "cpsat"], index=int(config.solver == "cpsat"))
-        timezone_name = st.text_input("Часовой пояс календаря", value=config.timezone)
+        with st.expander("Дополнительные настройки"):
+            seed = st.number_input("Seed", min_value=0, value=config.seed, step=1)
+            solver = st.selectbox(
+                "Алгоритм", ["greedy", "cpsat"], index=int(config.solver == "cpsat")
+            )
+        timezone_name = config.timezone
         employees = st.data_editor(
             tables.employees,
             column_config={
@@ -314,6 +334,7 @@ def _basic_configuration(project: ScheduleProject) -> None:
                         "seed": seed,
                         "solver": solver,
                         "timezone": timezone_name,
+                        "production_calendar": _saved_calendar(project, year, month),
                     }
                 )
                 if updated.production_calendar is not None and (
@@ -559,6 +580,30 @@ def _carry_from_frame(frame: pd.DataFrame, config: Config, as_of: date) -> list[
     labels = {label: shift for shift, label in SHIFT_NAMES_RU.items()}
     for _, row in frame.iterrows():
         employee = by_id[str(row["ID"])]
+        previous = next(
+            (
+                item
+                for item in config.carry_over
+                if item.employee_id == employee.employee_id or item.employee_name == employee.name
+            ),
+            None,
+        )
+        if previous is not None and (
+            bool(row["Новый сотрудник"]) == previous.no_previous_shifts
+            and bool(row["История известна"])
+            == (previous.as_of == as_of and previous.source != "legacy")
+            and row["Последний статус"] == SHIFT_NAMES_RU[previous.last_shift or ShiftType.DAY_OFF]
+            and int(row["Рабочая серия"]) == previous.consecutive_working
+            and all(
+                column not in row or int(row[column]) == getattr(previous, field)
+                for column, field in (
+                    ("Серия отдыха", "consecutive_off"),
+                    ("Серия одной смены", "consecutive_same_shift"),
+                )
+            )
+        ):
+            result.append(previous.model_copy(deep=True))
+            continue
         if row["Новый сотрудник"]:
             result.append(
                 CarryOverState(
@@ -582,14 +627,16 @@ def _carry_from_frame(frame: pd.DataFrame, config: Config, as_of: date) -> list[
                 raise ValueError(
                     f"{employee.name}: для рабочего последнего дня укажите длину серии"
                 )
+            if "Серия отдыха" not in row or "Серия одной смены" not in row:
+                raise ValueError(f"{employee.name}: уточните счётчики отдыха и одной смены")
             result.append(
                 CarryOverState(
                     employee_name=employee.name,
                     employee_id=employee.employee_id,
                     last_shift=shift,
                     consecutive_working=count if working else 0,
-                    consecutive_off=0 if working else 1,
-                    consecutive_same_shift=1 if working else 0,
+                    consecutive_off=int(row["Серия отдыха"]),
+                    consecutive_same_shift=int(row["Серия одной смены"]),
                     source="manual",
                     as_of=as_of,
                 )
@@ -649,6 +696,8 @@ def _history_configuration(project: ScheduleProject) -> None:
                     "Выходной",
                 ),
                 "Рабочая серия": carry.consecutive_working if carry else 0,
+                "Серия отдыха": carry.consecutive_off if carry else 0,
+                "Серия одной смены": carry.consecutive_same_shift if carry else 0,
             }
         )
     with st.form(_key("carry_form")):
@@ -918,7 +967,148 @@ def _calendar_configuration(project: ScheduleProject) -> None:
             _commit(config)
 
 
+def preparation_issues(config: Config) -> list[ScheduleDiagnostic]:
+    from duty_schedule.calendar import calendar_for_config, get_all_days
+    from duty_schedule.models import collect_config_issues
+    from duty_schedule.scheduler.rules import can_assign_work
+    from duty_schedule.scheduler.validation import validate_schedule_result
+
+    days = []
+    pins = {(pin.date, pin.employee_name): pin for pin in config.pins}
+    for day in get_all_days(config.year, config.month):
+        record = DaySchedule(date=day)
+        for employee in config.employees:
+            shift = (
+                ShiftType.SICK_LEAVE
+                if employee.is_on_sick_leave(day)
+                else ShiftType.VACATION
+                if employee.is_on_vacation(day)
+                else ShiftType.DAY_OFF
+            )
+            pin = pins.get((day, employee.name))
+            if pin:
+                shift = pin.shift
+                if pin.working_hours is not None:
+                    record.workday_hours[employee.name] = pin.working_hours
+            getattr(record, shift.value).append(employee.name)
+        days.append(record)
+    checked = validate_schedule_result(Schedule(config=config, days=days))
+    input_codes = {
+        "calendar_invalid",
+        "calendar_unverified",
+        "duplicate_employee",
+        "duplicate_employee_id",
+        "norm_choice_invalid",
+        "norm_employee_unknown",
+    }
+    excluded = {"coverage", "monthly_hours", "assignment_missing"}
+    issues = [
+        item
+        for item in checked.diagnostics
+        if item.code.startswith("history_")
+        or item.code.startswith("pin_")
+        or item.code in input_codes
+        or (item.code not in excluded and (item.date, item.employee_name) in pins)
+    ]
+    input_errors, _ = collect_config_issues(config)
+    issues.extend(
+        ScheduleDiagnostic(
+            code="pin_configuration" if detail.startswith("Пин ") else "config_invalid",
+            detail=detail,
+        )
+        for detail in input_errors
+    )
+    calendar = calendar_for_config(config)
+    for day in get_all_days(config.year, config.month):
+        pools = [
+            [
+                employee.name
+                for employee in config.employees
+                if can_assign_work(config, calendar, employee, day, shift, None, 0, False)
+                and ((pin := pins.get((day, employee.name))) is None or pin.shift == shift)
+            ]
+            for shift in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT)
+        ]
+        if not any(
+            a != b and a != c and b != c for a in pools[0] for b in pools[1] for c in pools[2]
+        ):
+            issues.append(
+                ScheduleDiagnostic(
+                    code="staffing_unavailable",
+                    date=day,
+                    detail="Недостаточно подходящих сотрудников для трёх дежурств; "
+                    "проверьте отсутствия и закрепления",
+                )
+            )
+    return issues
+
+
+def _preparation(project: ScheduleProject) -> list[ScheduleDiagnostic]:
+    issues = preparation_issues(project.config)
+    st.subheader("Готовность к расчёту")
+    if project.config.optimization_priority is not None:
+        st.warning("optimization_priority устарел и не меняет фиксированный порядок качества")
+    groups = [
+        (
+            "Состав и доступность",
+            {
+                "staffing_unavailable",
+                "duplicate_employee",
+                "duplicate_employee_id",
+                "config_invalid",
+            },
+            "2. Ограничения",
+        ),
+        ("Полный календарь", {"calendar_invalid", "calendar_unverified"}, "2. Ограничения"),
+        (
+            "История отдыха",
+            {item.code for item in issues if item.code.startswith("history_")},
+            "3. История",
+        ),
+        (
+            "Закрепления",
+            {item.code for item in issues if item.code.startswith("pin_") or item.approval_rule},
+            "4. Закрепления",
+        ),
+        ("Нормы часов", {"norm_choice_invalid", "norm_employee_unknown"}, "2. Ограничения"),
+    ]
+    for label, codes, action in groups:
+        problems = [item for item in issues if item.code in codes]
+        st.write(f"{label}: {'требует исправления' if problems else 'подготовлено'}")
+        actions = {
+            "1. Состав"
+            if item.code in {"duplicate_employee", "duplicate_employee_id", "config_invalid"}
+            else action
+            for item in problems
+        }
+        for target in sorted(actions):
+            if st.button(f"Открыть «{target}»", key=f"preflight_{label}_{target}"):
+                st.session_state["configuration_tabs"] = target
+                st.rerun()
+        for item in problems[:3]:
+            st.warning(
+                f"{item.employee_name or ''} {item.date or ''}: {item.detail}. Откройте «{action}»."
+            )
+    if issues:
+        with st.expander("Все причины подготовки"):
+            st.dataframe(pd.DataFrame([item.model_dump() for item in issues]), hide_index=True)
+    st.caption(
+        "Правки форм применяются кнопкой сохранения. "
+        "Неприменённые правки не входят в сохранённую версию."
+    )
+    return issues
+
+
 def _planning(project: ScheduleProject) -> None:
+    issues = _preparation(project)
+    diagnostic = st.checkbox("Диагностическое исследование неполных данных")
+    rebuild = st.checkbox("Полный пересчёт без сохранения назначений")
+    if project.repair_candidate is not None:
+        st.warning("Пересчёт не дал готового результата. Исходная версия остаётся текущей.")
+        _diagnostics(project.repair_candidate)
+        if st.button("Применить диагностический черновик"):
+            _set_project(st.session_state, add_revision(project, project.repair_candidate))
+            st.rerun()
     multi = st.toggle("Мультимесячное планирование", key=_key("multi_mode"))
     start = end = None
     if multi:
@@ -926,10 +1116,15 @@ def _planning(project: ScheduleProject) -> None:
         start_day = st.date_input("Начало диапазона", value=first, key=_key("range_start"))
         end_day = st.date_input("Конец диапазона", value=first, key=_key("range_end"))
         start, end = (start_day.year, start_day.month), (end_day.year, end_day.month)
-    if st.button("Сгенерировать расписание", type="primary", use_container_width=True):
+    if st.button(
+        "Сгенерировать расписание",
+        type="primary",
+        use_container_width=True,
+        disabled=bool(issues) and not diagnostic,
+    ):
         with st.spinner("Строим и проверяем график…"):
             try:
-                changed = generate_project(project, start, end)
+                changed = generate_project(project, start, end, rebuild=rebuild)
             except (CalendarError, ScheduleError, ValueError) as exc:
                 st.error(str(exc))
             else:
@@ -946,6 +1141,12 @@ def _edit_current(project: ScheduleProject, schedule: Schedule) -> None:
     with st.form(_key("schedule_edit_form")):
         frame = st.data_editor(
             _schedule_to_edit_df(schedule),
+            column_config={
+                column: st.column_config.MultiselectColumn(
+                    options=[employee.name for employee in schedule.config.employees]
+                )
+                for column in ("Утро 08–17", "Вечер 15–00", "Ночь 00–08", "Рабочий день")
+            },
             disabled=["Дата"],
             use_container_width=True,
             hide_index=True,
@@ -964,12 +1165,72 @@ def _edit_current(project: ScheduleProject, schedule: Schedule) -> None:
 
 
 def _diagnostics(schedule: Schedule) -> None:
+    repair = schedule.metadata.get("repair")
+    if repair:
+        st.write(
+            f"Пересчёт от версии {repair['baseline_id'] or 'без ID'}: "
+            f"{repair['changed_cells']} изменённых ячеек"
+        )
+        st.caption(f"Поиск: {repair['search_status']}; доказательство: {repair['optimality']}")
+        if repair["changes"]:
+            st.dataframe(pd.DataFrame(repair["changes"]), hide_index=True)
     if schedule.status == "ready":
         st.success("Текущая версия прошла обязательные проверки")
     elif schedule.status == "draft":
         st.info("Текущая версия изменена и требует проверки")
     else:
         st.warning("Диагностический черновик: обычный экспорт недоступен")
+    search_explanations = {
+        "feasible": "Найден допустимый вариант в ограниченное время; "
+        "глобальное качество не доказано.",
+        "timeout": "Поиск ограничен временем. Проверьте причины ниже или повторите расчёт.",
+        "heuristic_exhausted": "Ограниченный поиск не нашёл готовый график; "
+        "проверьте данные и доступность.",
+        "heuristic_solution": "Найден готовый вариант ограниченным поиском; "
+        "глобальное качество не доказано.",
+        "pending_approval": "Требуются указанные подтверждения. Откройте раздел подтверждений.",
+        "infeasible": "При действующих данных и ограничениях допустимого графика нет.",
+    }
+    if schedule.search_status in search_explanations:
+        st.info(search_explanations[schedule.search_status])
+    categories = [
+        (
+            "Исправить данные",
+            lambda item: item.code.startswith(("history_", "calendar_", "norm_", "pin_")),
+            "3. История",
+        ),
+        (
+            "Подтвердить разрешённое исключение",
+            lambda item: item.code == "approval_required",
+            "5. Подтверждения",
+        ),
+        (
+            "Проверить состав и доступность",
+            lambda item: item.code in {"coverage", "staffing_unavailable"},
+            "2. Ограничения",
+        ),
+    ]
+    for label, match, action in categories:
+        problems = [item for item in schedule.diagnostics if match(item)]
+        if problems:
+            st.write(label)
+            for item in problems[:3]:
+                st.warning(f"{item.employee_name or ''} {item.date or ''}: {item.detail}")
+            actions = {
+                "4. Закрепления"
+                if item.code.startswith("pin_")
+                else "2. Ограничения"
+                if item.code.startswith(("calendar_", "norm_"))
+                else action
+                for item in problems
+            }
+            for target in sorted(actions):
+                if st.button(
+                    f"Исправить: {target}",
+                    key=f"diagnostics_{schedule.revision_id}_{label}_{target}",
+                ):
+                    st.session_state["configuration_tabs"] = target
+                    st.rerun()
     if schedule.diagnostics:
         st.dataframe(
             pd.DataFrame(
@@ -1003,6 +1264,9 @@ def _next_config(schedule: Schedule) -> Config:
     config.carry_over = [
         CarryOverState.model_validate(item) for item in schedule.metadata.get("carry_over", [])
     ]
+    config.previous_schedule = schedule.model_copy(deep=True)
+    config.previous_schedule.config.previous_schedule = None
+    config._quality_origin = "external"
     return config
 
 
@@ -1125,10 +1389,14 @@ def _results(project: ScheduleProject) -> None:
 def render_application() -> None:
     if "project" not in st.session_state:
         st.session_state["project"] = new_project(_default_config())
+    from duty_schedule.ui.autosave import render_autosave
+
+    render_autosave()
     project = st.session_state["project"]
     _sidebar(project)
     tabs = st.tabs(
-        ["1. Состав", "2. Ограничения", "3. История", "4. Закрепления", "5. Подтверждения"]
+        ["1. Состав", "2. Ограничения", "3. История", "4. Закрепления", "5. Подтверждения"],
+        key="configuration_tabs",
     )
     with tabs[0]:
         _basic_configuration(project)

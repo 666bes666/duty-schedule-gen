@@ -37,6 +37,8 @@ class EmployeeStats:
     selected_hours: int = 0
     target_hours: int = 0
     hours_delta: int = 0
+    boundary_max_streak_work: int = 0
+    boundary_max_streak_rest: int = 0
 
 
 def diff_schedules(
@@ -215,6 +217,18 @@ def compute_stats(
 
         max_streak_work = max_streak(sorted_dates, emp_days, working=True)
         max_streak_rest = max_streak(sorted_dates, emp_days, working=False)
+        from duty_schedule.scheduler.rules import WORKING_SHIFTS, carry_for_employee
+
+        carry = carry_for_employee(schedule.config, emp)
+        streak_work = carry.consecutive_working if carry else 0
+        streak_rest = carry.consecutive_off if carry else 0
+        boundary_work, boundary_rest = 0, 0
+        for day in sorted_dates:
+            working = emp_days.get(day) in {shift.value for shift in WORKING_SHIFTS}
+            streak_work = streak_work + 1 if working else 0
+            streak_rest = 0 if working else streak_rest + 1
+            boundary_work = max(boundary_work, streak_work)
+            boundary_rest = max(boundary_rest, streak_rest)
         isolated_off = count_isolated_off(emp.name, schedule)
         paired_off = count_paired_off(emp.name, schedule)
 
@@ -244,6 +258,8 @@ def compute_stats(
                 holiday_work=holiday_work,
                 max_streak_work=max_streak_work,
                 max_streak_rest=max_streak_rest,
+                boundary_max_streak_work=boundary_work,
+                boundary_max_streak_rest=boundary_rest,
                 isolated_off=isolated_off,
                 paired_off=paired_off,
                 total_hours=total_hours,

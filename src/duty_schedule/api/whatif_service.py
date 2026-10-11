@@ -18,9 +18,8 @@ from duty_schedule.api.schemas import (
 )
 from duty_schedule.calendar import calendar_for_config
 from duty_schedule.logging import get_logger
-from duty_schedule.models import City, Config, Schedule, ShiftType
+from duty_schedule.models import Config, Schedule
 from duty_schedule.scheduler.core import generate_schedule
-from duty_schedule.scheduler.postprocess.quality import eligible_duty_names
 from duty_schedule.stats import EmployeeStats, build_assignments, compute_stats
 
 logger = get_logger(__name__)
@@ -43,8 +42,14 @@ HIGHER_IS_BETTER = {"paired_off"}
 
 
 def apply_patch(baseline: Config, patch: dict[str, Any]) -> Config:
-    merged = {**baseline.model_dump(), **patch}
-    return Config.model_validate(merged)
+    from duty_schedule.input_validation import validate_patch
+
+    merged = {**baseline.model_dump(), **validate_patch(patch)}
+    result = Config.model_validate(merged)
+    if "previous_schedule" not in patch:
+        result._quality_state = baseline._quality_state
+        result._quality_origin = baseline._quality_origin
+    return result
 
 
 def _stats_to_schema(s: EmployeeStats) -> EmployeeStatsSchema:
@@ -73,46 +78,15 @@ def _target_hours(stat: EmployeeStats | EmployeeStatsSchema) -> int:
 
 
 def compute_summary(stats: list[EmployeeStats], schedule: Schedule) -> SummaryMetrics:
-    employees = {employee.name: employee for employee in schedule.config.employees}
-    duty_stats = [
-        stat
-        for stat in stats
-        if stat.name in employees and employees[stat.name].on_duty and _target_hours(stat) > 0
-    ]
-    fairness = 0.0
-    calendar = calendar_for_config(schedule.config)
-    dates = [record.date for record in calendar.days]
-    for city, field, shift in (
-        (City.MOSCOW, "evening", ShiftType.EVENING),
-        (City.KHABAROVSK, "night", ShiftType.NIGHT),
-    ):
-        eligible = eligible_duty_names(schedule.config, calendar, dates, (shift,))
-        pool = [
-            stat
-            for stat in duty_stats
-            if employees[stat.name].city == city and stat.name in eligible
-        ]
-        rates = [getattr(stat, field) / _target_hours(stat) for stat in pool]
-        if len(rates) > 1:
-            fairness += statistics.pstdev(rates)
-    weekend_balance = 0.0
-    off_eligible = eligible_duty_names(
-        schedule.config,
-        calendar,
-        sorted(calendar.off_dates()),
-        (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT),
-    )
-    for city in City:
-        rates = [
-            stat.weekend_work / _target_hours(stat)
-            for stat in duty_stats
-            if employees[stat.name].city == city and stat.name in off_eligible
-        ]
-        if len(rates) > 1:
-            weekend_balance += statistics.pstdev(rates)
+    from duty_schedule.quality_history import quality_report
+
+    report = quality_report(schedule)
+    fairness = report["fairness"]
+    weekend_balance = report["off_balance"]
     deviations = [stat.total_hours - _target_hours(stat) for stat in stats]
     return SummaryMetrics(
         fairness_score=round(fairness, 4),
+        quality_context=report,
         workload_stddev=round(statistics.pstdev(deviations), 4) if len(deviations) > 1 else 0.0,
         coverage_gaps=sum(1 for day in schedule.days if not day.is_covered()),
         isolated_off_total=sum(stat.isolated_off for stat in stats),

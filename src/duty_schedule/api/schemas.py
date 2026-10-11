@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic_core import InitErrorDetails
 
 from duty_schedule.models import Config, Schedule, ScheduleDiagnostic
 
@@ -47,6 +48,8 @@ class EmployeeStatsSchema(BaseModel):
     selected_hours: int = 0
     target_hours: int = 0
     hours_delta: int = 0
+    boundary_max_streak_work: int = 0
+    boundary_max_streak_rest: int = 0
 
 
 class ErrorResponse(BaseModel):
@@ -65,15 +68,43 @@ class VariantPatch(BaseModel):
     @field_validator("patch")
     @classmethod
     def forbid_month_year(cls, v: dict[str, Any]) -> dict[str, Any]:
-        forbidden = {"month", "year"} & v.keys()
-        if forbidden:
-            raise ValueError(f"Изменение {', '.join(sorted(forbidden))} в варианте запрещено")
-        return v
+        from duty_schedule.input_validation import validate_patch
+
+        return validate_patch(v)
 
 
 class WhatIfRequest(BaseModel):
     baseline: dict[str, Any]
     variants: list[VariantPatch]
+
+    @model_validator(mode="after")
+    def validate_merged_variants(self) -> WhatIfRequest:
+        try:
+            baseline = Config.model_validate(self.baseline)
+        except ValidationError:
+            return self
+        for index, variant in enumerate(self.variants):
+            try:
+                Config.model_validate({**baseline.model_dump(), **variant.patch})
+            except ValidationError as exc:
+                errors = exc.errors(include_url=False)
+                for error in errors:
+                    error["loc"] = ("variants", index, "patch", *error["loc"])
+                raise ValidationError.from_exception_data(
+                    "WhatIfRequest", cast(list[InitErrorDetails], errors)
+                ) from exc
+        return self
+
+    @field_validator("baseline")
+    @classmethod
+    def matching_calendar(cls, value: dict[str, Any]) -> dict[str, Any]:
+        calendar = value.get("production_calendar")
+        if isinstance(calendar, dict) and (calendar.get("year"), calendar.get("month")) != (
+            value.get("year"),
+            value.get("month"),
+        ):
+            raise ValueError("baseline.production_calendar: период не соответствует конфигурации")
+        return value
 
     @field_validator("variants")
     @classmethod
@@ -103,6 +134,7 @@ class SummaryMetrics(BaseModel):
     coverage_gaps: int
     isolated_off_total: int
     weekend_balance_stddev: float
+    quality_context: dict[str, Any] = {}
 
 
 class ScenarioResult(BaseModel):

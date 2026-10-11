@@ -1,12 +1,13 @@
 {
   "kind": "change",
-  "status": "planned",
+  "status": "in-progress",
   "requirements": [
     {
       "id": "SEC-001",
       "tests": [
         "tests/unit/test_export_security.py::test_pdf_names_are_escaped_in_both_tables",
-        "tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening"
+        "tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening",
+        "tests/unit/test_two_month_quality.py::test_xls_external_quality_source_id_is_plain_text"
       ]
     },
     {

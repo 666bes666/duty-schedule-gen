@@ -1159,13 +1159,17 @@
         "VariantResult",
         "WhatIfRequest",
         "WhatIfRequest.check_variants_count",
+        "WhatIfRequest.matching_calendar",
+        "WhatIfRequest.validate_merged_variants",
         "WhatIfResponse"
       ],
       "imports": [
         "__future__",
         "datetime",
+        "duty_schedule.input_validation",
         "duty_schedule.models",
         "pydantic",
+        "pydantic_core",
         "typing"
       ]
     },
@@ -1206,10 +1210,11 @@
         "dataclasses",
         "duty_schedule.api.schemas",
         "duty_schedule.calendar",
+        "duty_schedule.input_validation",
         "duty_schedule.logging",
         "duty_schedule.models",
+        "duty_schedule.quality_history",
         "duty_schedule.scheduler.core",
-        "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.stats",
         "pydantic",
         "statistics",
@@ -1262,6 +1267,7 @@
         "duty_schedule.export.ics",
         "duty_schedule.export.pdf",
         "duty_schedule.export.xls",
+        "duty_schedule.input_validation",
         "duty_schedule.logging",
         "duty_schedule.models",
         "duty_schedule.project",
@@ -1361,6 +1367,7 @@
         "duty_schedule.constants",
         "duty_schedule.models",
         "duty_schedule.project",
+        "duty_schedule.quality_history",
         "duty_schedule.stats",
         "html",
         "io",
@@ -1396,6 +1403,7 @@
         "duty_schedule.constants",
         "duty_schedule.models",
         "duty_schedule.project",
+        "duty_schedule.quality_history",
         "duty_schedule.stats",
         "json",
         "openpyxl",
@@ -1406,6 +1414,23 @@
         "openpyxl.worksheet.datavalidation",
         "openpyxl.worksheet.worksheet",
         "pathlib"
+      ]
+    },
+    {
+      "path": "src/duty_schedule/input_validation.py",
+      "role": "domain",
+      "symbols": [
+        "migrate_legacy_config",
+        "validate_patch",
+        "validate_patch.check"
+      ],
+      "imports": [
+        "__future__",
+        "copy",
+        "duty_schedule.models",
+        "pydantic",
+        "typing",
+        "warnings"
       ]
     },
     {
@@ -1454,6 +1479,7 @@
         "Employee.is_day_off_weekly",
         "Employee.is_on_sick_leave",
         "Employee.is_on_vacation",
+        "Employee.nonblank_name",
         "Employee.validate_flags",
         "Employee.works_on_weekend",
         "MonthlyTarget",
@@ -1497,12 +1523,21 @@
         "ScheduleProject",
         "ScheduleProject.check_references",
         "ScheduleRevision",
+        "_CellChange",
+        "_ChangedCells",
+        "_ChangedCells.consistent_changes",
+        "_OptimizationMetadata",
+        "_OptimizationMetadata.consistent_quality",
+        "_OptimizationSnapshot",
+        "_RepairMetadata",
         "_append_revision",
         "_carry_dependency_diagnostics",
+        "_check_operation_metadata",
         "_dependency_diagnostics",
         "_input_key",
         "_period",
         "_previous_period",
+        "_snapshot_cells",
         "_state",
         "add_revision",
         "apply_assignments",
@@ -1520,10 +1555,32 @@
         "datetime",
         "duty_schedule.models",
         "duty_schedule.scheduler.changelog",
+        "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.scheduler.validation",
         "json",
         "pydantic",
         "uuid"
+      ]
+    },
+    {
+      "path": "src/duty_schedule/quality_history.py",
+      "role": "domain",
+      "symbols": [
+        "balance_counts",
+        "balance_pools",
+        "previous_quality_schedule",
+        "quality_report",
+        "weighted_imbalance"
+      ],
+      "imports": [
+        "__future__",
+        "duty_schedule.calendar",
+        "duty_schedule.models",
+        "duty_schedule.scheduler.postprocess.quality",
+        "duty_schedule.scheduler.validation",
+        "duty_schedule.workload",
+        "fractions",
+        "typing"
       ]
     },
     {
@@ -1602,6 +1659,7 @@
         "duty_schedule.constants",
         "duty_schedule.logging",
         "duty_schedule.models",
+        "duty_schedule.quality_history",
         "duty_schedule.scheduler.greedy",
         "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.scheduler.solver",
@@ -1625,8 +1683,10 @@
         "__future__",
         "datetime",
         "duty_schedule.models",
+        "duty_schedule.quality_history",
         "duty_schedule.scheduler.constraints",
         "duty_schedule.scheduler.core",
+        "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.scheduler.rules",
         "duty_schedule.workload",
         "random"
@@ -1824,6 +1884,7 @@
         "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.scheduler.validation",
         "duty_schedule.workload",
+        "fractions",
         "time",
         "typing"
       ]
@@ -1832,10 +1893,14 @@
       "path": "src/duty_schedule/scheduler/postprocess/quality.py",
       "role": "scheduler",
       "symbols": [
+        "changed_cells",
         "eligible_duty_names",
+        "optimization_provenance",
+        "optimization_provenance.snapshot",
         "optimize_candidate",
         "quality_key",
-        "quality_key.imbalance"
+        "repair_metadata",
+        "schedule_cells"
       ],
       "imports": [
         "__future__",
@@ -1844,9 +1909,11 @@
         "duty_schedule.calendar",
         "duty_schedule.logging",
         "duty_schedule.models",
+        "duty_schedule.quality_history",
         "duty_schedule.scheduler.rules",
         "duty_schedule.scheduler.validation",
         "duty_schedule.workload",
+        "fractions",
         "random"
       ]
     },
@@ -1931,10 +1998,12 @@
         "duty_schedule.constants",
         "duty_schedule.logging",
         "duty_schedule.models",
+        "duty_schedule.quality_history",
         "duty_schedule.scheduler.postprocess.quality",
         "duty_schedule.scheduler.rules",
         "duty_schedule.scheduler.validation",
         "duty_schedule.workload",
+        "math",
         "ortools.sat.python",
         "typing"
       ]
@@ -1976,6 +2045,7 @@
         "duty_schedule.calendar",
         "duty_schedule.costs",
         "duty_schedule.models",
+        "duty_schedule.scheduler.rules",
         "duty_schedule.workload",
         "typing"
       ]
@@ -1990,6 +2060,29 @@
         "duty_schedule.ui.state",
         "duty_schedule.ui.views"
       ]
+    },
+    {
+      "path": "src/duty_schedule/ui/autosave.py",
+      "role": "ui",
+      "symbols": [
+        "accept_storage_result",
+        "render_autosave"
+      ],
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "duty_schedule.project",
+        "hashlib",
+        "pathlib",
+        "streamlit",
+        "streamlit.components.v1",
+        "typing",
+        "uuid"
+      ]
+    },
+    {
+      "path": "src/duty_schedule/ui/autosave_component/index.html",
+      "role": "ui"
     },
     {
       "path": "src/duty_schedule/ui/builders.py",
@@ -2038,6 +2131,7 @@
         "_period_frame",
         "_pins_configuration",
         "_planning",
+        "_preparation",
         "_read_periods",
         "_results",
         "_saved_calendar",
@@ -2047,6 +2141,7 @@
         "generate_project",
         "import_config_into_state",
         "import_project_into_state",
+        "preparation_issues",
         "render_application"
       ],
       "imports": [
@@ -2060,8 +2155,10 @@
         "duty_schedule.models",
         "duty_schedule.project",
         "duty_schedule.scheduler",
-        "duty_schedule.scheduler.multimonth",
+        "duty_schedule.scheduler.rules",
+        "duty_schedule.scheduler.validation",
         "duty_schedule.stats",
+        "duty_schedule.ui.autosave",
         "duty_schedule.ui.builders",
         "duty_schedule.ui.config_io",
         "duty_schedule.ui.mappings",
@@ -2073,7 +2170,8 @@
         "pathlib",
         "streamlit",
         "tempfile",
-        "typing"
+        "typing",
+        "warnings"
       ]
     },
     {
@@ -2100,6 +2198,7 @@
         "dataclasses",
         "datetime",
         "duty_schedule._errors_fmt",
+        "duty_schedule.input_validation",
         "duty_schedule.models",
         "duty_schedule.ui.mappings",
         "pandas",
@@ -2475,10 +2574,11 @@
         "TestConfigYamlContract.test_example_config_loads",
         "TestConfigYamlContract.test_minimal_yaml_config",
         "TestConfigYamlContract.test_missing_employees_raises",
-        "TestConfigYamlContract.test_unknown_fields_ignored"
+        "TestConfigYamlContract.test_unknown_fields_rejected"
       ],
       "imports": [
         "__future__",
+        "duty_schedule.input_validation",
         "duty_schedule.models",
         "pathlib",
         "pydantic",
@@ -2560,6 +2660,35 @@
       ]
     },
     {
+      "path": "tests/contract/test_product_inputs.py",
+      "role": "tests",
+      "symbols": [
+        "test_blank_employee_is_rejected_before_generation",
+        "test_invalid_merged_patch_is_422_before_baseline_search",
+        "test_mismatched_calendar_is_422_without_search_or_network",
+        "test_unknown_nested_patch_is_422_without_search",
+        "test_unknown_previous_snapshot_fields_are_422_before_search"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "pytest",
+        "tests.contract.conftest",
+        "tests.ui.fixtures",
+        "unittest.mock"
+      ]
+    },
+    {
+      "path": "tests/contract/test_quality_context.py",
+      "role": "tests",
+      "symbols": [
+        "test_standalone_api_reports_month_only_quality"
+      ],
+      "imports": [
+        "pytest",
+        "tests.contract.conftest"
+      ]
+    },
+    {
       "path": "tests/contract/test_revision_api.py",
       "role": "tests",
       "symbols": [
@@ -2620,6 +2749,7 @@
       ],
       "imports": [
         "__future__",
+        "duty_schedule.input_validation",
         "duty_schedule.models",
         "pathlib",
         "pytest",
@@ -3017,13 +3147,44 @@
       ]
     },
     {
+      "path": "tests/integration/test_replanning.py",
+      "role": "tests",
+      "symbols": [
+        "test_both_engines_preserve_valid_baseline_and_pins"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.scheduler.core",
+        "pytest",
+        "tests.ui.fixtures"
+      ]
+    },
+    {
+      "path": "tests/integration/test_two_month_quality.py",
+      "role": "tests",
+      "symbols": [
+        "next_config",
+        "test_both_engines_use_exactly_two_months",
+        "test_changed_role_receives_only_eligible_period_weight"
+      ],
+      "imports": [
+        "datetime",
+        "duty_schedule.models",
+        "duty_schedule.quality_history",
+        "duty_schedule.scheduler.core",
+        "duty_schedule.scheduler.validation",
+        "pytest",
+        "tests.ui.fixtures"
+      ]
+    },
+    {
       "path": "tests/integration/test_whatif_endpoint.py",
       "role": "tests",
       "symbols": [
         "TestWhatIfCompare",
         "TestWhatIfCompare.test_calendar_error_502",
         "TestWhatIfCompare.test_invalid_baseline_400",
-        "TestWhatIfCompare.test_partial_failure_variant",
+        "TestWhatIfCompare.test_invalid_variant_rejected_before_generation",
         "TestWhatIfCompare.test_success_one_variant",
         "TestWhatIfCompare.test_too_many_variants_422",
         "TestWhatIfCompare.test_zero_variants_422",
@@ -3216,6 +3377,22 @@
       ]
     },
     {
+      "path": "tests/ui/test_first_month_journey.py",
+      "role": "tests",
+      "symbols": [
+        "test_first_month_without_all_cell_pins_and_technical_operations",
+        "test_preflight_explains_unknown_history_and_pin_conflict"
+      ],
+      "imports": [
+        "duty_schedule.ui.config_io",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_product_recovery",
+        "tests.ui.test_project_journey"
+      ]
+    },
+    {
       "path": "tests/ui/test_page_load.py",
       "role": "tests",
       "symbols": [
@@ -3228,6 +3405,33 @@
         "__future__",
         "playwright.sync_api",
         "pytest"
+      ]
+    },
+    {
+      "path": "tests/ui/test_product_recovery.py",
+      "role": "tests",
+      "symbols": [
+        "saved",
+        "test_browser_reload_restores_current_project_and_hours",
+        "test_corrupt_and_refused_storage_preserve_snapshot",
+        "test_corrupt_record_preserves_last_valid_copy",
+        "test_imported_history_unchanged_save_preserves_every_employee",
+        "test_opening_existing_other_project_updates_last_pointer",
+        "test_two_tabs_do_not_silently_overwrite_newer_revision",
+        "test_unavailable_log_is_not_reported_as_no_changes",
+        "test_unsubmitted_form_is_not_reported_as_saved",
+        "wait_saved"
+      ],
+      "imports": [
+        "__future__",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui.config_io",
+        "playwright.sync_api",
+        "pytest",
+        "re",
+        "tests.ui.fixtures",
+        "tests.ui.test_project_journey"
       ]
     },
     {
@@ -3254,6 +3458,38 @@
         "pytest",
         "re",
         "tests.ui.fixtures"
+      ]
+    },
+    {
+      "path": "tests/ui/test_quality_journey.py",
+      "role": "tests",
+      "symbols": [
+        "test_summary_and_exports_show_same_quality_window"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "openpyxl",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_project_journey"
+      ]
+    },
+    {
+      "path": "tests/ui/test_replanning_journey.py",
+      "role": "tests",
+      "symbols": [
+        "test_default_repair_and_explicit_rebuild_show_changed_cells"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_product_recovery",
+        "tests.ui.test_project_journey"
       ]
     },
     {
@@ -4183,6 +4419,50 @@
       ]
     },
     {
+      "path": "tests/unit/test_product_integrity.py",
+      "role": "tests",
+      "symbols": [
+        "test_cleared_editor_cell_moves_employee_to_day_off",
+        "test_cli_and_ui_reject_mismatched_calendar_atomically",
+        "test_cli_rejects_mismatched_calendar_with_both_periods",
+        "test_editing_one_history_preserves_other_complete_states",
+        "test_employee_identity_roundtrips_names_and_rejects_blank",
+        "test_legacy_team_lead_migration_is_visible",
+        "test_malformed_optimizer_metadata_cannot_replace_open_project",
+        "test_manual_edit_does_not_relabel_old_optimizer_snapshot",
+        "test_optimizer_without_changelog_reports_changes_and_quality",
+        "test_restored_repair_candidate_cannot_trust_ready_status",
+        "test_ui_period_change_selects_new_calendar_before_validation",
+        "test_unchanged_history_preserves_counters_and_source",
+        "test_unknown_input_field_is_rejected",
+        "test_xls_preserves_exact_names_and_rejects_missing_roster"
+      ],
+      "imports": [
+        "datetime",
+        "duty_schedule.cli",
+        "duty_schedule.export.xls",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.scheduler.postprocess.quality",
+        "duty_schedule.scheduler.validation",
+        "duty_schedule.ui.builders",
+        "duty_schedule.ui.components",
+        "duty_schedule.ui.config_io",
+        "duty_schedule.xls_import",
+        "io",
+        "json",
+        "openpyxl",
+        "pandas",
+        "pathlib",
+        "pydantic",
+        "pytest",
+        "streamlit.testing.v1",
+        "tests.ui.fixtures",
+        "typer.testing",
+        "yaml"
+      ]
+    },
+    {
       "path": "tests/unit/test_project.py",
       "role": "tests",
       "symbols": [
@@ -4239,6 +4519,34 @@
         "pytest",
         "subprocess",
         "sys"
+      ]
+    },
+    {
+      "path": "tests/unit/test_replanning.py",
+      "role": "tests",
+      "symbols": [
+        "test_calendar_hours_change_cannot_claim_zero_edits",
+        "test_failed_repair_does_not_replace_current_version",
+        "test_feasible_change_layer_never_claims_proven_minimum",
+        "test_feasible_change_layer_never_claims_proven_minimum.bounded_status",
+        "test_hours_and_rename_count_by_identity",
+        "test_nonzero_repair_matches_exhaustive_oracle",
+        "test_nonzero_repair_without_optional_solver_preserves_cells",
+        "test_noop_check_preserves_revision_id",
+        "test_small_repair_matches_independent_minimum_oracle"
+      ],
+      "imports": [
+        "datetime",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.scheduler",
+        "duty_schedule.scheduler.core",
+        "duty_schedule.scheduler.postprocess.quality",
+        "duty_schedule.scheduler.rules",
+        "duty_schedule.scheduler.validation",
+        "duty_schedule.ui.components",
+        "itertools",
+        "tests.ui.fixtures"
       ]
     },
     {
@@ -4400,6 +4708,60 @@
         "datetime",
         "duty_schedule.models",
         "duty_schedule.stats"
+      ]
+    },
+    {
+      "path": "tests/unit/test_two_month_quality.py",
+      "role": "tests",
+      "symbols": [
+        "test_config_save_cannot_resurrect_stale_quality_source",
+        "test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
+        "test_missing_and_stale_history_are_not_zero",
+        "test_month_and_boundary_streak_windows_are_distinct",
+        "test_new_and_departed_employee_do_not_invent_previous_counts",
+        "test_pdf_renderer_receives_month_and_boundary_series",
+        "test_pdf_renderer_receives_month_and_boundary_series.CapturingHTML",
+        "test_pdf_renderer_receives_month_and_boundary_series.CapturingHTML.__init__",
+        "test_pdf_renderer_receives_month_and_boundary_series.CapturingHTML.write_pdf",
+        "test_previous_active_revision_changes_quality_source",
+        "test_project_invalidates_old_quality_source_and_reload",
+        "test_rebinding_updated_previous_revision_reenables_quality",
+        "test_whatif_preserves_trusted_quality_context",
+        "test_xls_external_quality_source_id_is_plain_text",
+        "test_year_boundary_checks_adjacent_period_without_fabricating_history"
+      ],
+      "imports": [
+        "datetime",
+        "duty_schedule.api.whatif_service",
+        "duty_schedule.export.pdf",
+        "duty_schedule.export.xls",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.quality_history",
+        "duty_schedule.scheduler",
+        "duty_schedule.scheduler.validation",
+        "duty_schedule.stats",
+        "duty_schedule.ui.components",
+        "fractions",
+        "openpyxl",
+        "pytest",
+        "tests.integration.test_two_month_quality",
+        "tests.ui.fixtures"
+      ]
+    },
+    {
+      "path": "tests/unit/test_ui_autosave.py",
+      "role": "tests",
+      "symbols": [
+        "test_failed_and_corrupt_storage_preserve_valid_snapshot",
+        "test_restore_revalidates_saved_ready"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui.autosave",
+        "json",
+        "tests.ui.fixtures"
       ]
     },
     {
@@ -4654,7 +5016,7 @@
             "tests/unit/test_models.py::TestConfig::test_invalid_year",
             "tests/unit/test_models.py::TestConfig::test_non_duty_not_counted_as_duty",
             "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_minimal_yaml_config",
-            "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_unknown_fields_ignored"
+            "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_unknown_fields_rejected"
           ]
         },
         {
@@ -4942,7 +5304,7 @@
             "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_too_many_variants_422",
             "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_zero_variants_422",
             "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_invalid_baseline_400",
-            "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_partial_failure_variant",
+            "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_invalid_variant_rejected_before_generation",
             "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_calendar_error_502",
             "tests/contract/test_api_response_schema_contract.py::TestWhatIfSchema::test_metric_delta_fields"
           ]
@@ -5137,13 +5499,14 @@
     {
       "path": "specs/003-secure-api-exports",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "SEC-001",
           "tests": [
             "tests/unit/test_export_security.py::test_pdf_names_are_escaped_in_both_tables",
-            "tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening"
+            "tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening",
+            "tests/unit/test_two_month_quality.py::test_xls_external_quality_source_id_is_plain_text"
           ]
         },
         {
@@ -5387,7 +5750,7 @@
     {
       "path": "specs/006-month-continuity",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "HIST-001",
@@ -5515,7 +5878,7 @@
     {
       "path": "specs/008-workload-quality",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "HOURS-001",
@@ -5555,7 +5918,7 @@
           "id": "HOURS-005",
           "tests": [
             "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
-            "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance"
+            "tests/unit/test_product_integrity.py::test_optimizer_without_changelog_reports_changes_and_quality"
           ]
         }
       ],
@@ -5591,7 +5954,7 @@
     {
       "path": "specs/009-schedule-revisions",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "REV-001",
@@ -5706,7 +6069,7 @@
     {
       "path": "specs/010-ui-configuration",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "UIC-001",
@@ -6106,27 +6469,32 @@
     {
       "path": "specs/014-product-reliability",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "DATA-001",
           "tests": [
+            "tests/contract/test_product_inputs.py::test_blank_employee_is_rejected_before_generation",
             "tests/unit/test_product_integrity.py::test_employee_identity_roundtrips_names_and_rejects_blank",
-            "tests/contract/test_product_inputs.py::test_blank_employee_is_rejected_before_generation"
+            "tests/unit/test_product_integrity.py::test_xls_preserves_exact_names_and_rejects_missing_roster",
+            "tests/unit/test_product_integrity.py::test_cleared_editor_cell_moves_employee_to_day_off"
           ]
         },
         {
           "id": "DATA-002",
           "tests": [
-            "tests/unit/test_product_integrity.py::test_unchanged_history_preserves_counters_and_source",
-            "tests/ui/test_product_recovery.py::test_imported_history_unchanged_save_preserves_every_employee"
+            "tests/ui/test_product_recovery.py::test_imported_history_unchanged_save_preserves_every_employee",
+            "tests/unit/test_product_integrity.py::test_editing_one_history_preserves_other_complete_states",
+            "tests/unit/test_product_integrity.py::test_unchanged_history_preserves_counters_and_source"
           ]
         },
         {
           "id": "DATA-003",
           "tests": [
+            "tests/contract/test_product_inputs.py::test_invalid_merged_patch_is_422_before_baseline_search",
             "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search",
-            "tests/unit/test_product_integrity.py::test_legacy_team_lead_migration_is_visible"
+            "tests/unit/test_product_integrity.py::test_legacy_team_lead_migration_is_visible",
+            "tests/contract/test_product_inputs.py::test_unknown_previous_snapshot_fields_are_422_before_search"
           ]
         },
         {
@@ -6134,14 +6502,15 @@
           "tests": [
             "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
             "tests/unit/test_product_integrity.py::test_cli_and_ui_reject_mismatched_calendar_atomically",
-            "tests/unit/test_product_integrity.py::test_ui_period_switch_selects_matching_calendar_before_validation"
+            "tests/unit/test_product_integrity.py::test_cli_rejects_mismatched_calendar_with_both_periods",
+            "tests/unit/test_product_integrity.py::test_ui_period_change_selects_new_calendar_before_validation"
           ]
         },
         {
           "id": "DATA-005",
           "tests": [
-            "tests/unit/test_product_integrity.py::test_changed_optimizer_has_truthful_provenance",
-            "tests/ui/test_product_recovery.py::test_unavailable_log_is_not_reported_as_no_changes"
+            "tests/ui/test_product_recovery.py::test_unavailable_log_is_not_reported_as_no_changes",
+            "tests/unit/test_product_integrity.py::test_optimizer_without_changelog_reports_changes_and_quality"
           ]
         }
       ],
@@ -6157,16 +6526,22 @@
         "src/duty_schedule/api/planning.py",
         "src/duty_schedule/api/schemas.py",
         "src/duty_schedule/api/whatif_service.py",
+        "src/duty_schedule/cli.py",
+        "src/duty_schedule/input_validation.py",
         "src/duty_schedule/models.py",
         "src/duty_schedule/project.py",
         "src/duty_schedule/scheduler/core.py",
         "src/duty_schedule/scheduler/postprocess/quality.py",
+        "src/duty_schedule/scheduler/solver.py",
         "src/duty_schedule/ui/builders.py",
         "src/duty_schedule/ui/components.py",
         "src/duty_schedule/ui/config_io.py",
         "src/duty_schedule/ui/views.py",
         "src/duty_schedule/xls_import.py",
+        "tests/contract/test_config_yaml_contract.py",
         "tests/contract/test_product_inputs.py",
+        "tests/e2e/test_cli_workflow.py",
+        "tests/integration/test_whatif_endpoint.py",
         "tests/ui/test_product_recovery.py",
         "tests/unit/test_product_integrity.py"
       ]
@@ -6174,7 +6549,7 @@
     {
       "path": "specs/015-guided-authoring",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "FLOW-001",
@@ -6185,14 +6560,17 @@
         {
           "id": "FLOW-002",
           "tests": [
-            "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
+            "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours",
+            "tests/ui/test_product_recovery.py::test_opening_existing_other_project_updates_last_pointer"
           ]
         },
         {
           "id": "FLOW-003",
           "tests": [
-            "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot",
-            "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision"
+            "tests/ui/test_product_recovery.py::test_corrupt_record_preserves_last_valid_copy",
+            "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision",
+            "tests/ui/test_product_recovery.py::test_unsubmitted_form_is_not_reported_as_saved",
+            "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot"
           ]
         },
         {
@@ -6206,6 +6584,7 @@
         "app.py",
         "docs/project-index.json",
         "docs/project-index.md",
+        "pyproject.toml",
         "specs/015-guided-authoring/evidence.md",
         "specs/015-guided-authoring/plan.md",
         "specs/015-guided-authoring/spec.md",
@@ -6220,27 +6599,31 @@
         "src/duty_schedule/ui/views.py",
         "tests/ui/test_first_month_journey.py",
         "tests/ui/test_product_recovery.py",
-        "tests/unit/test_ui_autosave.py"
+        "tests/unit/test_ui_autosave.py",
+        "uv.lock"
       ]
     },
     {
       "path": "specs/016-stable-replanning",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "REPAIR-001",
           "tests": [
-            "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle",
-            "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins"
+            "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins",
+            "tests/unit/test_replanning.py::test_hours_and_rename_count_by_identity",
+            "tests/unit/test_replanning.py::test_nonzero_repair_matches_exhaustive_oracle",
+            "tests/unit/test_replanning.py::test_nonzero_repair_without_optional_solver_preserves_cells",
+            "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle"
           ]
         },
         {
           "id": "REPAIR-002",
           "tests": [
-            "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id",
+            "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells",
             "tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version",
-            "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells"
+            "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id"
           ]
         }
       ],
@@ -6268,28 +6651,37 @@
     {
       "path": "specs/017-two-month-quality",
       "kind": "change",
-      "status": "planned",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "QUALITY-001",
           "tests": [
+            "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months",
+            "tests/integration/test_two_month_quality.py::test_changed_role_receives_only_eligible_period_weight",
             "tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period",
-            "tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months"
+            "tests/unit/test_two_month_quality.py::test_new_and_departed_employee_do_not_invent_previous_counts"
           ]
         },
         {
           "id": "QUALITY-002",
           "tests": [
             "tests/unit/test_two_month_quality.py::test_missing_and_stale_history_are_not_zero",
-            "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source"
+            "tests/unit/test_two_month_quality.py::test_previous_active_revision_changes_quality_source",
+            "tests/unit/test_two_month_quality.py::test_project_invalidates_old_quality_source_and_reload",
+            "tests/unit/test_two_month_quality.py::test_rebinding_updated_previous_revision_reenables_quality",
+            "tests/unit/test_two_month_quality.py::test_whatif_preserves_trusted_quality_context",
+            "tests/unit/test_two_month_quality.py::test_year_boundary_checks_adjacent_period_without_fabricating_history",
+            "tests/unit/test_two_month_quality.py::test_config_save_cannot_resurrect_stale_quality_source"
           ]
         },
         {
           "id": "QUALITY-003",
           "tests": [
-            "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
             "tests/contract/test_quality_context.py::test_standalone_api_reports_month_only_quality",
-            "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window"
+            "tests/ui/test_quality_journey.py::test_summary_and_exports_show_same_quality_window",
+            "tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct",
+            "tests/unit/test_two_month_quality.py::test_pdf_renderer_receives_month_and_boundary_series",
+            "tests/unit/test_two_month_quality.py::test_xls_external_quality_source_id_is_plain_text"
           ]
         }
       ],
@@ -6313,15 +6705,19 @@
         "src/duty_schedule/scheduler/core.py",
         "src/duty_schedule/scheduler/greedy.py",
         "src/duty_schedule/scheduler/multimonth.py",
+        "src/duty_schedule/scheduler/postprocess/pipeline.py",
         "src/duty_schedule/scheduler/postprocess/quality.py",
         "src/duty_schedule/scheduler/solver.py",
         "src/duty_schedule/stats.py",
         "src/duty_schedule/ui/components.py",
         "src/duty_schedule/ui/views.py",
+        "tests/contract/test_api_response_schema_contract.py",
         "tests/contract/test_quality_context.py",
         "tests/integration/test_two_month_quality.py",
         "tests/ui/test_quality_journey.py",
-        "tests/unit/test_two_month_quality.py"
+        "tests/unit/test_planning_rules.py",
+        "tests/unit/test_two_month_quality.py",
+        "tests/unit/test_whatif_service.py"
       ]
     }
   ],

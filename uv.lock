@@ -708,7 +708,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.7" },
-    { name = "streamlit", specifier = ">=1.32.0" },
+    { name = "streamlit", specifier = ">=1.65.0" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "typer", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },

@@ -209,3 +209,9 @@ Retired helper и три селектора удалены по AUD-006; traceab
 месячный генератор. Непокрытый день возвращает failed candidate/diagnostic,
 а не исключение старого helper. Это текущий факт, а не переписывание истории.
 Полная карта: [индекс](../../docs/project-index.md).
+
+## 2026-10-11 — вновь проверенное поведение 014–017
+
+Strict Config и внешний Schedule отвергают неизвестные поля; legacy team_lead мигрируется с явным предупреждением. Mismatched calendar и invalid merged what-if variants возвращают422 до поиска. Имена проходят UI/XLS без comma splitting. Неизменённая история сохраняет полные counters/source.
+
+UI поддерживает origin-local autosave/backup/conflict и явные неприменённые формы. Repair сохраняет baseline, не создаёт ревизию на no-op check и отличает bounded от proven minimum. Качество подписывает month_only/two_months и verified/missing/stale; source previous active revision проверяется по ID/config/days. PDF boundary table и XLS escaped source ID проверены на реальном renderer/export boundary. Исторический baseline выше не заменяет текущие evidence014–017.

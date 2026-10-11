@@ -7,7 +7,6 @@ from duty_schedule.calendar import calendar_for_config
 from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.logging import get_logger
 from duty_schedule.models import Config, DaySchedule, Schedule, ShiftType
-from duty_schedule.scheduler.postprocess.quality import eligible_duty_names
 from duty_schedule.scheduler.rules import (
     ALL_SHIFTS,
     WORKING_SHIFTS,
@@ -40,6 +39,7 @@ def solve_schedule(
     holidays: set[date] | None = None,
     timeout: int = SOLVER_TIMEOUT_S,
     allow_pending: bool = False,
+    baseline: Schedule | None = None,
 ) -> Schedule:
     if not _HAS_ORTOOLS:
         raise SolverUnavailableError("OR-Tools не установлен. Установите: uv sync --extra solver")
@@ -210,64 +210,68 @@ def solve_schedule(
     for day_index, _day in enumerate(dates):
         for shift in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT):
             model.add(sum(variables[day_index, e, shift] for e in range(len(employees))) >= 1)
-    for shift in (ShiftType.EVENING, ShiftType.NIGHT):
-        eligible_names = eligible_duty_names(
-            config, calendar, dates, (shift,), allow_pending=allow_pending
-        )
-        eligible = [
-            e
-            for e, employee in enumerate(employees)
-            if targets[employee.name].selected_hours > 0 and employee.name in eligible_names
-        ]
-        total_target = sum(targets[employees[e].name].selected_hours for e in eligible)
-        total_count = sum(variables[d, e, shift] for d in range(len(dates)) for e in eligible)
-        for e in eligible:
-            count = sum(variables[d, e, shift] for d in range(len(dates)))
-            deviation = model.new_int_var(
-                0, len(dates) * max(total_target, 1) * len(employees), f"balance_{shift.value}_{e}"
-            )
-            model.add_abs_equality(
-                deviation,
-                count * total_target - total_count * targets[employees[e].name].selected_hours,
-            )
-            fairness_terms.append(deviation)
-    off_duty_names = eligible_duty_names(
-        config,
-        calendar,
-        sorted(calendar.off_dates()),
-        (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT),
-        allow_pending=allow_pending,
-    )
-    for city in {employee.city for employee in employees}:
-        eligible = [
-            e
-            for e, employee in enumerate(employees)
-            if employee.city == city
-            and employee.name in off_duty_names
-            and targets[employee.name].selected_hours > 0
-        ]
-        total_target = sum(targets[employees[e].name].selected_hours for e in eligible)
-        counts = {
-            e: sum(
-                variables[d, e, shift]
-                for d, day in enumerate(dates)
-                if not calendar.is_working(day)
-                for shift in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT)
-            )
-            for e in eligible
-        }
-        total_count = sum(counts.values())
-        for e in eligible:
-            deviation = model.new_int_var(
-                0,
-                len(dates) * max(total_target, 1) * len(employees),
-                f"weekend_balance_{city.value}_{e}",
-            )
-            model.add_abs_equality(
-                deviation,
-                counts[e] * total_target - total_count * targets[employees[e].name].selected_hours,
-            )
-            weekend_terms.append(deviation)
+    from math import lcm
+
+    from duty_schedule.quality_history import balance_pools
+
+    pools = balance_pools(config, allow_pending)
+    for names, terms in (
+        (("evening", "night"), fairness_terms),
+        (("off_moscow", "off_khabarovsk"), weekend_terms),
+    ):
+        denominators = [sum(pools[name]["weights"].values()) for name in names]
+        scale = lcm(*(value or 1 for value in denominators))
+        for name, denominator in zip(names, denominators, strict=True):
+            if not denominator:
+                continue
+            pool = pools[name]
+            counts = {}
+            for identity in pool["weights"]:
+                current = next(
+                    (e for e, employee in enumerate(employees) if employee.employee_id == identity),
+                    None,
+                )
+                counts[identity] = pool["previous_counts"].get(identity, 0)
+                if current is not None and identity in pool["current_ids"]:
+                    counts[identity] += sum(
+                        variables[d, current, shift]
+                        for d, day in enumerate(dates)
+                        if not pool["off_only"] or not calendar.is_working(day)
+                        for shift in pool["shifts"]
+                    )
+            total = sum(counts.values())
+            bound = 62 * len(pool["weights"]) * denominator
+            for identity, weight in pool["weights"].items():
+                deviation = model.new_int_var(0, bound, f"balance_{name}_{identity}")
+                model.add_abs_equality(deviation, counts[identity] * denominator - total * weight)
+                terms.append(deviation * (scale // denominator))
+
+    changes: list[Any] = []
+    if baseline is not None:
+        from duty_schedule.scheduler.postprocess.quality import schedule_cells
+
+        cells = schedule_cells(baseline)
+        for d, day in enumerate(dates):
+            for e, employee in enumerate(employees):
+                old = cells.get((day, employee.employee_id))
+                if old is None or old[0] is None:
+                    changes.append(1)
+                    continue
+                same_shift = variables[d, e, old[0]]
+                if old[0] == ShiftType.WORKDAY:
+                    same_hours = model.new_bool_var(f"same_hours_{d}_{e}")
+                    model.add(r_hours[d, e] == old[1]).only_enforce_if(same_hours)
+                    model.add(r_hours[d, e] != old[1]).only_enforce_if(same_hours.negated())
+                    unchanged = model.new_bool_var(f"unchanged_{d}_{e}")
+                    model.add_bool_and([same_shift, same_hours]).only_enforce_if(unchanged)
+                    model.add_bool_or([same_shift.negated(), same_hours.negated()]).only_enforce_if(
+                        unchanged.negated()
+                    )
+                    changes.append(unchanged.negated())
+                elif old[0] in WORKING_SHIFTS and old[1] != (calendar.hours(day) or 8):
+                    changes.append(1)
+                else:
+                    changes.append(same_shift.negated())
 
     longest = model.new_int_var(0, 7, "longest_working_streak")
     model.add_max_equality(longest, list(streaks.values()))
@@ -277,16 +281,28 @@ def solve_schedule(
         longest * 100000 + sum(streak_terms),
         sum(fairness_terms),
         sum(weekend_terms),
+        sum(
+            variables[d, e, shift]
+            for d in range(len(dates))
+            for e, employee in enumerate(employees)
+            if employee.preferred_shift is not None
+            for shift in WORKING_SHIFTS
+            if shift != employee.preferred_shift
+        ),
     ]
+    if baseline is not None:
+        layers.insert(1, sum(changes))
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max(timeout / 5, 0.01)
+    solver.parameters.max_time_in_seconds = max(timeout / len(layers), 0.01)
     solver.parameters.random_seed = config.seed
     solver.parameters.num_search_workers = 1
     best_days: list[DaySchedule] | None = None
+    first_days: list[DaySchedule] | None = None
     final_status = "timeout"
     objective_values: list[int] = []
     elapsed = 0.0
-    for layer in layers:
+    repair_proven = False
+    for layer_index, layer in enumerate(layers):
         model.minimize(layer)
         status = solver.solve(model)
         elapsed += solver.wall_time
@@ -317,8 +333,12 @@ def solve_schedule(
                             ):
                                 schedule_day.workday_hours[employee.name] = calculated_hours
             best_days.append(schedule_day)
+        if first_days is None:
+            first_days = [day.model_copy(deep=True) for day in best_days]
         final_status = "optimal" if status == cp_model.OPTIMAL else "feasible"
         objective_values.append(round(solver.objective_value))
+        if baseline is not None and layer_index == 1 and status == cp_model.OPTIMAL:
+            repair_proven = True
         if status != cp_model.OPTIMAL:
             break
         model.add(layer == round(solver.objective_value))
@@ -351,11 +371,18 @@ def solve_schedule(
             metadata={
                 "solver": "cpsat",
                 "solver_status": final_status.upper(),
+                "repair_optimality": "proven_minimum" if repair_proven else "bounded_search",
                 "objective_values": objective_values,
                 "duration_ms": round(elapsed * 1000, 1),
             },
         )
     )
+    if first_days is not None:
+        from duty_schedule.scheduler.postprocess.quality import optimization_provenance
+
+        result.metadata["optimization"] = optimization_provenance(
+            Schedule(config=config, days=first_days), result, "cpsat_lexicographic"
+        )
     if allow_pending and any(d.code == "approval_required" for d in result.diagnostics):
         result.search_status = "pending_approval"
     logger.info(

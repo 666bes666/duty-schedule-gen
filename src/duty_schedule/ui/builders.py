@@ -37,10 +37,10 @@ def _schedule_to_edit_df(schedule: Schedule) -> pd.DataFrame:
         rows.append(
             {
                 "Дата": f"{d.date.day:02d}.{d.date.month:02d} {_WEEKDAY_RU[d.date.weekday()]}",
-                "Утро 08–17": ", ".join(d.morning),
-                "Вечер 15–00": ", ".join(d.evening),
-                "Ночь 00–08": ", ".join(d.night),
-                "Рабочий день": ", ".join(d.workday),
+                "Утро 08–17": list(d.morning),
+                "Вечер 15–00": list(d.evening),
+                "Ночь 00–08": list(d.night),
+                "Рабочий день": list(d.workday),
             }
         )
     return pd.DataFrame(rows)
@@ -56,8 +56,16 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
         _row = row
 
         def _names(col: str, _r: Any = _row) -> list[str]:
-            val = str(_r.get(col, "")).strip()
-            return [n.strip() for n in val.split(",") if n.strip()] if val else []
+            value = _r.get(col, [])
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                value = []
+            if isinstance(value, str):
+                value = [value] if value else []
+            names = list(value)
+            known = {employee.name for employee in schedule.config.employees}
+            if any(name not in known for name in names):
+                raise ValueError(f"{col}: выберите сотрудника из состава")
+            return names
 
         all_assigned = set(
             _names("Утро 08–17")

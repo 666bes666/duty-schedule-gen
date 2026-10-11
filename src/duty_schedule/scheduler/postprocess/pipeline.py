@@ -4,6 +4,7 @@ import copy
 import time
 from dataclasses import dataclass
 from datetime import date
+from fractions import Fraction
 from typing import Protocol, runtime_checkable
 
 from duty_schedule.logging import get_logger
@@ -311,7 +312,7 @@ class Pipeline:
                 if item.severity == "hard"
             }
 
-        def quality(days: list[DaySchedule]) -> tuple[int, ...]:
+        def quality(days: list[DaySchedule]) -> tuple[int | Fraction, ...]:
             if ctx.config:
                 from duty_schedule.calendar import calendar_for_config
                 from duty_schedule.scheduler.postprocess.quality import quality_key

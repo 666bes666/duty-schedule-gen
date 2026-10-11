@@ -8,6 +8,7 @@ from duty_schedule.models import (
     DaySchedule,
     Employee,
     ProductionCalendar,
+    Schedule,
     ShiftType,
 )
 from duty_schedule.scheduler.constraints import (
@@ -21,13 +22,20 @@ def build_candidate(
     calendar: ProductionCalendar,
     seed: int,
     allow_pending: bool = False,
+    baseline: Schedule | None = None,
 ) -> tuple[list[DaySchedule], bool]:
+    from duty_schedule.quality_history import balance_pools
     from duty_schedule.scheduler.rules import (
         WORKING_SHIFTS,
         assignment_for,
         can_assign_work,
         carry_for_employee,
     )
+
+    pools = balance_pools(config, allow_pending)
+    from duty_schedule.scheduler.postprocess.quality import schedule_cells
+
+    baseline_cells = schedule_cells(baseline) if baseline is not None else {}
     from duty_schedule.workload import calculate_monthly_targets
 
     rng = random.Random(seed)
@@ -122,7 +130,13 @@ def build_candidate(
             state = states[employee.name]
             return (
                 float(state.consecutive_off == 1),
-                state.shift_count(shift) / max(targets[employee.name].selected_hours, 1),
+                (
+                    state.shift_count(shift)
+                    + pools[shift.value]["previous_counts"].get(employee.employee_id, 0)
+                )
+                / max(pools[shift.value]["weights"].get(employee.employee_id, 0), 1)
+                if shift.value in pools
+                else state.shift_count(shift) / max(targets[employee.name].selected_hours, 1),
                 actual[employee.name] / max(targets[employee.name].selected_hours, 1),
                 float(state.consecutive_working),
                 float(employee.preferred_shift not in (None, shift)),
@@ -135,6 +149,38 @@ def build_candidate(
         return True
 
     for day in days:
+        for employee in config.employees:
+            old = baseline_cells.get((day.date, employee.employee_id))
+            state = states[employee.name]
+            if (
+                old is None
+                or old[0] not in WORKING_SHIFTS
+                or employee.name not in day.day_off
+                or (day.date, employee.name) in pins
+            ):
+                continue
+            if old[0] in (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT) and getattr(
+                day, old[0].value
+            ):
+                continue
+            hours = old[1] if old[0] == ShiftType.WORKDAY else calendar.hours(day.date) or 8
+            if actual[employee.name] + hours > targets[
+                employee.name
+            ].selected_hours or not can_assign_work(
+                config,
+                calendar,
+                employee,
+                day.date,
+                old[0],
+                state.last_shift,
+                state.consecutive_working,
+                allow_pending,
+            ):
+                continue
+            day.day_off.remove(employee.name)
+            getattr(day, old[0].value).append(employee.name)
+            if old[0] == ShiftType.WORKDAY:
+                day.workday_hours[employee.name] = hours
         for shift in (ShiftType.NIGHT, ShiftType.MORNING, ShiftType.EVENING):
             select(day, shift)
         for name in employees:
@@ -145,7 +191,9 @@ def build_candidate(
 
     successful = True
     for employee in config.employees:
-        if not repair_employee_hours(config, calendar, days, employee, allow_pending):
+        if not repair_employee_hours(
+            config, calendar, days, employee, allow_pending, baseline=baseline
+        ):
             successful = False
     return days, successful and all(day.is_covered() for day in days)
 
@@ -157,7 +205,9 @@ def repair_employee_hours(
     employee: Employee,
     allow_pending: bool = False,
     allow_extra_duty: bool = False,
+    baseline: Schedule | None = None,
 ) -> bool:
+    from duty_schedule.scheduler.postprocess.quality import schedule_cells
     from duty_schedule.scheduler.rules import (
         WORKING_SHIFTS,
         approval_for,
@@ -168,6 +218,7 @@ def repair_employee_hours(
     )
     from duty_schedule.workload import calculate_monthly_targets
 
+    baseline_cells = schedule_cells(baseline) if baseline is not None else {}
     name = employee.name
     target = calculate_monthly_targets(config, calendar)[name].selected_hours
     carry = carry_for_employee(config, employee)
@@ -177,8 +228,8 @@ def repair_employee_hours(
     pins = {(pin.date, pin.employee_name): pin for pin in config.pins}
     states: dict[
         tuple[int, int, bool, int],
-        tuple[tuple[int, int, int], tuple[tuple[ShiftType, int], ...]],
-    ] = {(0, initial_cw, initial_shift == ShiftType.EVENING, initial_off): ((0, 0, 0), ())}
+        tuple[tuple[int, int, int, int], tuple[tuple[ShiftType, int], ...]],
+    ] = {(0, initial_cw, initial_shift == ShiftType.EVENING, initial_off): ((0, 0, 0, 0), ())}
     suffix_capacity = [0] * (len(days) + 1)
     for index in range(len(days) - 1, -1, -1):
         day = days[index]
@@ -239,7 +290,7 @@ def repair_employee_hours(
             )
         next_states: dict[
             tuple[int, int, bool, int],
-            tuple[tuple[int, int, int], tuple[tuple[ShiftType, int], ...]],
+            tuple[tuple[int, int, int, int], tuple[tuple[ShiftType, int], ...]],
         ] = {}
         for (total, streak, previous_evening, off_count), (score, path) in states.items():
             for shift, hours in options:
@@ -282,8 +333,13 @@ def repair_employee_hours(
                     pending += 1
                 new_score = (
                     score[0] + pending,
-                    score[1] + int(working and off_count == 1),
-                    score[2] + max(0, new_streak - 5) + new_streak * new_streak,
+                    score[1]
+                    + int(
+                        baseline is not None
+                        and baseline_cells.get((day.date, employee.employee_id)) != (shift, hours)
+                    ),
+                    score[2] + int(working and off_count == 1),
+                    score[3] + max(0, new_streak - 5) + new_streak * new_streak,
                 )
                 key = (new_total, new_streak, shift == ShiftType.EVENING, new_off)
                 prior = next_states.get(key)
@@ -292,7 +348,9 @@ def repair_employee_hours(
         states = next_states
         if not states:
             if not allow_extra_duty and employee.on_duty:
-                return repair_employee_hours(config, calendar, days, employee, allow_pending, True)
+                return repair_employee_hours(
+                    config, calendar, days, employee, allow_pending, True, baseline
+                )
             return False
     choices = [
         (score, path) for (total, _, _, _), (score, path) in states.items() if total == target

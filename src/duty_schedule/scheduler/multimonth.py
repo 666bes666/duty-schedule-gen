@@ -79,6 +79,11 @@ def generate_multimonth(
                 except CalendarError:
                     calendar = calendar_for_config(month_config)
             month_config.production_calendar = calendar
+            if schedules and schedules[-1].status == "ready":
+                month_config.previous_schedule = schedules[-1].model_copy(deep=True)
+                month_config.previous_schedule.config.previous_schedule = None
+            elif schedules:
+                month_config.previous_schedule = None
             schedule = generate_schedule(month_config)
             schedules.append(schedule)
             logger.info("multimonth_month_done", year=year, month=month, status=schedule.status)

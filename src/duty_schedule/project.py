@@ -24,6 +24,78 @@ class ExportBlockedError(ValueError):
         super().__init__("График не прошёл обязательные проверки; доступен диагностический проект")
 
 
+class _CellChange(BaseModel):
+    date: date
+    employee_id: str
+    before: tuple[ShiftType | None, int] | None
+    after: tuple[ShiftType | None, int] | None
+
+
+class _ChangedCells(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    changed_cells: int = Field(ge=0)
+    changes: list[_CellChange]
+
+    @model_validator(mode="after")
+    def consistent_changes(self) -> _ChangedCells:
+        if self.changed_cells != len(self.changes):
+            raise ValueError("Число правок не соответствует списку изменений")
+        if len({(change.date, change.employee_id) for change in self.changes}) != len(self.changes):
+            raise ValueError("Повторяющаяся изменённая ячейка")
+        return self
+
+
+class _OptimizationSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str | None
+    days: dict[date, dict[str, tuple[ShiftType | None, int]]]
+
+
+class _OptimizationMetadata(_ChangedCells):
+    status: str
+    algorithm: str
+    before: _OptimizationSnapshot
+    after: _OptimizationSnapshot
+    quality_labels: list[str]
+    quality_before: list[float]
+    quality_after: list[float]
+    optimality: str
+
+    @model_validator(mode="after")
+    def consistent_quality(self) -> _OptimizationMetadata:
+        if self.status not in {"changes", "no_changes", "log_unavailable"}:
+            raise ValueError("Неизвестный статус оптимизации")
+        if self.status == "no_changes" and self.changed_cells:
+            raise ValueError("Отсутствие изменений не согласовано с числом правок")
+        if len(self.quality_before) != len(self.quality_labels) or len(self.quality_after) != len(
+            self.quality_labels
+        ):
+            raise ValueError("Компоненты качества не соответствуют подписям")
+        return self
+
+
+class _RepairMetadata(_ChangedCells):
+    baseline_id: str | None
+    search_status: str
+    optimality: str
+
+
+def _check_operation_metadata(schedule: Schedule) -> None:
+    for key, model in (("optimization", _OptimizationMetadata), ("repair", _RepairMetadata)):
+        value = schedule.metadata.get(key)
+        if value is not None:
+            model.model_validate(value)
+
+
+def _snapshot_cells(schedule: Schedule) -> dict:
+    from duty_schedule.scheduler.postprocess.quality import schedule_cells
+
+    result: dict = {}
+    for (day, identity), values in schedule_cells(schedule).items():
+        result.setdefault(str(day), {})[identity] = list(values)
+    return result
+
+
 class ScheduleRevision(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
     parent_id: str | None = None
@@ -42,6 +114,7 @@ class ScheduleProject(BaseModel):
     revisions: list[ScheduleRevision] = []
     active_revisions: dict[str, str] = {}
     selected_period: str
+    repair_candidate: Schedule | None = None
 
     @model_validator(mode="after")
     def check_references(self) -> ScheduleProject:
@@ -223,6 +296,37 @@ def _append_revision(project: ScheduleProject, schedule: Schedule) -> SchedulePr
         schedule=schedule.model_copy(deep=True),
     )
     revision.schedule.revision_id = revision.id
+    snapshot = revision.schedule.config.previous_schedule
+    source_id = revision.previous_revision_id
+    if snapshot is not None and source_id is not None:
+        source = next(r.schedule for r in result.revisions if r.id == source_id)
+        same_input = (
+            snapshot.config.model_dump(exclude={"previous_schedule"})
+            == source.config.model_dump(exclude={"previous_schedule"})
+            and snapshot.days == source.days
+        )
+        if snapshot.revision_id == source_id and same_input and source.status == "ready":
+            revision.schedule.config._quality_origin = "project"
+            revision.schedule.config._quality_state = "available"
+        else:
+            revision.schedule.config._quality_state = "stale"
+            revision.schedule.status = "diagnostic"
+            if not any(
+                d.code == "previous_revision_changed" for d in revision.schedule.diagnostics
+            ):
+                revision.schedule.diagnostics.append(
+                    ScheduleDiagnostic(
+                        code="previous_revision_changed",
+                        detail="Предыдущий месяц изменён; требуется обновить перенос и пересчитать",
+                    )
+                )
+    optimization = revision.schedule.metadata.get("optimization")
+    if (
+        optimization
+        and optimization["after"]["revision_id"] is None
+        and optimization["after"]["days"] == _snapshot_cells(revision.schedule)
+    ):
+        optimization["after"]["revision_id"] = revision.id
     result.revisions.append(revision)
     result.active_revisions[period] = revision.id
     result.selected_period = period
@@ -237,6 +341,7 @@ def _append_revision(project: ScheduleProject, schedule: Schedule) -> SchedulePr
             continue
         later = next(r for r in result.revisions if r.id == later_id)
         stale = later.schedule.model_copy(deep=True)
+        stale.config._quality_state = "stale"
         stale.status = "diagnostic"
         stale.diagnostics = [
             ScheduleDiagnostic(
@@ -361,6 +466,12 @@ def check_current(project: ScheduleProject) -> ScheduleProject:
     if stale:
         checked.status = "diagnostic"
         checked.diagnostics.extend(stale)
+    if _input_key(current) == _input_key(checked):
+        result = project.model_copy(deep=True)
+        revision = next(item for item in result.revisions if item.id == current.revision_id)
+        checked.revision_id = revision.id
+        revision.schedule = checked
+        return result
     return _append_revision(project, checked)
 
 
@@ -376,6 +487,7 @@ def load_project(content: bytes | str) -> ScheduleProject:
         raw = json.loads(content)
         project = ScheduleProject.model_validate(raw)
         for revision in project.revisions:
+            _check_operation_metadata(revision.schedule)
             changelog = revision.schedule.metadata.get("changelog")
             if changelog is not None:
                 revision.schedule.metadata["changelog"] = TypeAdapter(ChangeLog).validate_python(
@@ -389,6 +501,9 @@ def load_project(content: bytes | str) -> ScheduleProject:
         if stale:
             revision.schedule.status = "diagnostic"
             revision.schedule.diagnostics.extend(stale)
+    if project.repair_candidate is not None:
+        _check_operation_metadata(project.repair_candidate)
+        project.repair_candidate = validate_schedule_result(project.repair_candidate)
     by_id = {revision.id: revision for revision in project.revisions}
     for period in sorted(project.active_revisions):
         revision = by_id[project.active_revisions[period]]
@@ -396,4 +511,27 @@ def load_project(content: bytes | str) -> ScheduleProject:
         if problems:
             revision.schedule.status = "diagnostic"
             revision.schedule.diagnostics.extend(problems)
+    for period, active_id in project.active_revisions.items():
+        revision = by_id[active_id]
+        previous_id = project.active_revisions.get(_previous_period(period))
+        snapshot = revision.schedule.config.previous_schedule
+        if snapshot is not None and previous_id is not None:
+            active_previous = by_id[previous_id].schedule
+            same_input = (
+                snapshot.config.model_dump(exclude={"previous_schedule"})
+                == active_previous.config.model_dump(exclude={"previous_schedule"})
+                and snapshot.days == active_previous.days
+            )
+            if (
+                snapshot.revision_id == previous_id
+                and same_input
+                and active_previous.status == "ready"
+                and not any(
+                    item.code == "previous_revision_changed"
+                    for item in revision.schedule.diagnostics
+                )
+            ):
+                revision.schedule.config._quality_origin = "project"
+            else:
+                revision.schedule.config._quality_state = "stale"
     return project

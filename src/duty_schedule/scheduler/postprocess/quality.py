@@ -3,17 +3,17 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 from datetime import date
+from fractions import Fraction
 
 from duty_schedule.calendar import calendar_for_config
 from duty_schedule.logging import get_logger
-from duty_schedule.models import City, Config, ProductionCalendar, Schedule, ShiftType
+from duty_schedule.models import Config, ProductionCalendar, Schedule, ShiftType
 from duty_schedule.scheduler.rules import (
     WORKING_SHIFTS,
     assignment_for,
     can_assign_work,
     carry_for_employee,
 )
-from duty_schedule.workload import calculate_monthly_targets
 
 logger = get_logger(__name__)
 
@@ -50,9 +50,7 @@ def eligible_duty_names(
     return eligible
 
 
-def quality_key(schedule: Schedule) -> tuple[int, int, int, int]:
-    calendar = calendar_for_config(schedule.config)
-    targets = calculate_monthly_targets(schedule.config, calendar)
+def quality_key(schedule: Schedule) -> tuple[int, int, Fraction, Fraction, int]:
     isolated = 0
     streak_penalty = 0
     longest = 0
@@ -72,65 +70,36 @@ def quality_key(schedule: Schedule) -> tuple[int, int, int, int]:
                 streak = 0
                 rest += 1
 
-    def imbalance(names: list[str], counts: dict[str, int]) -> int:
-        total_norm = sum(targets[name].selected_hours for name in names)
-        total_count = sum(counts[name] for name in names)
-        return sum(
-            abs(counts[name] * total_norm - total_count * targets[name].selected_hours)
-            for name in names
-        )
+    from duty_schedule.quality_history import balance_counts, balance_pools, weighted_imbalance
 
-    dates = [record.date for record in calendar.days]
-    evening_pool = eligible_duty_names(schedule.config, calendar, dates, (ShiftType.EVENING,))
-    night_pool = eligible_duty_names(schedule.config, calendar, dates, (ShiftType.NIGHT,))
-    evening_names = [
-        employee.name
+    pools = balance_pools(schedule.config)
+    values = {
+        name: weighted_imbalance(balance_counts(schedule, pool), pool["weights"])
+        for name, pool in pools.items()
+    }
+    preference = sum(
+        employee.preferred_shift is not None
+        and assignment_for(day, employee.name) in WORKING_SHIFTS
+        and assignment_for(day, employee.name) != employee.preferred_shift
+        for day in schedule.days
         for employee in schedule.config.employees
-        if employee.name in evening_pool and targets[employee.name].selected_hours > 0
-    ]
-    night_names = [
-        employee.name
-        for employee in schedule.config.employees
-        if employee.name in night_pool and targets[employee.name].selected_hours > 0
-    ]
-    fairness = imbalance(
-        evening_names,
-        {name: sum(name in day.evening for day in schedule.days) for name in evening_names},
-    ) + imbalance(
-        night_names, {name: sum(name in day.night for day in schedule.days) for name in night_names}
     )
-    weekend_fairness = 0
-    off_duty_pool = eligible_duty_names(
-        schedule.config,
-        calendar,
-        sorted(calendar.off_dates()),
-        (ShiftType.MORNING, ShiftType.EVENING, ShiftType.NIGHT),
+    return (
+        isolated,
+        longest * 100000 + streak_penalty,
+        values["evening"] + values["night"],
+        values["off_moscow"] + values["off_khabarovsk"],
+        preference,
     )
-    for city in City:
-        names = [
-            employee.name
-            for employee in schedule.config.employees
-            if employee.name in off_duty_pool
-            and employee.city == city
-            and targets[employee.name].selected_hours > 0
-        ]
-        counts = {
-            name: sum(
-                name in day.morning + day.evening + day.night
-                for day in schedule.days
-                if not calendar.is_working(day.date)
-            )
-            for name in names
-        }
-        weekend_fairness += imbalance(names, counts)
-    return isolated, longest * 100000 + streak_penalty, fairness, weekend_fairness
 
 
-def optimize_candidate(schedule: Schedule, budget: int = 120) -> Schedule:
+def optimize_candidate(
+    schedule: Schedule, budget: int = 120, baseline: Schedule | None = None
+) -> Schedule:
     from duty_schedule.scheduler.validation import validate_schedule_result
 
     best = schedule.model_copy(deep=True)
-    best_key = quality_key(best)
+    best_key = (len(changed_cells(baseline, best)) if baseline else 0, *quality_key(best))
     calendar = calendar_for_config(best.config)
     pins = {(pin.date, pin.employee_name) for pin in best.config.pins}
     rng = random.Random(best.config.seed)
@@ -185,7 +154,10 @@ def optimize_candidate(schedule: Schedule, budget: int = 120) -> Schedule:
             getattr(day, sb.value).remove(b.name)
             getattr(day, sb.value).append(a.name)
             getattr(day, sa.value).append(b.name)
-        candidate_key = quality_key(candidate)
+        candidate_key = (
+            len(changed_cells(baseline, candidate)) if baseline else 0,
+            *quality_key(candidate),
+        )
         if candidate_key >= best_key:
             continue
         candidate = validate_schedule_result(candidate)
@@ -201,7 +173,99 @@ def optimize_candidate(schedule: Schedule, budget: int = 120) -> Schedule:
         "postprocess_stage_done",
         stage="lexicographic_swaps",
         changes=accepted,
-        quality=list(best_key),
+        quality=[float(value) for value in best_key],
         budget=budget,
     )
+    best.metadata["optimization"] = optimization_provenance(schedule, best, "lexicographic_swaps")
     return best
+
+
+def optimization_provenance(before: Schedule, after: Schedule, algorithm: str) -> dict:
+    from duty_schedule.workload import assignment_hours
+
+    def snapshot(schedule: Schedule) -> dict:
+        calendar = calendar_for_config(schedule.config)
+        return {
+            "revision_id": schedule.revision_id or None,
+            "days": {
+                str(day.date): {
+                    employee.employee_id: [
+                        assignment_for(day, employee.name),
+                        assignment_hours(day, employee.name, calendar),
+                    ]
+                    for employee in schedule.config.employees
+                }
+                for day in schedule.days
+            },
+        }
+
+    first, last = snapshot(before), snapshot(after)
+    last["revision_id"] = None
+    changes = [
+        {
+            "date": day,
+            "employee_id": identity,
+            "before": values,
+            "after": last["days"].get(day, {}).get(identity),
+        }
+        for day, employees in first["days"].items()
+        for identity, values in employees.items()
+        if values != last["days"].get(day, {}).get(identity)
+    ]
+    return {
+        "status": "changes" if changes else "no_changes",
+        "algorithm": algorithm,
+        "before": first,
+        "after": last,
+        "changed_cells": len(changes),
+        "changes": changes,
+        "quality_labels": [
+            "isolated_rest",
+            "working_streaks",
+            "evening_night_balance",
+            "off_duty_balance",
+            "preference_penalty",
+        ],
+        "quality_before": [float(value) for value in quality_key(before)],
+        "quality_after": [float(value) for value in quality_key(after)],
+        "optimality": "bounded_search",
+    }
+
+
+def schedule_cells(schedule: Schedule) -> dict:
+    from duty_schedule.workload import assignment_hours
+
+    calendar = calendar_for_config(schedule.config)
+    return {
+        (day.date, employee.employee_id): (
+            assignment_for(day, employee.name),
+            assignment_hours(day, employee.name, calendar),
+        )
+        for day in schedule.days
+        for employee in schedule.config.employees
+    }
+
+
+def changed_cells(before: Schedule, after: Schedule) -> list[dict]:
+    first, last = schedule_cells(before), schedule_cells(after)
+    return [
+        {
+            "date": str(day),
+            "employee_id": identity,
+            "before": first.get((day, identity)),
+            "after": last.get((day, identity)),
+        }
+        for day, identity in sorted(first.keys() | last.keys())
+        if first.get((day, identity)) != last.get((day, identity))
+    ]
+
+
+def repair_metadata(before: Schedule, after: Schedule, optimality: str) -> dict:
+    changes = changed_cells(before, after)
+    return {
+        "baseline_id": before.revision_id or None,
+        "changed_cells": len(changes),
+        "changes": changes,
+        "search_status": after.search_status,
+        "optimality": optimality,
+    }

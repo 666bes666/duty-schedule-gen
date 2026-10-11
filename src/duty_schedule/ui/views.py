@@ -141,6 +141,7 @@ def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
                 "Вых.раб.": s.weekend_work,
                 "Празд.раб.": s.holiday_work,
                 "Макс.серия": s.max_streak_work,
+                "Макс.серия с границей": s.boundary_max_streak_work,
                 "Изол.вых.": s.isolated_off,
                 "Парн.вых.": s.paired_off,
                 "Календарная норма, ч": s.calendar_hours,
@@ -157,6 +158,12 @@ def _render_balance_metrics(stats_list: list[EmployeeStats], schedule: Schedule)
     from duty_schedule.api.whatif_service import compute_summary
 
     summary = compute_summary(stats_list, schedule)
+    st.caption(
+        f"Окно качества: {summary.quality_context['window']}; "
+        f"история: {summary.quality_context['history']}; "
+        f"источник: {summary.quality_context['source']}; "
+        f"версия: {summary.quality_context['source_revision_id'] or 'без ID'}"
+    )
     c1, c2, c3 = st.columns(3)
     c1.metric("Баланс дежурств", f"{summary.fairness_score:.4f}")
     c2.metric("Баланс выходных", f"{summary.weekend_balance_stddev:.4f}")
@@ -442,8 +449,25 @@ def _render_changelog(schedule: Schedule) -> None:
         if changelog
         else []
     )
+    provenance = schedule.metadata.get("optimization")
+    if provenance:
+        st.write(
+            f"Оптимизация: {provenance['status']}; изменённых ячеек: {provenance['changed_cells']}"
+        )
+        st.dataframe(
+            pd.DataFrame(
+                {
+                    "Показатель (меньше лучше)": provenance["quality_labels"],
+                    "До": provenance["quality_before"],
+                    "После": provenance["quality_after"],
+                }
+            ),
+            hide_index=True,
+        )
+        st.caption("Ограниченный поиск; глобальный оптимум не доказан.")
+    else:
+        st.info("log_unavailable: данные об изменениях оптимизации недоступны.")
     if not entries:
-        st.info("Лог оптимизации пуст — постобработка не внесла изменений.")
         return
     names = sorted({entry["employee"] for entry in entries})
     selected = st.selectbox("Фильтр по сотруднику", ["Все"] + names, key="changelog_filter")
@@ -574,6 +598,8 @@ def _render_whatif_panel(schedule: Schedule, holidays: set, short_days: set) -> 
                 if set(patch.patch) - set(WHATIF_PARAMETERS):
                     raise ValueError("Изменения содержат неизвестные параметры")
                 variant["patch"] = patch.patch
+                if not patch.patch:
+                    st.caption("Этот вариант не изменяет параметры")
                 variant.pop("error", None)
             except ValueError as exc:
                 variant["error"] = str(exc)

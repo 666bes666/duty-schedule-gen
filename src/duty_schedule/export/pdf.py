@@ -305,7 +305,25 @@ def generate_schedule_pdf(
 
     css = _build_css(page_size)
     body = _build_schedule_html(schedule, assignments, employees, stats)
+    from duty_schedule.quality_history import quality_report
 
+    report = quality_report(schedule)
+    body += (
+        f"<p>Окно качества: {escape(report['window'])}; история: {escape(report['history'])}; "
+        f"источник: {escape(report['source'])}; "
+        f"версия: {escape(report['source_revision_id'] or 'без ID')}; "
+        f"баланс: {report['fairness']}</p>"
+    )
+
+    body += (
+        "<table><tr><th>Сотрудник</th><th>Серия в месяце</th><th>Серия с границей</th></tr>"
+        + "".join(
+            f"<tr><td>{escape(stat.name)}</td><td>{stat.max_streak_work}</td>"
+            f"<td>{stat.boundary_max_streak_work}</td></tr>"
+            for stat in stats
+        )
+        + "</table>"
+    )
     html_str = f"<!DOCTYPE html><html><head><style>{css}</style></head><body>{body}</body></html>"
 
     try:

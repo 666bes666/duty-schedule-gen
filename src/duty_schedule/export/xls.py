@@ -164,6 +164,25 @@ def _write_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | Non
     ws_stat = wb.create_sheet(title="Статистика")
     _build_stats_sheet(ws_stat, stats, schedule, employees, num_days, ld)
 
+    from duty_schedule.quality_history import quality_report
+
+    report = quality_report(schedule)
+    quality_sheet = wb.create_sheet("Качество")
+    quality_sheet.append(["Окно", report["window"], "История", report["history"]])
+    quality_sheet.append(
+        [
+            "Источник",
+            report["source"],
+            _sanitize_cell(report["source_revision_id"]) if report["source_revision_id"] else None,
+        ]
+    )
+    for name, pool in report["pools"].items():
+        quality_sheet.append([name, pool["imbalance"]])
+    quality_sheet.append(["Сотрудник", "Серия в месяце", "Серия с границей"])
+    for stat in stats:
+        quality_sheet.append(
+            [_sanitize_cell(stat.name), stat.max_streak_work, stat.boundary_max_streak_work]
+        )
     _add_legend(wb)
 
     norms = wb.create_sheet("Нормы часов")

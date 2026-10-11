@@ -1,10 +1,11 @@
 {
   "kind": "change",
-  "status": "planned",
+  "status": "in-progress",
   "files": [
     "app.py",
     "docs/project-index.json",
     "docs/project-index.md",
+    "pyproject.toml",
     "specs/015-guided-authoring/evidence.md",
     "specs/015-guided-authoring/plan.md",
     "specs/015-guided-authoring/spec.md",
@@ -19,7 +20,8 @@
     "src/duty_schedule/ui/views.py",
     "tests/ui/test_first_month_journey.py",
     "tests/ui/test_product_recovery.py",
-    "tests/unit/test_ui_autosave.py"
+    "tests/unit/test_ui_autosave.py",
+    "uv.lock"
   ],
   "requirements": [
     {
@@ -31,14 +33,17 @@
     {
       "id": "FLOW-002",
       "tests": [
-        "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours"
+        "tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours",
+        "tests/ui/test_product_recovery.py::test_opening_existing_other_project_updates_last_pointer"
       ]
     },
     {
       "id": "FLOW-003",
       "tests": [
-        "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot",
-        "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision"
+        "tests/ui/test_product_recovery.py::test_corrupt_record_preserves_last_valid_copy",
+        "tests/ui/test_product_recovery.py::test_two_tabs_do_not_silently_overwrite_newer_revision",
+        "tests/ui/test_product_recovery.py::test_unsubmitted_form_is_not_reported_as_saved",
+        "tests/unit/test_ui_autosave.py::test_failed_and_corrupt_storage_preserve_valid_snapshot"
       ]
     },
     {

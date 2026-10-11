@@ -2,6 +2,7 @@
   "components": {
     "schemas": {
       "CalendarDay": {
+        "additionalProperties": false,
         "properties": {
           "date": {
             "format": "date",
@@ -26,7 +27,7 @@
         "type": "object"
       },
       "CarryOverState": {
-        "description": "Перенос состояния сотрудника с конца предыдущего месяца.",
+        "additionalProperties": false,
         "properties": {
           "as_of": {
             "anyOf": [
@@ -115,7 +116,8 @@
         "title": "City",
         "type": "string"
       },
-      "Config": {
+      "Config-Input": {
+        "additionalProperties": false,
         "properties": {
           "approvals": {
             "default": [],
@@ -169,6 +171,126 @@
             },
             "title": "Pins",
             "type": "array"
+          },
+          "previous_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "production_calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductionCalendar"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "solver": {
+            "default": "greedy",
+            "enum": [
+              "greedy",
+              "cpsat"
+            ],
+            "title": "Solver",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Europe/Moscow",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "year",
+          "employees"
+        ],
+        "title": "Config",
+        "type": "object"
+      },
+      "Config-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RuleApproval"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "carry_over": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CarryOverState"
+            },
+            "title": "Carry Over",
+            "type": "array"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/Employee"
+            },
+            "title": "Employees",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "norm_choices": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NormChoice"
+            },
+            "title": "Norm Choices",
+            "type": "array"
+          },
+          "optimization_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pins": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PinnedAssignment"
+            },
+            "title": "Pins",
+            "type": "array"
+          },
+          "previous_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "production_calendar": {
             "anyOf": [
@@ -244,6 +366,7 @@
         "type": "object"
       },
       "DaySchedule": {
+        "additionalProperties": false,
         "properties": {
           "date": {
             "format": "date",
@@ -327,6 +450,7 @@
         "type": "object"
       },
       "Employee": {
+        "additionalProperties": false,
         "description": "Сотрудник: обычный предел серии 6, персональный предел сохраняется.\n\nЦель 5 рабочих дней относится к качеству, а серия до 7 требует\nотдельного подтверждения конкретной даты и сотрудника.",
         "properties": {
           "always_on_duty": {
@@ -458,6 +582,16 @@
           "adjusted_hours": {
             "default": 0,
             "title": "Adjusted Hours",
+            "type": "integer"
+          },
+          "boundary_max_streak_rest": {
+            "default": 0,
+            "title": "Boundary Max Streak Rest",
+            "type": "integer"
+          },
+          "boundary_max_streak_work": {
+            "default": 0,
+            "title": "Boundary Max Streak Work",
             "type": "integer"
           },
           "calendar_hours": {
@@ -677,6 +811,7 @@
         "type": "object"
       },
       "MonthlyTarget": {
+        "additionalProperties": false,
         "properties": {
           "absence_reduction_hours": {
             "title": "Absence Reduction Hours",
@@ -716,7 +851,7 @@
       "MultiMonthRequest": {
         "properties": {
           "config": {
-            "$ref": "#/components/schemas/Config"
+            "$ref": "#/components/schemas/Config-Input"
           },
           "end_month": {
             "title": "End Month",
@@ -753,7 +888,7 @@
         "properties": {
           "schedules": {
             "items": {
-              "$ref": "#/components/schemas/Schedule"
+              "$ref": "#/components/schemas/Schedule-Output"
             },
             "title": "Schedules",
             "type": "array"
@@ -766,6 +901,7 @@
         "type": "object"
       },
       "NormChoice": {
+        "additionalProperties": false,
         "properties": {
           "employee_id": {
             "anyOf": [
@@ -823,7 +959,7 @@
         "type": "string"
       },
       "PinnedAssignment": {
-        "description": "Фиксированное назначение: конкретный сотрудник на конкретный день и смену.",
+        "additionalProperties": false,
         "properties": {
           "date": {
             "format": "date",
@@ -860,6 +996,7 @@
         "type": "object"
       },
       "ProductionCalendar": {
+        "additionalProperties": false,
         "properties": {
           "days": {
             "items": {
@@ -912,6 +1049,7 @@
         "type": "object"
       },
       "RuleApproval": {
+        "additionalProperties": false,
         "properties": {
           "confirmed_at": {
             "format": "date-time",
@@ -989,7 +1127,7 @@
           "schedule": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Output"
               },
               {
                 "type": "null"
@@ -1019,10 +1157,74 @@
         "title": "ScenarioResult",
         "type": "object"
       },
-      "Schedule": {
+      "Schedule-Input": {
+        "additionalProperties": false,
         "properties": {
           "config": {
-            "$ref": "#/components/schemas/Config"
+            "$ref": "#/components/schemas/Config-Input"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DaySchedule"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "monthly_targets": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MonthlyTarget"
+            },
+            "default": {},
+            "title": "Monthly Targets",
+            "type": "object"
+          },
+          "revision_id": {
+            "default": "",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "search_status": {
+            "default": "not_run",
+            "title": "Search Status",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "ready",
+              "diagnostic"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "days"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
+      "Schedule-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config-Output"
           },
           "days": {
             "items": {
@@ -1082,6 +1284,7 @@
         "type": "object"
       },
       "ScheduleDiagnostic": {
+        "additionalProperties": false,
         "properties": {
           "approval_rule": {
             "anyOf": [
@@ -1210,6 +1413,12 @@
             "title": "Isolated Off Total",
             "type": "integer"
           },
+          "quality_context": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Quality Context",
+            "type": "object"
+          },
           "weekend_balance_stddev": {
             "title": "Weekend Balance Stddev",
             "type": "number"
@@ -1230,6 +1439,7 @@
         "type": "object"
       },
       "VacationPeriod": {
+        "additionalProperties": false,
         "properties": {
           "end": {
             "format": "date",
@@ -1350,7 +1560,7 @@
           "schedule": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Output"
               },
               {
                 "type": "null"
@@ -1458,7 +1668,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -1522,7 +1732,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -1666,7 +1876,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -1809,7 +2019,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Input"
               }
             }
           },
@@ -1953,7 +2163,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Input"
               }
             }
           },
@@ -2078,7 +2288,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Input"
               }
             }
           },
@@ -2203,7 +2413,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -2387,7 +2597,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -2398,7 +2608,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Schedule"
+                  "$ref": "#/components/schemas/Schedule-Output"
                 }
               }
             },
@@ -2489,7 +2699,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Config"
+                "$ref": "#/components/schemas/Config-Input"
               }
             }
           },
@@ -2500,7 +2710,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Schedule"
+                  "$ref": "#/components/schemas/Schedule-Output"
                 }
               }
             },
@@ -2535,7 +2745,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Schedule"
+                "$ref": "#/components/schemas/Schedule-Input"
               }
             }
           },

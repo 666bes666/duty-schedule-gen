@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 
 class ScheduleType(StrEnum):
@@ -64,11 +64,15 @@ SHIFT_NAMES_RU = {
 
 
 class CalendarDay(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     date: date
     kind: Literal["working", "off", "short"]
 
 
 class ProductionCalendar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     year: int = Field(ge=2024, le=9999)
     month: int = Field(ge=1, le=12)
     days: list[CalendarDay]
@@ -105,6 +109,8 @@ class ProductionCalendar(BaseModel):
 
 
 class NormChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     employee_name: str
     employee_id: str | None = None
     year: int = Field(ge=2024, le=9999)
@@ -113,6 +119,8 @@ class NormChoice(BaseModel):
 
 
 class RuleApproval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     employee_name: str
     employee_id: str | None = None
     date: date
@@ -133,6 +141,8 @@ class RuleApproval(BaseModel):
 
 
 class MonthlyTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     calendar_hours: int
     absence_reduction_hours: int
     adjusted_hours: int
@@ -141,6 +151,8 @@ class MonthlyTarget(BaseModel):
 
 
 class ScheduleDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     code: str
     detail: str
     employee_name: str | None = None
@@ -150,6 +162,8 @@ class ScheduleDiagnostic(BaseModel):
 
 
 class VacationPeriod(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     start: date
     end: date
 
@@ -166,6 +180,15 @@ class Employee(BaseModel):
     Цель 5 рабочих дней относится к качеству, а серия до 7 требует
     отдельного подтверждения конкретной даты и сотрудника.
     """
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("name")
+    @classmethod
+    def nonblank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Имя сотрудника не должно быть пустым")
+        return value
 
     name: str
     employee_id: str = ""
@@ -247,6 +270,8 @@ class Employee(BaseModel):
 
 
 class PinnedAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Фиксированное назначение: конкретный сотрудник на конкретный день и смену."""
 
     date: date
@@ -264,6 +289,8 @@ class PinnedAssignment(BaseModel):
 
 
 class CarryOverState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Перенос состояния сотрудника с конца предыдущего месяца."""
 
     employee_name: str
@@ -290,6 +317,10 @@ class CarryOverState(BaseModel):
 
 
 class Config(BaseModel):
+    _quality_origin: str = PrivateAttr(default="external")
+    _quality_state: str = PrivateAttr(default="available")
+    model_config = ConfigDict(extra="forbid")
+
     month: int
     year: int = Field(ge=2024, le=9999)
     timezone: str = "Europe/Moscow"
@@ -302,6 +333,7 @@ class Config(BaseModel):
     production_calendar: ProductionCalendar | None = None
     norm_choices: list[NormChoice] = []
     approvals: list[RuleApproval] = []
+    previous_schedule: Schedule | None = None
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:
@@ -309,6 +341,15 @@ class Config(BaseModel):
             raise ValueError("Месяц должен быть в диапазоне 1–12")
         if self.year < 2024:
             raise ValueError("Год должен быть >= 2024")
+        if self.production_calendar is not None and (
+            self.production_calendar.year,
+            self.production_calendar.month,
+        ) != (self.year, self.month):
+            raise ValueError(
+                f"Период производственного календаря {self.production_calendar.year}-"
+                f"{self.production_calendar.month:02d} не соответствует конфигурации "
+                f"{self.year}-{self.month:02d}"
+            )
         return self
 
     @model_validator(mode="after")
@@ -330,6 +371,8 @@ class Config(BaseModel):
 
 
 class DaySchedule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     date: date
     is_holiday: bool = False
     morning: list[str] = []
@@ -350,6 +393,8 @@ class DaySchedule(BaseModel):
 
 
 class Schedule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     config: Config
     days: list[DaySchedule]
     metadata: dict[str, Any] = {}
@@ -368,6 +413,8 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
     """
     errors: list[str] = []
     warnings: list[str] = []
+    if config.optimization_priority is not None:
+        warnings.append("optimization_priority deprecated: порядок качества фиксирован")
 
     if not config.employees:
         errors.append("Конфигурация не содержит ни одного сотрудника.")
@@ -435,3 +482,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
             )
 
     return errors, warnings
+
+
+Config.model_rebuild()

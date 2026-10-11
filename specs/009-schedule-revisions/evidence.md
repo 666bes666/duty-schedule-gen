@@ -41,3 +41,19 @@ project.py реализует формат1, неизменяемые snapshots 
 проверки прежних требований; они не доказывают устранение PLOG или выполнение
 новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
 Status возвращён в planned. Анализ и gates документов: evidence013.
+
+## 2026-10-11 — проверка реализации 014–017
+
+Новая реализация проверена на текущем diff от `97a591bfe1b8728ce74d7618027605c800008736`; исторические результаты выше сохранены.
+
+- **REV-001**: приёмка проверена тестами `tests/unit/test_project.py`, `tests/unit/test_ui_workflow.py::test_revision_comparison_displays_changed_individual_workday_hours`, `tests/ui/test_project_journey.py`, `tests/unit/test_replanning.py::test_noop_check_preserves_revision_id`.
+- **REV-002**: приёмка проверена тестами `tests/unit/test_project.py::test_project_round_trip_preserves_revisions_and_hours`, `tests/unit/test_project.py::test_invalid_saved_changelog_is_rejected_before_replacing_project`, `tests/unit/test_project.py::test_load_reconstructs_entire_active_month_dependency_chain`, `tests/ui/test_project_journey.py`, `tests/ui/test_product_recovery.py::test_browser_reload_restores_current_project_and_hours`.
+- **REV-003**: приёмка проверена тестами `tests/unit/test_project.py::test_edit_pins_both_changed_participants`, `tests/unit/test_ui_workflow.py::test_ui_range_preserves_configuration_and_manual_pins_of_each_period`, `tests/ui/test_project_journey.py`.
+- **REV-004**: приёмка проверена тестами `tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported`, `tests/unit/test_cli_project.py`, `tests/ui/test_project_journey.py`.
+- **REV-005**: приёмка проверена тестами `tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle`, `tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins`, `tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version`.
+
+Полный проверенный прогон до последних review fixes: 839 passed, coverage 87.52%; browser18 passed. После последних fixes целевой прогон34 passed; независимые ревьюеры semantic_review_g (47 passed, Python) и semantic_review_h (42 passed, integration) дали PASS на исправленном diff. Ruff lint/format и mypy69файлов прошли. Итоговые стабильные полные прогоны, wheel smoke и dev SHA добавляются ниже после завершения.
+
+## 2026-10-11 — итоговые локальные gates
+
+849 non-UI tests passed, coverage88.18%;18browser tests passed;16additional targeted passed после двух acceptance tests. Runtime стабильный. Ruff/mypy/SDD/index/wheel/audit и независимое dual PASS: [общие реальные команды и ограничения](../014-product-reliability/evidence.md). Dev delivery добавляется после push.

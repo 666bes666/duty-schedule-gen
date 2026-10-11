@@ -395,7 +395,7 @@ def test_off_duty_quality_balances_only_available_employees(
             ],
         )
 
-    assert quality_key(candidate(balanced_pairs))[-1] < quality_key(candidate(uneven_pairs))[-1]
+    assert quality_key(candidate(balanced_pairs))[3] < quality_key(candidate(uneven_pairs))[3]
 
 
 def test_solver_off_duty_balance_ignores_weekday_only_duty_role(planning_config: Config) -> None:

@@ -12,7 +12,7 @@
         "tests/unit/test_models.py::TestConfig::test_invalid_year",
         "tests/unit/test_models.py::TestConfig::test_non_duty_not_counted_as_duty",
         "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_minimal_yaml_config",
-        "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_unknown_fields_ignored"
+        "tests/contract/test_config_yaml_contract.py::TestConfigYamlContract::test_unknown_fields_rejected"
       ]
     },
     {
@@ -300,7 +300,7 @@
         "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_too_many_variants_422",
         "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_zero_variants_422",
         "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_invalid_baseline_400",
-        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_partial_failure_variant",
+        "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_invalid_variant_rejected_before_generation",
         "tests/integration/test_whatif_endpoint.py::TestWhatIfCompare::test_calendar_error_502",
         "tests/contract/test_api_response_schema_contract.py::TestWhatIfSchema::test_metric_delta_fields"
       ]

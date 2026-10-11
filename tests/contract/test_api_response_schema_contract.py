@@ -62,6 +62,8 @@ EMPLOYEE_STATS_FIELDS = {
     "selected_hours",
     "target_hours",
     "hours_delta",
+    "boundary_max_streak_work",
+    "boundary_max_streak_rest",
 }
 SUMMARY_FIELDS = {
     "fairness_score",
@@ -69,6 +71,7 @@ SUMMARY_FIELDS = {
     "coverage_gaps",
     "isolated_off_total",
     "weekend_balance_stddev",
+    "quality_context",
 }
 VARIANT_FIELDS = {
     "name",

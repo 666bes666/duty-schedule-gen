@@ -41,3 +41,19 @@ HOURS-004 явно изменён по ответу владельца: окно
 проверки прежних требований; они не доказывают устранение PLOG или выполнение
 новых сценариев. Новые test selectors запланированы, исходники/тесты не изменены.
 Status возвращён в planned. Анализ и gates документов: evidence013.
+
+## 2026-10-11 — проверка реализации 014–017
+
+Новая реализация проверена на текущем diff от `97a591bfe1b8728ce74d7618027605c800008736`; исторические результаты выше сохранены.
+
+- **HOURS-001**: приёмка проверена тестами `tests/unit/test_workload.py::test_norm_deducts_union_of_working_absences_only`, `tests/unit/test_hour_consumers.py`.
+- **HOURS-002**: приёмка проверена тестами `tests/unit/test_workload.py::test_full_norm_choice_is_period_specific`, `tests/unit/test_planning_rules.py::test_full_norm_after_short_absence_proposes_individual_r_confirmation`.
+- **HOURS-003**: приёмка проверена тестами `tests/unit/test_planning_rules.py::test_individual_workday_requires_exact_confirmation`, `tests/integration/test_pipeline_hour_compatibility.py::test_legacy_pipeline_preserves_short_day_and_confirmed_individual_hours`, `tests/ui/test_project_journey.py`.
+- **HOURS-004**: приёмка проверена тестами `tests/unit/test_planning_rules.py::test_legacy_priority_does_not_change_agreed_greedy_quality_order`, `tests/unit/test_planning_rules.py::test_off_duty_quality_balances_only_available_employees`, `tests/unit/test_planning_rules.py::test_solver_off_duty_balance_ignores_weekday_only_duty_role`, `tests/unit/test_whatif_service.py::test_quality_is_proportional_to_selected_hours`, `tests/unit/test_whatif_service.py::test_summary_off_duty_balance_uses_available_pool`, `tests/unit/test_two_month_quality.py::test_cumulative_weights_use_eligible_roles_and_selected_norm_each_period`, `tests/integration/test_two_month_quality.py::test_both_engines_use_exactly_two_months`.
+- **HOURS-005**: приёмка проверена тестами `tests/unit/test_two_month_quality.py::test_month_and_boundary_streak_windows_are_distinct`, `tests/unit/test_product_integrity.py::test_optimizer_without_changelog_reports_changes_and_quality`.
+
+Полный проверенный прогон до последних review fixes: 839 passed, coverage 87.52%; browser18 passed. После последних fixes целевой прогон34 passed; независимые ревьюеры semantic_review_g (47 passed, Python) и semantic_review_h (42 passed, integration) дали PASS на исправленном diff. Ruff lint/format и mypy69файлов прошли. Итоговые стабильные полные прогоны, wheel smoke и dev SHA добавляются ниже после завершения.
+
+## 2026-10-11 — итоговые локальные gates
+
+849 non-UI tests passed, coverage88.18%;18browser tests passed;16additional targeted passed после двух acceptance tests. Runtime стабильный. Ruff/mypy/SDD/index/wheel/audit и независимое dual PASS: [общие реальные команды и ограничения](../014-product-reliability/evidence.md). Dev delivery добавляется после push.
