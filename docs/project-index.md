@@ -41,7 +41,7 @@
 | [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | planned | UIC-001, UIC-002, UIC-003, UIC-004, UIC-005, UIC-006 |
 | [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | complete | DEL-001, DEL-002, DEL-003, DEL-004 |
 | [specs/012-project-audit](../specs/012-project-audit/spec.md) | complete | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
-| [specs/013-product-logic-audit](../specs/013-product-logic-audit/spec.md) | in-progress | PAUD-001, PAUD-002, PAUD-003, PAUD-004, PAUD-005 |
+| [specs/013-product-logic-audit](../specs/013-product-logic-audit/spec.md) | complete | PAUD-001, PAUD-002, PAUD-003, PAUD-004, PAUD-005 |
 | [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | planned | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
 | [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | planned | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
 | [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | planned | REPAIR-001, REPAIR-002 |

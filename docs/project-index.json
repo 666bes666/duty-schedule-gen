@@ -6005,7 +6005,7 @@
     {
       "path": "specs/013-product-logic-audit",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "PAUD-001",

@@ -199,3 +199,53 @@ PAUD-001/002 остаются принятыми audit/probes; PAUD-005: scoped 
 Новые planned selectors ещё отсутствуют, это явно обозначено в каждом evidence.
 Индекс содержит18спецификаций; его окончательные статусы регенерируются перед
 staged snapshot. T005/T006 закрыты; T007 выполняется до опубликованного dev SHA.
+
+## 2026-10-11 — опубликованный контрактный коммит
+
+Коммит `087be98e8a3289ff55becf4e654b4979f737a7d2`
+(`docs: audit product logic and specify authoring improvements`) опубликован в
+origin/dev сразу после staged gates/commit. Изменены55точных путей документов;
+src/tests/scripts/config/lock/runtime не менялись. После push дерево было чистым.
+Снимок нового индекса:18спецификаций,101требование.
+
+Перед commit: `check_sdd --staged`, `check_sdd --base HEAD`, index --check и
+diff --check pass; hooks SDD/format/Conventional Commit pass. Перед push:
+`check_sdd --base HEAD~1` и index --check pass. Ruff/format/mypy текущих
+неизменённых исходников прошли; дополнительный прогон изменённого SDD/index
+контекста70passed/0failures/0errors/0skips,4,677s
+(`/tmp/duty-product-contract-checks.xml`). Full794/UI7 результаты относятся
+к тем же неизменённым исходникам; не утверждается, что новые planned tests запускались.
+
+Обычный dev push получил серверное сообщение `Bypassed rule violations:
+5 of 5 required status checks are expected`. Это существующий admin allowance
+прямого dev flow; защиты/review policy не менялись и merge не выполнялся.
+Remote CI выполняется после push, локальные gates выполнены до него.
+
+На этом SHA оба SDD Gate уже success:
+[push](https://github.com/666bes666/duty-schedule-gen/actions/runs/38142385643),
+[existing PR](https://github.com/666bes666/duty-schedule-gen/actions/runs/38142388313).
+CI Dev/Test ещё проверяются; их завершение фиксируется следующей записью.
+
+## 2026-10-11 — подтверждённая приёмка в dev
+
+Тот же опубликованный SHA087be98e8a3289ff55becf4e654b4979f737a7d2 получил success:
+[CI Dev](https://github.com/666bes666/duty-schedule-gen/actions/runs/38142385637),
+[CI Test](https://github.com/666bes666/duty-schedule-gen/actions/runs/38142388311),
+оба SDD Gate из предыдущей записи. CI Test выполнил Ubuntu/Windows Python3.12/3.13,
+security, performance, required CP-SAT без skips и Streamlit smoke. Продвижение
+в test/main и merge существующего PR не выполнялись.
+
+PAUD-001: матрица всех продуктовых областей, проверенные источники и ограничения.
+PAUD-002: пять воспроизводимых дефектов, отдельные gaps/ограничения и отрицательный
+контроль календарного флага; минимальные шаги/последствия сохранены в audit.md.
+PAUD-003: пять принятых ответов применены, неполученных согласований нет.
+PAUD-004:14future requirements/29tasks, обновлённые пять живых контрактов и
+финальный анализ без открытых критических противоречий; ID и префиксы исторического
+evidence пяти контрактов дополнительно проверены программно и сохранены точно.
+PAUD-005: full794/UI7, дополнительный SDD/index/OpenAPI70, local/staged gates,
+dev push и verified CI опубликованного SHA. Все задачи аудита закрыты.
+
+Complete относится к аудиту, интервью и обновлению спецификаций, не к реализации
+014–017. Будущие контракты и пять переоткрытых features остаются planned с
+открытыми задачами. Заключительное bookkeeping evidence/status/index публикуется
+отдельным docs-коммитом; code/test/lock от проверенного SHA не меняются.
