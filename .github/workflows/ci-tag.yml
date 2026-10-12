@@ -1,39 +1,40 @@
-name: Auto Tag on Version Change
+name: Tag Verified Version
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      source-sha:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   tag:
-    name: Create tag if version changed
+    name: Create tag for verified SHA
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-      - name: Check version change
-        id: version
+          ref: ${{ inputs.source-sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python
+        with:
+          dev-deps: "false"
+      - name: Validate or create tag
+        env:
+          DUTY_VERIFIED_SHA: ${{ inputs.source-sha }}
+          DUTY_RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          CURRENT=$(grep -Po '(?<=^version = ")[^"]+' pyproject.toml)
-          if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-            PREVIOUS=$(git show HEAD~1:pyproject.toml | grep -Po '(?<=^version = ")[^"]+' || echo "")
+          DUTY_TAG="v$DUTY_RELEASE_VERSION"
+          if DUTY_EXISTING_SHA=$(git rev-parse -q --verify "refs/tags/${DUTY_TAG}^{commit}"); then
+            uv run python scripts/artifact_manifest.py tag --sha "$DUTY_VERIFIED_SHA" --version "$DUTY_RELEASE_VERSION" --existing-sha "$DUTY_EXISTING_SHA"
           else
-            PREVIOUS=""
+            uv run python scripts/artifact_manifest.py tag --sha "$DUTY_VERIFIED_SHA" --version "$DUTY_RELEASE_VERSION"
+            git tag "$DUTY_TAG" "$DUTY_VERIFIED_SHA"
+            git push origin "refs/tags/$DUTY_TAG"
           fi
-          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
-          if [ "$CURRENT" != "$PREVIOUS" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Create and push tag
-        if: steps.version.outputs.changed == 'true'
-        run: |
-          TAG="v${{ steps.version.outputs.current }}"
-          git tag "$TAG"
-          git push origin "$TAG"

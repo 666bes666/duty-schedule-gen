@@ -64,8 +64,12 @@ def _make_schedule() -> Schedule:
 
 
 @pytest.fixture()
-def schedule() -> Schedule:
-    return _make_schedule()
+def schedule(planning_config) -> Schedule:
+    from duty_schedule.scheduler import generate_schedule
+
+    result = generate_schedule(planning_config)
+    assert result.status == "ready"
+    return result
 
 
 def test_generate_pdf_returns_bytes(schedule: Schedule) -> None:

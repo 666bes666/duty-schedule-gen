@@ -1,0 +1,100 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "files": [
+    "docs/project-index.json",
+    "docs/project-index.md",
+    "specs/000-baseline/gaps.md",
+    "specs/003-secure-api-exports/evidence.md",
+    "specs/003-secure-api-exports/plan.md",
+    "specs/003-secure-api-exports/spec.md",
+    "specs/003-secure-api-exports/tasks.md",
+    "specs/003-secure-api-exports/traceability.json",
+    "specs/004-scheduling-validity/decisions.md",
+    "specs/006-month-continuity/evidence.md",
+    "specs/006-month-continuity/plan.md",
+    "specs/006-month-continuity/spec.md",
+    "specs/006-month-continuity/tasks.md",
+    "specs/006-month-continuity/traceability.json",
+    "specs/008-workload-quality/evidence.md",
+    "specs/008-workload-quality/plan.md",
+    "specs/008-workload-quality/spec.md",
+    "specs/008-workload-quality/tasks.md",
+    "specs/008-workload-quality/traceability.json",
+    "specs/009-schedule-revisions/evidence.md",
+    "specs/009-schedule-revisions/plan.md",
+    "specs/009-schedule-revisions/spec.md",
+    "specs/009-schedule-revisions/tasks.md",
+    "specs/009-schedule-revisions/traceability.json",
+    "specs/010-ui-configuration/evidence.md",
+    "specs/010-ui-configuration/plan.md",
+    "specs/010-ui-configuration/spec.md",
+    "specs/010-ui-configuration/tasks.md",
+    "specs/010-ui-configuration/traceability.json",
+    "specs/013-product-logic-audit/audit.md",
+    "specs/013-product-logic-audit/evidence.md",
+    "specs/013-product-logic-audit/plan.md",
+    "specs/013-product-logic-audit/spec.md",
+    "specs/013-product-logic-audit/tasks.md",
+    "specs/013-product-logic-audit/traceability.json",
+    "specs/014-product-reliability/evidence.md",
+    "specs/014-product-reliability/plan.md",
+    "specs/014-product-reliability/spec.md",
+    "specs/014-product-reliability/tasks.md",
+    "specs/014-product-reliability/traceability.json",
+    "specs/015-guided-authoring/evidence.md",
+    "specs/015-guided-authoring/plan.md",
+    "specs/015-guided-authoring/spec.md",
+    "specs/015-guided-authoring/tasks.md",
+    "specs/015-guided-authoring/traceability.json",
+    "specs/016-stable-replanning/evidence.md",
+    "specs/016-stable-replanning/plan.md",
+    "specs/016-stable-replanning/spec.md",
+    "specs/016-stable-replanning/tasks.md",
+    "specs/016-stable-replanning/traceability.json",
+    "specs/017-two-month-quality/evidence.md",
+    "specs/017-two-month-quality/plan.md",
+    "specs/017-two-month-quality/spec.md",
+    "specs/017-two-month-quality/tasks.md",
+    "specs/017-two-month-quality/traceability.json"
+  ],
+  "requirements": [
+    {
+      "id": "PAUD-001",
+      "tests": [
+        "tests/unit/test_planning_rules.py",
+        "tests/unit/test_project.py",
+        "tests/contract/test_revision_api.py",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "id": "PAUD-002",
+      "tests": [
+        "tests/unit/test_whatif_service.py",
+        "tests/unit/test_hour_consumers.py",
+        "tests/unit/test_export_time_model.py"
+      ]
+    },
+    {
+      "id": "PAUD-003",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "PAUD-004",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "PAUD-005",
+      "tests": [
+        "tests/unit/test_sdd.py",
+        "tests/unit/test_project_context.py",
+        "tests/contract/test_openapi_snapshot.py"
+      ]
+    }
+  ]
+}

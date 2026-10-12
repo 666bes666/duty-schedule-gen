@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -13,11 +14,21 @@ from rich.table import Table
 
 from duty_schedule import __version__
 from duty_schedule._errors_fmt import format_validation_errors
-from duty_schedule.calendar import CalendarError, fetch_holidays
+from duty_schedule.calendar import CalendarError, fetch_production_calendar
 from duty_schedule.export.ics import export_ics
 from duty_schedule.export.xls import export_xls
+from duty_schedule.input_validation import migrate_legacy_config
 from duty_schedule.logging import get_logger, setup_logging
 from duty_schedule.models import City, Config, Schedule, collect_config_issues
+from duty_schedule.project import (
+    ExportBlockedError,
+    add_revision,
+    current_schedule,
+    ensure_exportable,
+    load_project,
+    new_project,
+    serialize_project,
+)
 from duty_schedule.scheduler import ScheduleError, generate_schedule
 
 app = typer.Typer(
@@ -36,7 +47,7 @@ def _load_config(config_path: Path) -> Config:
     try:
         with config_path.open(encoding="utf-8") as f:
             raw = yaml.safe_load(f)
-        return Config.model_validate(raw)
+        return Config.model_validate(migrate_legacy_config(raw))
     except yaml.YAMLError as exc:
         raise typer.BadParameter(f"Ошибка разбора YAML: {exc}") from exc
     except ValidationError as exc:
@@ -58,6 +69,9 @@ def generate(
         int | None, typer.Option("--seed", "-s", help="Переопределить seed из конфигурации")
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Подробный вывод")] = False,
+    project_file: Annotated[
+        Path | None, typer.Option("--project-file", help="Файл рабочего проекта")
+    ] = None,
 ) -> None:
     """Сгенерировать график дежурств и экспортировать в XLS и/или ICS."""
     setup_logging("DEBUG" if verbose else "INFO")
@@ -103,6 +117,16 @@ def generate(
             raise typer.Exit(1) from exc
 
     console.print(f"✓ Расписание сгенерировано: [bold]{len(schedule.days)} дней[/bold]")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    project = add_revision(new_project(config), schedule)
+    saved_path = project_file or output_dir / f"project_{config.year}_{config.month:02d}.duty.json"
+    saved_path.parent.mkdir(parents=True, exist_ok=True)
+    saved_path.write_bytes(serialize_project(project))
+    console.print(f"✓ Рабочий проект: {saved_path}")
+    if schedule.status != "ready":
+        _print_diagnostics(schedule)
+        raise typer.Exit(1)
 
     exported: list[str] = []
     fmt_lower = fmt.lower()
@@ -170,10 +194,21 @@ def generate_range(
 
     for sched in schedules:
         m, y = sched.config.month, sched.config.year
+        if sched.status != "ready":
+            _print_diagnostics(sched)
+            break
         xls_path = export_xls(sched, output_dir)
         console.print(f"✓ {m:02d}.{y}: [green]{xls_path}[/green] ({len(sched.days)} дней)")
 
-    console.print(f"[bold green]Готово: {len(schedules)} месяцев[/bold green]")
+    project = new_project(config)
+    for schedule in schedules:
+        project = add_revision(project, schedule)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "range.duty.json").write_bytes(serialize_project(project))
+    completed = sum(s.status == "ready" for s in schedules)
+    console.print(f"[bold green]Проверено: {completed} месяцев[/bold green]")
+    if any(s.status != "ready" for s in schedules):
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -217,11 +252,15 @@ def version() -> None:
     console.print(f"duty-schedule v{__version__}")
 
 
-def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
+def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set[date], set[date]]:
     from datetime import date as _date
 
     try:
-        return fetch_holidays(config.year, config.month)
+        calendar = config.production_calendar or fetch_production_calendar(
+            config.year, config.month
+        )
+        config.production_calendar = calendar
+        return calendar.off_dates(), calendar.short_dates()
     except CalendarError as exc:
         logger.warning("production_calendar_api_unavailable", error=str(exc))
         console.print(f"[yellow]⚠ {exc}[/yellow]")
@@ -245,8 +284,8 @@ def _load_holidays(config: Config, holidays_arg: str | None) -> tuple[set, set]:
             if _date(config.year, config.month, d).weekday() >= 5
         }
         console.print(
-            f"[yellow]Используются только выходные дни ({len(weekends)} дней). "
-            "Укажите --holidays для точного производственного календаря.[/yellow]"
+            "[yellow]Нет сохранённого производственного календаря нужного периода. "
+            "Приближение используется только для диагностического черновика.[/yellow]"
         )
         from duty_schedule.calendar import compute_short_days
 
@@ -267,6 +306,72 @@ def _print_summary(schedule: Schedule) -> None:
     table.add_row("Праздников", str(meta.get("holidays_count", "—")))
 
     console.print(table)
+
+    from duty_schedule.stats import build_assignments, compute_stats
+
+    hours = Table(title="Нормы рабочих часов")
+    for name in ("Сотрудник", "Календарная", "Скорректированная", "Выбранная", "Фактическая"):
+        hours.add_column(name)
+    for stat in compute_stats(
+        schedule, build_assignments(schedule), meta.get("production_working_days", 0)
+    ):
+        hours.add_row(
+            stat.name,
+            str(stat.calendar_hours),
+            str(stat.adjusted_hours),
+            str(stat.selected_hours),
+            str(stat.total_hours),
+        )
+    console.print(hours)
+
+
+def _print_diagnostics(schedule: Schedule) -> None:
+    console.print(
+        "[bold yellow]Диагностический черновик; обычный экспорт заблокирован[/bold yellow]"
+    )
+    for problem in schedule.diagnostics:
+        console.print(
+            f"• {problem.date or ''} {problem.employee_name or ''}: {problem.detail}", markup=False
+        )
+
+
+@app.command(name="export-project")
+def export_project(
+    project_file: Annotated[Path, typer.Argument(help="Сохранённый файл проекта")],
+    output_dir: Annotated[Path, typer.Option("--output-dir", "-o")] = Path("output"),
+    period: Annotated[str | None, typer.Option("--period", help="Месяц YYYY-MM")] = None,
+    fmt: Annotated[str, typer.Option("--format", "-f")] = "all",
+) -> None:
+    try:
+        project = load_project(project_file.read_bytes())
+        if period is not None:
+            project.selected_period = period
+        schedule = current_schedule(project)
+        if schedule is None:
+            raise ValueError("Нет графика выбранного периода")
+        schedule = ensure_exportable(schedule)
+        if fmt not in ("xls", "ics", "all", "pdf"):
+            raise ValueError("Формат: xls, ics, pdf, all")
+        if fmt in ("xls", "all"):
+            console.print(str(export_xls(schedule, output_dir)))
+        if fmt in ("ics", "all"):
+            for path in export_ics(schedule, output_dir):
+                console.print(str(path))
+        if fmt == "pdf":
+            from duty_schedule.export.pdf import generate_schedule_pdf
+
+            output_dir.mkdir(parents=True, exist_ok=True)
+            pdf_path = (
+                output_dir / f"schedule_{schedule.config.year}_{schedule.config.month:02d}.pdf"
+            )
+            pdf_path.write_bytes(generate_schedule_pdf(schedule))
+            console.print(str(pdf_path))
+    except ExportBlockedError as exc:
+        console.print(str(exc), markup=False)
+        raise typer.Exit(1) from exc
+    except (OSError, ValueError) as exc:
+        console.print(str(exc), markup=False)
+        raise typer.Exit(2) from exc
 
 
 if __name__ == "__main__":

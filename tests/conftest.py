@@ -2,16 +2,55 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
 from duty_schedule.models import (
+    CalendarDay,
+    CarryOverState,
     City,
     Config,
     Employee,
+    ProductionCalendar,
     ScheduleType,
 )
+
+
+def complete_config(config: Config) -> Config:
+    from duty_schedule.calendar import get_all_days
+
+    result = config.model_copy(deep=True)
+    result.production_calendar = ProductionCalendar(
+        year=result.year,
+        month=result.month,
+        days=[
+            CalendarDay(date=day, kind="off" if day.weekday() >= 5 else "working")
+            for day in get_all_days(result.year, result.month)
+        ],
+        source="verified test fixture",
+        fetched_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    previous = date(result.year, result.month, 1) - timedelta(days=1)
+    result.carry_over = [
+        CarryOverState(
+            employee_name=e.name,
+            employee_id=e.employee_id,
+            source="new_employee",
+            no_previous_shifts=True,
+            as_of=previous,
+        )
+        for e in result.employees
+    ]
+    return result
+
+
+@pytest.fixture
+def planning_config() -> Config:
+    employees = [_emp(f"M{i}") for i in range(6)] + [
+        _emp(f"K{i}", City.KHABAROVSK) for i in range(2)
+    ]
+    return complete_config(Config(year=2026, month=4, employees=employees))
 
 
 def _emp(

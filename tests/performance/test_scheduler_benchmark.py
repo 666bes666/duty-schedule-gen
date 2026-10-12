@@ -6,6 +6,7 @@ pytest.importorskip("pytest_benchmark")
 
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.scheduler import generate_schedule
+from tests.conftest import complete_config
 
 
 def _make_config(moscow: int = 5, khabarovsk: int = 3) -> Config:
@@ -16,19 +17,22 @@ def _make_config(moscow: int = 5, khabarovsk: int = 3) -> Config:
         Employee(name=f"Х{i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
         for i in range(khabarovsk)
     ]
-    return Config(month=3, year=2025, seed=42, employees=employees)
+    return complete_config(Config(month=3, year=2025, seed=42, employees=employees))
 
 
 @pytest.mark.benchmark
 class TestSchedulerBenchmark:
     def test_generate_minimal_team(self, benchmark):
         config = _make_config(4, 2)
-        benchmark(generate_schedule, config, set())
+        result = benchmark(generate_schedule, config, set())
+        assert result.status == "ready"
 
     def test_generate_standard_team(self, benchmark):
         config = _make_config(5, 3)
-        benchmark(generate_schedule, config, set())
+        result = benchmark(generate_schedule, config, set())
+        assert result.status == "ready"
 
     def test_generate_large_team(self, benchmark):
         config = _make_config(10, 5)
-        benchmark(generate_schedule, config, set())
+        result = benchmark(generate_schedule, config, set())
+        assert result.status == "ready"

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
+import calendar as month_calendar
+from datetime import UTC, date, datetime
+from datetime import date as Date
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import NAMESPACE_URL, uuid5
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 
 class ScheduleType(StrEnum):
@@ -28,6 +31,7 @@ class ShiftType(StrEnum):
     WORKDAY = "workday"
     DAY_OFF = "day_off"
     VACATION = "vacation"
+    SICK_LEAVE = "sick_leave"
 
 
 class City(StrEnum):
@@ -55,10 +59,111 @@ SHIFT_NAMES_RU = {
     ShiftType.WORKDAY: "Рабочий день",
     ShiftType.DAY_OFF: "Выходной",
     ShiftType.VACATION: "Отпуск",
+    ShiftType.SICK_LEAVE: "Больничный",
 }
 
 
+class CalendarDay(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    kind: Literal["working", "off", "short"]
+
+
+class ProductionCalendar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    year: int = Field(ge=2024, le=9999)
+    month: int = Field(ge=1, le=12)
+    days: list[CalendarDay]
+    source: str = Field(min_length=1)
+    fetched_at: datetime
+    verified: bool = True
+    used_saved: bool = False
+
+    @model_validator(mode="after")
+    def validate_period(self) -> ProductionCalendar:
+        expected = {
+            date(self.year, self.month, d)
+            for d in range(1, month_calendar.monthrange(self.year, self.month)[1] + 1)
+        }
+        actual = [d.date for d in self.days]
+        if len(actual) != len(expected) or set(actual) != expected:
+            raise ValueError("Календарь должен содержать каждую дату месяца ровно один раз")
+        return self
+
+    def is_working(self, day: date) -> bool:
+        return self.hours(day) > 0
+
+    def hours(self, day: date) -> int:
+        record = next((record for record in self.days if record.date == day), None)
+        if record is None:
+            raise ValueError(f"Дата {day} отсутствует в производственном календаре")
+        return {"working": 8, "short": 7, "off": 0}[record.kind]
+
+    def off_dates(self) -> set[date]:
+        return {record.date for record in self.days if record.kind == "off"}
+
+    def short_dates(self) -> set[date]:
+        return {record.date for record in self.days if record.kind == "short"}
+
+
+class NormChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    employee_name: str
+    employee_id: str | None = None
+    year: int = Field(ge=2024, le=9999)
+    month: int = Field(ge=1, le=12)
+    mode: Literal["adjusted", "full"] = "adjusted"
+
+
+class RuleApproval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    employee_name: str
+    employee_id: str | None = None
+    date: date
+    rule: Literal["working_streak", "weekly_day_off", "individual_workday"]
+    purpose: Literal["coverage", "monthly_norm"]
+    value: int | None = None
+    confirmed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def validate_value(self) -> RuleApproval:
+        if self.rule == "working_streak" and (self.value is None or not 1 <= self.value <= 7):
+            raise ValueError("Подтверждение серии должно задавать предел от 1 до 7")
+        if self.rule == "individual_workday" and (self.value is None or not 1 <= self.value <= 8):
+            raise ValueError("Подтверждение индивидуального Р должно задавать от 1 до 8 часов")
+        if self.rule == "weekly_day_off" and self.value is not None:
+            raise ValueError("Подтверждение еженедельного выходного не имеет значения value")
+        return self
+
+
+class MonthlyTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    calendar_hours: int
+    absence_reduction_hours: int
+    adjusted_hours: int
+    selected_hours: int
+    mode: Literal["adjusted", "full"] = "adjusted"
+
+
+class ScheduleDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    detail: str
+    employee_name: str | None = None
+    date: Date | None = None
+    approval_rule: Literal["working_streak", "weekly_day_off", "individual_workday"] | None = None
+    value: int | None = None
+
+
 class VacationPeriod(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     start: date
     end: date
 
@@ -70,16 +175,23 @@ class VacationPeriod(BaseModel):
 
 
 class Employee(BaseModel):
-    """Сотрудник.
+    """Сотрудник: обычный предел серии 6, персональный предел сохраняется.
 
-    max_consecutive_working: персональный лимит рабочих дней подряд.
-    Если None, используется MAX_CONSECUTIVE_WORKING_DEFAULT (6) при
-    планировании (greedy/CP-SAT). Для гибких дежурных без явного значения
-    постпроцессинг дополнительно применяет MAX_CONSECUTIVE_WORKING_FLEX (5)
-    при ребалансировке смен.
+    Цель 5 рабочих дней относится к качеству, а серия до 7 требует
+    отдельного подтверждения конкретной даты и сотрудника.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("name")
+    @classmethod
+    def nonblank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Имя сотрудника не должно быть пустым")
+        return value
+
     name: str
+    employee_id: str = ""
     city: City
     schedule_type: ScheduleType
     on_duty: bool = True
@@ -87,6 +199,7 @@ class Employee(BaseModel):
     morning_only: bool = False
     evening_only: bool = False
     vacations: list[VacationPeriod] = []
+    sick_leaves: list[VacationPeriod] = []
     unavailable_dates: list[date] = []
     preferred_shift: ShiftType | None = None
     days_off_weekly: list[int] = []
@@ -94,6 +207,8 @@ class Employee(BaseModel):
 
     @model_validator(mode="after")
     def validate_flags(self) -> Employee:
+        if not self.employee_id:
+            self.employee_id = uuid5(NAMESPACE_URL, f"duty-schedule:{self.name}").hex
         if self.morning_only and self.evening_only:
             raise ValueError(
                 f"Сотрудник {self.name!r}: нельзя одновременно указать morning_only и evening_only"
@@ -109,12 +224,14 @@ class Employee(BaseModel):
                 f"Сотрудник {self.name!r}: always_on_duty требует"
                 " указания morning_only или evening_only"
             )
-        if self.preferred_shift in (ShiftType.VACATION, ShiftType.DAY_OFF):
+        if self.preferred_shift in (ShiftType.VACATION, ShiftType.DAY_OFF, ShiftType.SICK_LEAVE):
             raise ValueError(
                 f"Сотрудник {self.name!r}: preferred_shift не может быть vacation или day_off"
             )
-        if self.max_consecutive_working is not None and self.max_consecutive_working < 1:
-            raise ValueError(f"Сотрудник {self.name!r}: max_consecutive_working должен быть >= 1")
+        if self.max_consecutive_working is not None and not 1 <= self.max_consecutive_working <= 7:
+            raise ValueError(
+                f"Сотрудник {self.name!r}: max_consecutive_working должен быть от 1 до 7"
+            )
         for d in self.days_off_weekly:
             if not 0 <= d <= 6:
                 raise ValueError(
@@ -128,7 +245,12 @@ class Employee(BaseModel):
 
     def is_blocked(self, day: date) -> bool:
         """Сотрудник недоступен: в отпуске или заблокировал день вручную."""
-        return self.is_on_vacation(day) or day in self.unavailable_dates
+        return (
+            self.is_on_vacation(day) or self.is_on_sick_leave(day) or day in self.unavailable_dates
+        )
+
+    def is_on_sick_leave(self, day: date) -> bool:
+        return any(period.start <= day <= period.end for period in self.sick_leaves)
 
     def is_day_off_weekly(self, day: date) -> bool:
         """Постоянный выходной день недели (независимо от графика)."""
@@ -148,32 +270,59 @@ class Employee(BaseModel):
 
 
 class PinnedAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Фиксированное назначение: конкретный сотрудник на конкретный день и смену."""
 
     date: date
     employee_name: str
     shift: ShiftType
+    working_hours: int | None = Field(default=None, ge=1, le=8)
 
     @model_validator(mode="after")
     def validate_shift(self) -> PinnedAssignment:
-        if self.shift == ShiftType.VACATION:
+        if self.shift in (ShiftType.VACATION, ShiftType.SICK_LEAVE):
             raise ValueError("Нельзя закрепить отпуск как пин")
+        if self.working_hours is not None and self.shift != ShiftType.WORKDAY:
+            raise ValueError("Индивидуальные часы допускаются только для Р")
         return self
 
 
 class CarryOverState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """Перенос состояния сотрудника с конца предыдущего месяца."""
 
     employee_name: str
+    employee_id: str | None = None
     last_shift: ShiftType | None = None
-    consecutive_working: int = 0
-    consecutive_off: int = 0
-    consecutive_same_shift: int = 0
+    consecutive_working: int = Field(default=0, ge=0)
+    consecutive_off: int = Field(default=0, ge=0)
+    consecutive_same_shift: int = Field(default=0, ge=0)
+    as_of: date | None = None
+    source: Literal["legacy", "manual", "schedule", "xls", "new_employee"] = "legacy"
+    no_previous_shifts: bool = False
+
+    @model_validator(mode="after")
+    def validate_counters(self) -> CarryOverState:
+        if self.consecutive_working and self.consecutive_off:
+            raise ValueError("История не может одновременно содержать рабочую серию и выходные")
+        if self.consecutive_same_shift > self.consecutive_working:
+            raise ValueError("Серия одной смены не может превышать рабочую серию")
+        if self.no_previous_shifts and (
+            self.last_shift is not None or self.consecutive_working or self.consecutive_off
+        ):
+            raise ValueError("Отсутствие предыдущих смен требует пустой истории")
+        return self
 
 
 class Config(BaseModel):
+    _quality_origin: str = PrivateAttr(default="external")
+    _quality_state: str = PrivateAttr(default="available")
+    model_config = ConfigDict(extra="forbid")
+
     month: int
-    year: int
+    year: int = Field(ge=2024, le=9999)
     timezone: str = "Europe/Moscow"
     seed: int = 42
     employees: list[Employee]
@@ -181,6 +330,10 @@ class Config(BaseModel):
     carry_over: list[CarryOverState] = []
     solver: Literal["greedy", "cpsat"] = "greedy"
     optimization_priority: OptimizationPriority | None = None
+    production_calendar: ProductionCalendar | None = None
+    norm_choices: list[NormChoice] = []
+    approvals: list[RuleApproval] = []
+    previous_schedule: Schedule | None = None
 
     @model_validator(mode="after")
     def validate_month_year(self) -> Config:
@@ -188,10 +341,22 @@ class Config(BaseModel):
             raise ValueError("Месяц должен быть в диапазоне 1–12")
         if self.year < 2024:
             raise ValueError("Год должен быть >= 2024")
+        if self.production_calendar is not None and (
+            self.production_calendar.year,
+            self.production_calendar.month,
+        ) != (self.year, self.month):
+            raise ValueError(
+                f"Период производственного календаря {self.production_calendar.year}-"
+                f"{self.production_calendar.month:02d} не соответствует конфигурации "
+                f"{self.year}-{self.month:02d}"
+            )
         return self
 
     @model_validator(mode="after")
     def validate_team_constraints(self) -> Config:
+        identities = [employee.employee_id for employee in self.employees]
+        if len(set(identities)) != len(identities):
+            raise ValueError("Постоянный идентификатор сотрудника должен быть уникальным")
         moscow_duty = sum(1 for e in self.employees if e.city == City.MOSCOW and e.on_duty)
         khabarovsk_duty = sum(1 for e in self.employees if e.city == City.KHABAROVSK and e.on_duty)
         if moscow_duty < 4:
@@ -206,6 +371,8 @@ class Config(BaseModel):
 
 
 class DaySchedule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     date: date
     is_holiday: bool = False
     morning: list[str] = []
@@ -214,6 +381,8 @@ class DaySchedule(BaseModel):
     workday: list[str] = []
     day_off: list[str] = []
     vacation: list[str] = []
+    sick_leave: list[str] = []
+    workday_hours: dict[str, int] = {}
 
     def all_assigned(self) -> list[str]:
         return self.morning + self.evening + self.night + self.workday
@@ -224,9 +393,16 @@ class DaySchedule(BaseModel):
 
 
 class Schedule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     config: Config
     days: list[DaySchedule]
     metadata: dict[str, Any] = {}
+    status: Literal["draft", "ready", "diagnostic"] = "draft"
+    diagnostics: list[ScheduleDiagnostic] = []
+    search_status: str = "not_run"
+    revision_id: str = ""
+    monthly_targets: dict[str, MonthlyTarget] = {}
 
 
 def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
@@ -237,6 +413,8 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
     """
     errors: list[str] = []
     warnings: list[str] = []
+    if config.optimization_priority is not None:
+        warnings.append("optimization_priority deprecated: порядок качества фиксирован")
 
     if not config.employees:
         errors.append("Конфигурация не содержит ни одного сотрудника.")
@@ -304,3 +482,6 @@ def collect_config_issues(config: Config) -> tuple[list[str], list[str]]:
             )
 
     return errors, warnings
+
+
+Config.model_rebuild()

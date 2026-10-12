@@ -1,70 +1,54 @@
 from __future__ import annotations
 
-from duty_schedule.models import DaySchedule, Employee, ShiftType
-from duty_schedule.scheduler.constraints import _is_working_on_day
+from duty_schedule.models import CarryOverState, DaySchedule, Employee, ShiftType
+from duty_schedule.scheduler.rules import WORKING_SHIFTS, assignment_for, matches_employee
 
 
 def _get_shift_type(emp_name: str, day: DaySchedule) -> ShiftType | None:
-    if emp_name in day.morning:
-        return ShiftType.MORNING
-    if emp_name in day.evening:
-        return ShiftType.EVENING
-    if emp_name in day.night:
-        return ShiftType.NIGHT
-    if emp_name in day.workday:
-        return ShiftType.WORKDAY
-    if emp_name in day.vacation:
-        return ShiftType.VACATION
-    if emp_name in day.day_off:
-        return ShiftType.DAY_OFF
-    return None
+    return assignment_for(day, emp_name)
 
 
 def compute_carry_over(
     days: list[DaySchedule],
     employees: list[Employee],
+    initial_history: list[CarryOverState] | None = None,
 ) -> list[dict[str, object]]:
-    result: list[dict[str, object]] = []
-
-    for emp in employees:
-        last_shift: ShiftType | None = None
-        consecutive_working = 0
-        consecutive_off = 0
-        consecutive_same_shift = 0
-        same_shift_done = False
-
-        for day in reversed(days):
-            shift = _get_shift_type(emp.name, day)
-            working = _is_working_on_day(emp.name, day)
-
-            if last_shift is None:
-                last_shift = shift
-                if working:
-                    consecutive_working = 1
-                    consecutive_same_shift = 1
-                else:
-                    consecutive_off = 1
-                continue
-
-            if working and consecutive_working > 0:
-                consecutive_working += 1
-                if not same_shift_done and shift == last_shift:
-                    consecutive_same_shift += 1
-                else:
-                    same_shift_done = True
-            elif not working and consecutive_off > 0:
-                consecutive_off += 1
+    results: list[dict[str, object]] = []
+    for employee in employees:
+        initial = next(
+            (
+                carry
+                for carry in (initial_history or [])
+                if matches_employee(carry.employee_name, carry.employee_id, employee)
+            ),
+            None,
+        )
+        working = initial.consecutive_working if initial else 0
+        off = initial.consecutive_off if initial else 0
+        same = initial.consecutive_same_shift if initial else 0
+        last = initial.last_shift if initial else None
+        for day in sorted(days, key=lambda item: item.date):
+            shift = assignment_for(day, employee.name)
+            if shift in WORKING_SHIFTS:
+                working += 1
+                off = 0
+                same = same + 1 if shift == last else 1
             else:
-                break
-
-        result.append(
+                working = 0
+                same = 0
+                off += 1
+            last = shift
+        results.append(
             {
-                "employee_name": emp.name,
-                "last_shift": str(last_shift) if last_shift else None,
-                "consecutive_working": consecutive_working,
-                "consecutive_off": consecutive_off,
-                "consecutive_same_shift": consecutive_same_shift,
+                "employee_name": employee.name,
+                "employee_id": employee.employee_id,
+                "last_shift": str(last) if last else None,
+                "consecutive_working": working,
+                "consecutive_off": off,
+                "consecutive_same_shift": same,
+                "as_of": max(day.date for day in days).isoformat() if days else None,
+                "source": "schedule",
+                "no_previous_shifts": False,
             }
         )
-
-    return result
+    return results

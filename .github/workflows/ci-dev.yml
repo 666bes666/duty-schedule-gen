@@ -16,9 +16,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-python
-      - run: uv run ruff check src/ tests/
-      - run: uv run ruff format --check src/ tests/
+      - name: Validate scoped SDD and project index
+        env:
+          DUTY_SDD_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$DUTY_SDD_BASE" ] && [ "$DUTY_SDD_BASE" != "0000000000000000000000000000000000000000" ]; then
+            uv run python scripts/check_sdd.py --base "$DUTY_SDD_BASE"
+          else
+            uv run python scripts/check_sdd.py
+          fi
+          uv run python scripts/project_context.py --check
+      - run: uv run ruff check src/ tests/ scripts/
+      - run: uv run ruff format --check src/ tests/ scripts/
 
   unit-tests:
     name: Unit Tests
@@ -26,6 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
+        with:
+          extras: solver
       - run: uv run pytest tests/unit tests/integration -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
 
   pip-audit:

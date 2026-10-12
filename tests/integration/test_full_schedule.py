@@ -17,6 +17,7 @@ from duty_schedule.models import (
 from duty_schedule.scheduler import (
     generate_schedule,
 )
+from tests.conftest import complete_config
 
 
 def _make_config(month: int = 3, year: int = 2025, seed: int = 42) -> Config:
@@ -27,7 +28,7 @@ def _make_config(month: int = 3, year: int = 2025, seed: int = 42) -> Config:
         Employee(name=f"Хабаровск {i}", city=City.KHABAROVSK, schedule_type=ScheduleType.FLEXIBLE)
         for i in range(1, 3)
     ]
-    return Config(month=month, year=year, seed=seed, employees=employees)
+    return complete_config(Config(month=month, year=year, seed=seed, employees=employees))
 
 
 class TestFullScheduleGeneration:

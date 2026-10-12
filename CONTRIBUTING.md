@@ -1,21 +1,37 @@
 # Руководство по вкладу в проект
 
+## Обязательный SDD
+
+Изменения вне SDD запрещены для всех типов файлов и работ, включая hotfix,
+cleanup, refactor, test, CI и docs. До реализации нужны проверяемые требования,
+plan/tasks/traceability и согласованный анализ; точные пути области — `files`.
+Baseline и draft не разрешают реализацию. Полный порядок: [SDD](docs/sdd.md).
+Для чистого clone и нового агента: [холодный старт](docs/cold-start.md),
+[индекс](docs/project-index.md).
+
 ## Начало работы
 
 ```bash
 git clone https://github.com/666bes666/duty-schedule-gen.git
 cd duty-schedule-gen
-uv sync --dev
-uv run pre-commit install
+uv sync --locked --dev
+uv run pre-commit install --install-hooks
+uv run pre-commit install --hook-type commit-msg
 ```
 
 Для работы с CP-SAT solver:
 
 ```bash
-uv sync --dev --extra solver
+uv sync --locked --dev --extra solver
 ```
 
 ## Ветвление и workflow
+
+Перед реализацией подготовьте спецификацию изменения, план, задачи и связь
+требований с тестами по [руководству SDD](docs/sdd.md). Правила проекта закреплены
+в [конституции](.specify/memory/constitution.md). Для агентов общая точка входа —
+[AGENTS.md](AGENTS.md). SDD обязателен для текущего pipeline; Spec Kit не создаёт
+feature-ветки и не требует отдельного согласования каждого этапа.
 
 Проект использует трёхуровневый pipeline:
 
@@ -31,10 +47,15 @@ dev ──PR──> test ──PR──> main
 
 ### Создание фичи
 
-1. Коммит напрямую в `dev` (без feature-веток)
-2. Push в GitHub сразу после коммита
-3. PR из `dev` в `test` — проходит полный набор тестов + security + performance
-4. PR из `test` в `main` — полная регрессия + UI + system тесты
+1. Требования с ID и критерии приёмки → план → задачи → анализ согласованности
+2. Реализация и тесты; актуализация задач, traceability и evidence
+3. Локальные проверки, включая `uv run python scripts/check_sdd.py`
+4. Коммит напрямую в `dev` (без feature-веток), затем push в GitHub сразу
+5. PR из `dev` в `test` — полный набор проверок + security + performance
+6. PR из `test` в `main` — полная регрессия + UI + system тесты
+
+В PR укажите каталог спецификации, затронутые ID требований и evidence.
+Структурный gate не заменяет содержательное ревью и тесты поведения.
 
 ### Hotfix
 
@@ -56,13 +77,15 @@ dev ──PR──> test ──PR──> main
 - Форматтер: `ruff format`
 - Линтер: `ruff check` — все правила из `pyproject.toml`
 - Типизация: `mypy` (проверяется в ci-test и ci-main)
-- Без комментариев в исходном коде — все заметки идут в `NOTES.md`
+- Без комментариев в исходном коде — решения записываются в спецификацию и план
 - Docstrings не обязательны
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+uv run python scripts/check_sdd.py --base HEAD
+uv run python scripts/project_context.py --check
+uv run ruff check src/ tests/ scripts/
+uv run ruff format src/ tests/ scripts/
+uv run mypy src/ scripts/
 ```
 
 ## Тесты
@@ -82,11 +105,11 @@ uv run pytest tests/e2e
 uv run pytest --cov=duty_schedule --cov-report=term-missing --ignore=tests/ui
 
 # Performance (требует группу ci-perf)
-uv sync --dev --group ci-perf
+uv sync --locked --dev --group ci-perf
 uv run pytest tests/performance --benchmark-only
 
 # UI (требует группу ci-ui)
-uv sync --dev --group ci-ui
+uv sync --locked --dev --group ci-ui
 uv run playwright install chromium
 uv run pytest tests/ui
 ```
@@ -126,17 +149,18 @@ main:  X.Y.Z (стабильный релиз)
 
 1. Обновить версию в `src/duty_schedule/__init__.py` и `pyproject.toml`
 2. PR через `dev → test → main`
-3. При мерже в `main` — `ci-tag.yml` автоматически создаёт tag `vX.Y.Z`
-4. Tag запускает `release.yml` → GitHub Release
+3. CI Main проверяет source SHA, installed wheel, контейнер API/UI и manifest/checksums
+4. При изменении версии CI Main вызывает reusable `ci-tag.yml` и `release.yml`
+5. Публикуется именно проверенный артефакт того же SHA; отдельный tag-trigger не требуется
 
 ## Dependency Groups
 
 ```bash
-uv sync --dev                           # базовые dev-зависимости
-uv sync --dev --extra solver            # + CP-SAT solver (ortools)
-uv sync --dev --group ci-security       # + bandit, pip-audit
-uv sync --dev --group ci-perf           # + pytest-benchmark
-uv sync --dev --group ci-ui             # + playwright
+uv sync --locked --dev                           # базовые dev-зависимости
+uv sync --locked --dev --extra solver            # + CP-SAT solver (ortools)
+uv sync --locked --dev --group ci-security       # + bandit, pip-audit
+uv sync --locked --dev --group ci-perf           # + pytest-benchmark
+uv sync --locked --dev --group ci-ui             # + playwright
 ```
 
 ## Сообщения коммитов
@@ -221,9 +245,12 @@ docker compose up api       # REST API (порт 8000)
 
 | Ветка | PR обязателен | Ревью | CI checks | Force push |
 |-------|:---:|:---:|-----------|:---:|
-| `dev` | Да | 0 | lint, unit-tests, smoke | Нет |
-| `test` | Да | 1 | Все ci-test jobs | Нет |
-| `main` | Да | 1 + env approval | Все ci-main jobs | Нет |
+| `dev` | Нет, прямые коммиты | 0 | lint, unit-tests, smoke, SDD | Нет |
+| `test` | Да | 1 | Все ci-test jobs + SDD | Нет |
+| `main` | Да | 1 + env approval | Все ci-main jobs + SDD | Нет |
+
+Таблица описывает ожидаемую политику, а не подтверждённые текущие настройки GitHub.
+Для `dev` обязательный PR несовместим с принятой политикой прямых коммитов.
 
 Настройка через GitHub Settings → Branches → Branch protection rules:
 - **main/test**: Required status checks, Require PR before merging, Dismiss stale reviews, Restrict force-push.
@@ -245,12 +272,13 @@ git revert <merge-commit-sha>
 git push origin dev
 ```
 
-Затем провести через `dev → test → main` как обычный PR. После мержа `ci-tag.yml` создаст новый тег с инкрементированной патч-версией.
+Затем провести через `dev → test → main` как обычный PR, явно обновив версию
+в обоих version files. CI не увеличивает patch автоматически.
 
 ### Переустановка предыдущего wheel
 
 ```bash
-pip install "duty-schedule==X.Y.Z"
+uv pip install "duty-schedule==X.Y.Z"
 ```
 
 Все wheel доступны на странице GitHub Releases. SHA256-контрольные суммы — в `checksums.txt` рядом с артефактами.

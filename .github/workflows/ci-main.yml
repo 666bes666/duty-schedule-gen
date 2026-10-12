@@ -6,20 +6,35 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-main-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   lint:
-    name: Lint + Mypy
+    name: Lint + Mypy + SDD
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-python
-      - run: uv run ruff check src/ tests/
-      - run: uv run ruff format --check src/ tests/
-      - run: uv run mypy src/
+      - name: Validate specifications and implementation linkage
+        env:
+          DUTY_SDD_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$DUTY_SDD_BASE" ] && [ "$DUTY_SDD_BASE" != "0000000000000000000000000000000000000000" ]; then
+            uv run python scripts/check_sdd.py --base "$DUTY_SDD_BASE"
+          else
+            uv run python scripts/check_sdd.py
+          fi
+      - run: uv run python scripts/project_context.py --check
+      - run: uv run ruff check src/ tests/ scripts/
+      - run: uv run ruff format --check src/ tests/ scripts/
+      - run: uv run mypy src/ scripts/
 
   test-all:
     name: Tests (${{ matrix.os }} / py${{ matrix.python }})
@@ -37,12 +52,17 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           extra-groups: ci-perf
+          extras: solver
       - run: uv run pytest tests/unit tests/integration tests/contract tests/e2e tests/system tests/performance -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
       - uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  solver-tests:
+    name: Required Solver
+    uses: ./.github/workflows/solver-tests.yml
 
   security:
     name: Security Scan
@@ -63,17 +83,9 @@ jobs:
       - uses: ./.github/actions/setup-python
         with:
           extra-groups: ci-ui
-      - name: Install Playwright browsers
-        run: uv run playwright install chromium --with-deps
-      - name: Start Streamlit
-        uses: ./.github/actions/streamlit-smoke
-        with:
-          keep-running: "true"
-      - name: Run UI tests
-        run: uv run pytest tests/ui -q
-      - name: Stop Streamlit
-        if: always()
-        run: kill $(cat /tmp/streamlit.pid) 2>/dev/null || true
+          extras: solver
+      - run: uv run playwright install chromium --with-deps
+      - run: uv run pytest tests/ui -q
 
   system-tests:
     name: System Tests
@@ -81,23 +93,153 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
+        with:
+          extras: solver
       - run: uv run pytest tests/system -q
 
-  build:
-    name: Build
+  performance:
+    name: Performance Benchmarks for Release SHA
     runs-on: ubuntu-latest
-    needs: [lint, test-all, security, ui-tests, system-tests]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-python
         with:
-          dev-deps: "false"
-      - name: Build wheel
-        run: uv build
-      - name: Smoke test from wheel
+          extra-groups: ci-perf
+          extras: solver
+      - name: Restore previously successful benchmark baseline
+        id: bench-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .benchmarks/
+          key: benchmark-v2-${{ runner.os }}-py312-${{ github.sha }}
+          restore-keys: benchmark-v2-${{ runner.os }}-py312-
+      - name: Compare restored baseline and run benchmarks
+        env:
+          DUTY_CURRENT_SHA: ${{ github.sha }}
+          DUTY_MATCHED_KEY: ${{ steps.bench-cache.outputs.cache-matched-key }}
         run: |
-          uv run --no-project --with dist/*.whl duty-schedule --help
+          duty_benchmark_args=(--benchmark-save=baseline --benchmark-min-rounds=2 --benchmark-max-time=15)
+          if [ -n "$DUTY_MATCHED_KEY" ]; then
+            DUTY_PREVIOUS_BENCHMARK=$(uv run python scripts/benchmark_baseline.py .benchmarks --current-sha "$DUTY_CURRENT_SHA")
+            if [ -n "$DUTY_PREVIOUS_BENCHMARK" ]; then
+              duty_benchmark_args+=(--benchmark-compare="$DUTY_PREVIOUS_BENCHMARK" --benchmark-compare-fail=mean:10%)
+            fi
+          fi
+          uv run pytest tests/performance -q --benchmark-only "${duty_benchmark_args[@]}"
+      - name: Retain candidate after successful comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-candidate
+          path: .benchmarks/
+          include-hidden-files: true
+
+  build:
+    name: Build and Installed Artifact
+    runs-on: ubuntu-latest
+    needs: [lint, test-all, security, ui-tests, system-tests, solver-tests, performance]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version-changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python
+        with:
+          dev-deps: "false"
+      - name: Native PDF libraries
+        run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 fonts-dejavu-core
+      - name: Read release identity
+        id: version
+        env:
+          DUTY_BASE_SHA: ${{ github.event.before }}
+        run: |
+          DUTY_RELEASE_VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          DUTY_PREVIOUS_VERSION="$DUTY_RELEASE_VERSION"
+          if [ -n "$DUTY_BASE_SHA" ] && git cat-file -e "${DUTY_BASE_SHA}:pyproject.toml" 2>/dev/null; then
+            DUTY_PREVIOUS_VERSION=$(git show "${DUTY_BASE_SHA}:pyproject.toml" | uv run python -c "import sys,tomllib; print(tomllib.loads(sys.stdin.read())['project']['version'])")
+          fi
+          echo "version=$DUTY_RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "changed=$([ "$DUTY_RELEASE_VERSION" != "$DUTY_PREVIOUS_VERSION" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - run: uv build
+      - name: Functionally test isolated installed wheel
+        run: |
+          DUTY_REPO_DIR="$GITHUB_WORKSPACE"
+          DUTY_WHEEL=$(find "$DUTY_REPO_DIR/dist" -maxdepth 1 -name '*.whl' -print -quit)
+          cd "$RUNNER_TEMP"
+          uv run --no-project --with "${DUTY_WHEEL}[solver]" python "$DUTY_REPO_DIR/scripts/artifact_smoke.py" --source-root "$DUTY_REPO_DIR"
+      - name: Bind tested files to source SHA and version
+        env:
+          DUTY_VERIFIED_SHA: ${{ github.sha }}
+          DUTY_RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: uv run python scripts/artifact_manifest.py build --sha "$DUTY_VERIFIED_SHA" --version "$DUTY_RELEASE_VERSION"
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ github.sha }}
           path: dist/
+
+  packaged-runtime:
+    name: Container API and UI Journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python
+        with:
+          extra-groups: ci-ui
+      - run: uv run playwright install chromium --with-deps
+      - run: docker build -t duty-schedule-smoke .
+      - run: uv run python scripts/container_smoke.py --image duty-schedule-smoke
+      - run: docker run --rm -d --name duty-ui-smoke -p 127.0.0.1:8501:8501 duty-schedule-smoke
+      - run: uv run python scripts/container_smoke.py --ui-url http://127.0.0.1:8501
+      - name: Exercise packaged project workflow
+        env:
+          DUTY_TEST_STREAMLIT_URL: http://127.0.0.1:8501
+        run: uv run pytest tests/ui/test_project_journey.py -q --junitxml=packaged-ui.xml
+      - run: uv run python scripts/check_junit.py packaged-ui.xml
+      - name: Container logs
+        if: failure()
+        run: docker logs duty-ui-smoke || true
+      - name: Stop container
+        if: always()
+        run: docker rm -f duty-ui-smoke || true
+
+  promote-benchmark:
+    name: Promote Verified Release Benchmark
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, packaged-runtime]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: benchmark-candidate
+          path: .benchmarks/
+      - uses: actions/cache/save@v4
+        with:
+          path: .benchmarks/
+          key: benchmark-v2-${{ runner.os }}-py312-${{ github.sha }}
+
+  tag:
+    name: Tag Verified Main SHA
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.version-changed == 'true'
+    needs: [build, packaged-runtime, promote-benchmark]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ci-tag.yml
+    with:
+      source-sha: ${{ github.sha }}
+      version: ${{ needs.build.outputs.version }}
+
+  release:
+    name: Release Verified Artifact
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.version-changed == 'true'
+    needs: [build, packaged-runtime, promote-benchmark, tag]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      source-sha: ${{ github.sha }}
+      version: ${{ needs.build.outputs.version }}
+      artifact-name: dist-${{ github.sha }}

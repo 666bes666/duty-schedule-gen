@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import re
+from datetime import date, timedelta
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from openpyxl import load_workbook
 
@@ -36,11 +39,16 @@ def _find_sheet(wb: Workbook) -> Worksheet:
 
 def _resolve_shift(raw: object) -> ShiftType:
     if raw is None:
-        return ShiftType.DAY_OFF
+        raise XlsImportError("Пустая ячейка смены не является подтверждённым выходным")
     text = str(raw).strip().lower()
-    if not text:
-        return ShiftType.DAY_OFF
-    return LABEL_TO_SHIFT.get(text, ShiftType.DAY_OFF)
+    if re.fullmatch(r"день \(\d+\s*ч\)", text):
+        return ShiftType.WORKDAY
+    if text == "б":
+        return ShiftType.SICK_LEAVE
+    shift = LABEL_TO_SHIFT.get(text)
+    if shift is None:
+        raise XlsImportError(f"Неизвестная ячейка смены: {raw!r}")
+    return shift
 
 
 def _find_day_columns(ws: Worksheet) -> tuple[int, int]:
@@ -59,36 +67,59 @@ def _find_day_columns(ws: Worksheet) -> tuple[int, int]:
     return start_col, end_col
 
 
-def _build_carry_over(name: str, shifts: list[ShiftType]) -> CarryOverState:
-    last_shift: ShiftType | None = None
-    consecutive_working = 0
-    consecutive_off = 0
-    consecutive_same_shift = 0
-
-    for s in reversed(shifts):
-        if s in WORKING_SHIFTS:
-            if consecutive_off > 0:
-                break
-            if last_shift is None:
-                last_shift = s
-                consecutive_same_shift = 1
-            elif s == last_shift:
-                consecutive_same_shift += 1
-            else:
-                break
-            consecutive_working += 1
+def _build_carry_over(
+    name: str,
+    shifts: list[ShiftType],
+    employee_id: str | None = None,
+    as_of: date | None = None,
+    initial: CarryOverState | None = None,
+) -> CarryOverState:
+    last = initial.last_shift if initial else None
+    working = initial.consecutive_working if initial else 0
+    off = initial.consecutive_off if initial else 0
+    same = initial.consecutive_same_shift if initial else 0
+    for shift in shifts:
+        if shift in WORKING_SHIFTS:
+            working += 1
+            off = 0
+            same = same + 1 if shift == last else 1
         else:
-            if consecutive_working > 0:
-                break
-            consecutive_off += 1
-
+            off += 1
+            working = 0
+            same = 0
+        last = shift
     return CarryOverState(
         employee_name=name,
-        last_shift=last_shift,
-        consecutive_working=consecutive_working,
-        consecutive_off=consecutive_off,
-        consecutive_same_shift=consecutive_same_shift,
+        employee_id=employee_id,
+        last_shift=last,
+        consecutive_working=working,
+        consecutive_off=off,
+        consecutive_same_shift=same,
+        as_of=as_of,
+        source="xls" if as_of else "legacy",
     )
+
+
+def _read_metadata(wb: Workbook) -> dict[str, Any]:
+    name = "__duty_schedule_metadata__"
+    if name not in wb.sheetnames:
+        return {}
+    try:
+        result = json.loads(
+            "".join(
+                str(wb[name].cell(row=row, column=1).value)
+                for row in range(1, wb[name].max_row + 1)
+                if wb[name].cell(row=row, column=1).value is not None
+            )
+        )
+        if not isinstance(result, dict) or result.get("format_version") != 1:
+            raise ValueError("Неподдерживаемая версия XLS metadata")
+        if not isinstance(result.get("employee_ids", {}), dict):
+            raise ValueError("Некорректные идентификаторы сотрудников")
+        date(int(result["year"]), int(result["month"]), 1)
+        return result
+    except (KeyError, TypeError, ValueError) as exc:
+        raise XlsImportError(f"Некорректные metadata XLS: {exc}") from exc
 
 
 def parse_carry_over_from_xls(file_bytes: bytes) -> list[CarryOverState]:
@@ -98,6 +129,7 @@ def parse_carry_over_from_xls(file_bytes: bytes) -> list[CarryOverState]:
         raise XlsImportError(f"Не удалось открыть файл: {exc}") from exc
 
     ws = _find_sheet(wb)
+    metadata = _read_metadata(wb)
 
     try:
         start_col, end_col = _find_day_columns(ws)
@@ -106,22 +138,68 @@ def parse_carry_over_from_xls(file_bytes: bytes) -> list[CarryOverState]:
     except Exception as exc:
         raise XlsImportError(f"Ошибка при разборе структуры файла: {exc}") from exc
 
+    as_of = None
+    initial_history: list[CarryOverState] = []
+    if metadata:
+        try:
+            as_of = date(int(metadata["year"]), int(metadata["month"]), end_col - start_col + 1)
+            initial_history = [
+                CarryOverState.model_validate(item) for item in metadata.get("initial_history", [])
+            ]
+            for col in range(start_col, end_col + 1):
+                label = str(ws.cell(row=2, column=col).value)
+                match = re.match(r"^(\d+)", label)
+                if match is None or int(match[1]) != col - start_col + 1:
+                    raise ValueError("Неоднозначные или пропущенные даты XLS")
+        except (TypeError, ValueError) as exc:
+            raise XlsImportError(f"Неверный период XLS: {exc}") from exc
     results: list[CarryOverState] = []
     row = 3
-    while True:
+    expected_names = set(metadata.get("employee_ids", {}))
+    while row <= ws.max_row:
         name_val = ws.cell(row=row, column=1).value
         if name_val is None or str(name_val).strip() == "":
-            break
-        name = str(name_val).strip()
-        if name.startswith("'"):
+            if any(
+                ws.cell(row=row, column=col).value is not None
+                for col in range(start_col, end_col + 1)
+            ):
+                raise XlsImportError(f"Строка {row}: пустое имя сотрудника")
+            row += 1
+            continue
+        name = str(name_val)
+        if name not in expected_names and name.startswith("'") and name[1:] in expected_names:
             name = name[1:]
+        if expected_names and name not in expected_names:
+            raise XlsImportError(f"Строка {row}: неизвестное имя {name!r}")
 
         shifts: list[ShiftType] = []
         for col in range(start_col, end_col + 1):
             cell_val = ws.cell(row=row, column=col).value
             shifts.append(_resolve_shift(cell_val))
 
-        results.append(_build_carry_over(name, shifts))
+        employee_id = metadata.get("employee_ids", {}).get(name)
+        if employee_id is not None and not isinstance(employee_id, str):
+            raise XlsImportError("Идентификатор сотрудника должен быть строкой")
+        initial = (
+            next(
+                (
+                    carry
+                    for carry in initial_history
+                    if carry.employee_id == employee_id
+                    if employee_id
+                ),
+                None,
+            )
+            if employee_id
+            else next((carry for carry in initial_history if carry.employee_name == name), None)
+        )
+        if initial and initial.as_of != date(
+            int(metadata["year"]), int(metadata["month"]), 1
+        ) - timedelta(days=1):
+            raise XlsImportError("Исходная история XLS относится к неверному периоду")
+        results.append(_build_carry_over(name, shifts, employee_id, as_of, initial))
         row += 1
 
+    if expected_names and {item.employee_name for item in results} != expected_names:
+        raise XlsImportError("XLS содержит неполный состав сотрудников")
     return results

@@ -14,6 +14,65 @@ from duty_schedule.api.whatif_service import (
 )
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.stats import EmployeeStats
+from tests.contract.conftest import config_payload
+
+
+def test_quality_is_proportional_to_selected_hours() -> None:
+    from dataclasses import replace
+
+    from duty_schedule.models import Schedule
+
+    config = _make_config()
+    first, second = TestComputeSummary()._make_stats(
+        [employee.name for employee in config.employees[:2]], [10, 20], [20, 20]
+    )
+    first = replace(first, selected_hours=80, target_hours=80, total_hours=80)
+    second = replace(second, selected_hours=160, target_hours=160, total_hours=160)
+    summary = compute_summary([first, second], Schedule(config=config, days=[]))
+    assert summary.fairness_score == 0
+
+
+def test_equal_hour_norms_do_not_hide_unbalanced_evening_duties() -> None:
+    from dataclasses import replace
+
+    from duty_schedule.models import Schedule
+
+    config = _make_config()
+    first, second = TestComputeSummary()._make_stats(
+        [employee.name for employee in config.employees[:2]], [20, 20], [20, 20]
+    )
+    first = replace(first, evening=0, selected_hours=160, target_hours=160)
+    second = replace(second, evening=20, selected_hours=160, target_hours=160)
+    from duty_schedule.models import DaySchedule
+
+    days = [
+        DaySchedule(date=date(config.year, config.month, n), evening=[config.employees[1].name])
+        for n in range(1, 21)
+    ]
+    summary = compute_summary([first, second], Schedule(config=config, days=days))
+    assert summary.fairness_score > 0
+
+
+@pytest.mark.parametrize("restriction", ["five_two", "blocked_off", "weekly_off"])
+def test_summary_off_duty_balance_uses_available_pool(restriction) -> None:
+    from duty_schedule.models import Schedule
+
+    config = _make_config()
+    employee = config.employees[3]
+    if restriction == "five_two":
+        employee.schedule_type = ScheduleType.FIVE_TWO
+    elif restriction == "blocked_off":
+        employee.unavailable_dates = sorted(config.production_calendar.off_dates())
+    else:
+        employee.days_off_weekly = list(range(7))
+    stats = TestComputeSummary()._make_stats(
+        [employee.name for employee in config.employees],
+        [20] * 6,
+        [20] * 6,
+        weekend_work=[5, 5, 5, 0, 0, 0],
+    )
+    summary = compute_summary(stats, Schedule(config=config, days=[]))
+    assert summary.weekend_balance_stddev == 0
 
 
 def _emp(
@@ -25,19 +84,9 @@ def _emp(
 
 
 def _make_config(seed: int = 42) -> Config:
-    return Config(
-        month=3,
-        year=2025,
-        seed=seed,
-        employees=[
-            _emp("Иванов Иван"),
-            _emp("Петров Пётр"),
-            _emp("Сидоров Сидор"),
-            _emp("Козлов Коля"),
-            _emp("Дальнев Дмитрий", City.KHABAROVSK),
-            _emp("Востоков Виктор", City.KHABAROVSK),
-        ],
-    )
+    data = config_payload()
+    data["seed"] = seed
+    return Config.model_validate(data)
 
 
 HOLIDAYS: set[date] = {date(2025, 3, 8), date(2025, 3, 10)}
@@ -145,16 +194,20 @@ class TestComputeSummary:
             [20, 20],
             [20, 20],
         )
+        cfg = _make_config()
+        cfg.month = 2
+        cfg.production_calendar = None
+        names = [employee.name for employee in cfg.employees if employee.city == City.MOSCOW]
+        nights = [employee.name for employee in cfg.employees if employee.city == City.KHABAROVSK]
         days = [
             DaySchedule(
-                date=date(2025, 3, d),
-                morning=["A"],
-                evening=["B"],
-                night=["X"],
+                date=date(2025, 2, d),
+                morning=[names[d % 4]],
+                evening=[names[(d + 1) % 4]],
+                night=[nights[d % 2]],
             )
-            for d in range(1, 32)
+            for d in range(1, 29)
         ]
-        cfg = _make_config()
         schedule = Schedule(config=cfg, days=days)
         summary = compute_summary(stats, schedule)
         assert summary.fairness_score == 0.0
@@ -180,6 +233,8 @@ class TestComputeSummary:
             for d in range(1, 32)
         ]
         cfg = _make_config()
+        cfg.employees[0].name = "A"
+        cfg.employees[1].name = "B"
         schedule = Schedule(config=cfg, days=days)
         summary = compute_summary(stats, schedule)
         assert summary.fairness_score > 0

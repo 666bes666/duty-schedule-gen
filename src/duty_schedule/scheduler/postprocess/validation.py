@@ -43,6 +43,18 @@ def validate_schedule(
     violations.extend(_check_schedule_type(days, employees, holidays))
     violations.extend(_check_shift_restrictions(days, employees))
     violations.extend(_check_blocked_dates(days, employees))
+    for emp in employees:
+        for day in days:
+            if emp.is_day_off_weekly(day.date) and _is_working_on_day(emp.name, day):
+                violations.append(
+                    ConstraintViolation(
+                        employee=emp.name,
+                        date=day.date,
+                        constraint="weekly_day_off",
+                        detail="working on fixed weekly day off without confirmed context",
+                        severity="hard",
+                    )
+                )
     if pins:
         violations.extend(_check_pinned(days, pins, emp_by_name))
 
@@ -100,7 +112,7 @@ def _check_coverage(days: list[DaySchedule]) -> list[ConstraintViolation]:
 def _check_duplicates(days: list[DaySchedule]) -> list[ConstraintViolation]:
     result: list[ConstraintViolation] = []
     for d in days:
-        assigned = d.all_assigned()
+        assigned = d.all_assigned() + d.day_off + d.vacation + d.sick_leave
         seen: set[str] = set()
         for name in assigned:
             if name in seen:
@@ -136,7 +148,7 @@ def _check_max_consecutive(
                             date=d.date,
                             constraint="max_consecutive_working",
                             detail=f"streak {streak} > limit {limit}",
-                            severity="soft",
+                            severity="hard",
                         )
                     )
             else:
@@ -212,7 +224,7 @@ def _check_blocked_dates(
                         date=d.date,
                         constraint="blocked_date",
                         detail="working on blocked/vacation date",
-                        severity="soft",
+                        severity="hard",
                     )
                 )
     return result

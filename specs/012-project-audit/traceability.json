@@ -1,0 +1,98 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "AUD-001",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "AUD-002",
+      "tests": [
+        "tests/unit/test_sdd.py"
+      ]
+    },
+    {
+      "id": "AUD-003",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py"
+      ]
+    },
+    {
+      "id": "AUD-004",
+      "tests": [
+        "tests/unit/test_project_context.py"
+      ]
+    },
+    {
+      "id": "AUD-005",
+      "tests": [
+        "tests/unit/test_project_context.py"
+      ]
+    },
+    {
+      "id": "AUD-006",
+      "tests": [
+        "tests/unit/test_constraints.py",
+        "tests/unit/test_planning_rules.py"
+      ]
+    },
+    {
+      "id": "AUD-007",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py",
+        "tests/contract/test_openapi_snapshot.py",
+        "tests/ui/test_project_journey.py"
+      ]
+    }
+  ],
+  "files": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/ci-dev.yml",
+    ".github/workflows/ci-main.yml",
+    ".github/workflows/ci-test.yml",
+    ".github/workflows/sdd.yml",
+    ".gitignore",
+    ".pre-commit-config.yaml",
+    ".specify/UPSTREAM.md",
+    ".specify/memory/constitution.md",
+    ".specify/templates/evidence-template.md",
+    ".specify/templates/plan-template.md",
+    ".specify/templates/spec-template.md",
+    ".specify/templates/tasks-template.md",
+    ".specify/templates/traceability-template.json",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "NOTES.md",
+    "README.md",
+    "docs/cold-start.md",
+    "docs/project-index.json",
+    "docs/project-index.md",
+    "docs/sdd.md",
+    "scripts/check_sdd.py",
+    "scripts/project_context.py",
+    "specs/012-project-audit/evidence.md",
+    "specs/012-project-audit/github-protection.json",
+    "specs/012-project-audit/plan.md",
+    "specs/012-project-audit/spec.md",
+    "specs/012-project-audit/tasks.md",
+    "specs/012-project-audit/traceability.json",
+    "src/duty_schedule/logging.py",
+    "src/duty_schedule/scheduler/__init__.py",
+    "src/duty_schedule/scheduler/constraints.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/views.py",
+    "tests/contract/test_openapi_snapshot.py",
+    "tests/ui/test_project_journey.py",
+    "tests/unit/test_constraints.py",
+    "tests/unit/test_delivery_workflows.py",
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_project_context.py",
+    "tests/unit/test_sdd.py"
+  ]
+}

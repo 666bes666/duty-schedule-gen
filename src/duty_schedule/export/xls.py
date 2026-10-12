@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -59,6 +60,7 @@ SHIFT_LABELS = {
     "workday": "День",
     "day_off": "—",
     "vacation": "Отп",
+    "sick_leave": "Б",
 }
 
 
@@ -115,7 +117,7 @@ def _countif_working(sheet_name: str, day_range: str) -> str:
         f'COUNTIF({s}{day_range},"Утро")'
         f'+COUNTIF({s}{day_range},"Вечер")'
         f'+COUNTIF({s}{day_range},"Ночь")'
-        f'+COUNTIF({s}{day_range},"День")'
+        f'+COUNTIF({s}{day_range},"День*")'
     )
 
 
@@ -125,11 +127,11 @@ def _is_working_array(sheet_name: str, day_range: str) -> str:
         f'(({s}{day_range}="Утро")'
         f'+({s}{day_range}="Вечер")'
         f'+({s}{day_range}="Ночь")'
-        f'+({s}{day_range}="День")>0)*1'
+        f'+(LEFT({s}{day_range},4)="День")>0)*1'
     )
 
 
-def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | None = None) -> Path:
+def _write_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | None = None) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     filename = output_dir / f"schedule_{schedule.config.year}_{schedule.config.month:02d}.xlsx"
 
@@ -156,16 +158,84 @@ def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | Non
     num_days = len(days)
     ld = get_column_letter(num_days + 2)
 
-    _build_helper_sheet(wb, days, employees, production_days, short_days)
+    _build_helper_sheet(wb, days, employees, production_days, short_days, schedule, stats)
     _build_schedule_sheet(ws, days, employees, assignments, num_days, ld)
 
     ws_stat = wb.create_sheet(title="Статистика")
     _build_stats_sheet(ws_stat, stats, schedule, employees, num_days, ld)
 
+    from duty_schedule.quality_history import quality_report
+
+    report = quality_report(schedule)
+    quality_sheet = wb.create_sheet("Качество")
+    quality_sheet.append(["Окно", report["window"], "История", report["history"]])
+    quality_sheet.append(
+        [
+            "Источник",
+            report["source"],
+            _sanitize_cell(report["source_revision_id"]) if report["source_revision_id"] else None,
+        ]
+    )
+    for name, pool in report["pools"].items():
+        quality_sheet.append([name, pool["imbalance"]])
+    quality_sheet.append(["Сотрудник", "Серия в месяце", "Серия с границей"])
+    for stat in stats:
+        quality_sheet.append(
+            [_sanitize_cell(stat.name), stat.max_streak_work, stat.boundary_max_streak_work]
+        )
     _add_legend(wb)
+
+    norms = wb.create_sheet("Нормы часов")
+    norms.append(
+        [
+            "Сотрудник",
+            "Календарная",
+            "Скорректированная",
+            "Выбранная",
+            "Фактическая",
+            "Отклонение",
+            "Больничный (дней)",
+        ]
+    )
+    for stat in stats:
+        norms.append(
+            [
+                _sanitize_cell(stat.name),
+                stat.calendar_hours,
+                stat.adjusted_hours,
+                stat.selected_hours,
+                stat.total_hours,
+                stat.hours_delta,
+                stat.sick_leave,
+            ]
+        )
+    metadata = wb.create_sheet("__duty_schedule_metadata__")
+    metadata.sheet_state = "hidden"
+    raw = json.dumps(
+        {
+            "format_version": 1,
+            "year": schedule.config.year,
+            "month": schedule.config.month,
+            "employee_ids": {e.name: e.employee_id for e in employees},
+            "initial_history": [c.model_dump(mode="json") for c in schedule.config.carry_over],
+            "calendar": schedule.config.production_calendar.model_dump(mode="json")
+            if schedule.config.production_calendar
+            else None,
+            "carry_over": schedule.model_dump(mode="json")["metadata"].get("carry_over", []),
+        },
+        ensure_ascii=False,
+    )
+    for index in range(0, len(raw), 16000):
+        metadata.cell(row=index // 16000 + 1, column=1, value=raw[index : index + 16000])
 
     wb.save(filename)
     return filename
+
+
+def export_xls(schedule: Schedule, output_dir: Path, short_days: set[date] | None = None) -> Path:
+    from duty_schedule.project import ensure_exportable
+
+    return _write_xls(ensure_exportable(schedule), output_dir, short_days)
 
 
 def _build_helper_sheet(
@@ -174,6 +244,8 @@ def _build_helper_sheet(
     employees: list[Employee],
     production_days: int,
     short_days: set[date] | None = None,
+    schedule: Schedule | None = None,
+    stats: list[EmployeeStats] | None = None,
 ) -> None:
     ws = wb.create_sheet(title=HELPER_SHEET)
     ws.sheet_state = "hidden"
@@ -189,13 +261,34 @@ def _build_helper_sheet(
 
     for col_idx, day in enumerate(days, start=3):
         ws.cell(row=1, column=col_idx, value=day.date)
-        ws.cell(row=2, column=col_idx, value=HOURS_SHORT if day.date in _short else HOURS_NORMAL)
-        ws.cell(row=3, column=col_idx, value=1 if day.date.weekday() >= 5 else 0)
+        calendar = schedule.config.production_calendar if schedule else None
+        day_hours = (
+            calendar.hours(day.date) or 8
+            if calendar
+            else HOURS_SHORT
+            if day.date in _short
+            else HOURS_NORMAL
+        )
+        ws.cell(row=2, column=col_idx, value=day_hours)
+        nonworking = not calendar.is_working(day.date) if calendar else day.date.weekday() >= 5
+        ws.cell(row=3, column=col_idx, value=int(nonworking))
         ws.cell(row=4, column=col_idx, value=1 if day.is_holiday and day.date.weekday() < 5 else 0)
 
     for i, emp in enumerate(employees):
         row = 6 + i
         ws.cell(row=row, column=1, value=_sanitize_cell(emp.name))
+        if stats:
+            ws.cell(row=row, column=2, value=stats[i].selected_hours)
+        for col_idx, day in enumerate(days, start=3):
+            calendar = schedule.config.production_calendar if schedule else None
+            hours = (
+                calendar.hours(day.date) or 8
+                if calendar is not None
+                else HOURS_SHORT
+                if day.date in _short
+                else HOURS_NORMAL
+            )
+            ws.cell(row=row, column=col_idx, value=day.workday_hours.get(emp.name, hours))
 
 
 def _build_schedule_sheet(
@@ -255,7 +348,7 @@ def _build_schedule_sheet(
     hc2.border = THIN_BORDER
 
     last_row = len(employees) + 2
-    dv = DataValidation(type="list", formula1='"Утро,Вечер,Ночь,День,—,Отп"', allow_blank=True)
+    dv = DataValidation(type="list", formula1='"Утро,Вечер,Ночь,День,—,Отп,Б"', allow_blank=True)
     dv.sqref = f"C3:{ld}{last_row}"
     ws.add_data_validation(dv)
 
@@ -279,6 +372,8 @@ def _build_schedule_sheet(
         for col_idx, day in enumerate(days, start=3):
             shift_key = emp_days.get(day.date, "day_off")
             label = SHIFT_LABELS.get(shift_key, "?")
+            if shift_key == "workday" and emp.name in day.workday_hours:
+                label = f"День ({day.workday_hours[emp.name]}ч)"
             color = CELL_COLORS.get(shift_key, "FFFFFF")
             if day.is_holiday:
                 color = _darken(color)
@@ -290,7 +385,8 @@ def _build_schedule_sheet(
 
         dr = f"C{row_idx}:{ld}{row_idx}"
         total_formula = (
-            f'=COUNTIF({dr},"Утро")+COUNTIF({dr},"Вечер")+COUNTIF({dr},"Ночь")+COUNTIF({dr},"День")'
+            f'=COUNTIF({dr},"Утро")+COUNTIF({dr},"Вечер")'
+            f'+COUNTIF({dr},"Ночь")+COUNTIF({dr},"День*")'
         )
         itogo = ws.cell(row=row_idx, column=total_col, value=total_formula)
         itogo.fill = _fill(COLORS["name"])
@@ -300,8 +396,8 @@ def _build_schedule_sheet(
 
         hours_formula = (
             f"=SUMPRODUCT("
-            f'(({dr}="Утро")+({dr}="Вечер")+({dr}="Ночь")+({dr}="День")>0)*1'
-            f",'{HELPER_SHEET}'!C$2:{ld}$2)"
+            f'(({dr}="Утро")+({dr}="Вечер")+({dr}="Ночь")+(LEFT({dr},4)="День")>0)*1'
+            f",'{HELPER_SHEET}'!C${row_idx + 3}:{ld}${row_idx + 3})"
         )
         hc3 = ws.cell(row=row_idx, column=hours_col, value=hours_formula)
         hc3.fill = _fill(COLORS["name"])
@@ -360,8 +456,8 @@ def _build_stats_sheet(
         "Сотрудник",
         "Город",
         "Рабочих\nдней",
-        "Норма",
-        "±Норма",
+        "Норма\nчасов",
+        "±Норма\nчасов",
         "Часов",
         "Утро",
         "Вечер",
@@ -416,14 +512,14 @@ def _build_stats_sheet(
         f_working = f"={_countif_working(SCHED_SHEET, dr)}"
         _stat_cell(ws, row_idx, 3, f_working, COLORS["name"])
 
-        f_norm = f"='{HELPER_SHEET}'!$B$5"
+        f_norm = f"='{HELPER_SHEET}'!$B${6 + i}"
         _stat_cell(ws, row_idx, 4, f_norm, COLORS["name"])
 
-        f_delta = f"=C{row_idx}-D{row_idx}"
+        f_delta = f"=F{row_idx}-D{row_idx}"
         _stat_cell(ws, row_idx, 5, f_delta, COLORS["name"])
 
         iw = _is_working_array(SCHED_SHEET, dr)
-        f_hours = f"=SUMPRODUCT({iw},'{HELPER_SHEET}'!C$2:{ld}$2)"
+        f_hours = f"=SUMPRODUCT({iw},'{HELPER_SHEET}'!C${6 + i}:{ld}${6 + i})"
         _stat_cell(ws, row_idx, 6, f_hours, COLORS["name"])
 
         f_morning = f"=COUNTIF('{SCHED_SHEET}'!{dr},\"Утро\")"
@@ -438,7 +534,7 @@ def _build_stats_sheet(
         _stat_cell(ws, row_idx, 9, f_night, COLORS["night"], white=True)
         ws[f"I{row_idx}"].number_format = zero_dash_fmt
 
-        f_workday = f"=COUNTIF('{SCHED_SHEET}'!{dr},\"День\")"
+        f_workday = f"=COUNTIF('{SCHED_SHEET}'!{dr},\"День*\")"
         _stat_cell(ws, row_idx, 10, f_workday, COLORS["workday"], white=True)
         ws[f"J{row_idx}"].number_format = zero_dash_fmt
 

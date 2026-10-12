@@ -1,0 +1,2838 @@
+{
+  "components": {
+    "schemas": {
+      "CalendarDay": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "working",
+              "off",
+              "short"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "kind"
+        ],
+        "title": "CalendarDay",
+        "type": "object"
+      },
+      "CarryOverState": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "consecutive_off": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Consecutive Off",
+            "type": "integer"
+          },
+          "consecutive_same_shift": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Consecutive Same Shift",
+            "type": "integer"
+          },
+          "consecutive_working": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Consecutive Working",
+            "type": "integer"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "last_shift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShiftType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "no_previous_shifts": {
+            "default": false,
+            "title": "No Previous Shifts",
+            "type": "boolean"
+          },
+          "source": {
+            "default": "legacy",
+            "enum": [
+              "legacy",
+              "manual",
+              "schedule",
+              "xls",
+              "new_employee"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "employee_name"
+        ],
+        "title": "CarryOverState",
+        "type": "object"
+      },
+      "City": {
+        "enum": [
+          "moscow",
+          "khabarovsk"
+        ],
+        "title": "City",
+        "type": "string"
+      },
+      "Config-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RuleApproval"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "carry_over": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CarryOverState"
+            },
+            "title": "Carry Over",
+            "type": "array"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/Employee"
+            },
+            "title": "Employees",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "norm_choices": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NormChoice"
+            },
+            "title": "Norm Choices",
+            "type": "array"
+          },
+          "optimization_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pins": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PinnedAssignment"
+            },
+            "title": "Pins",
+            "type": "array"
+          },
+          "previous_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "production_calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductionCalendar"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "solver": {
+            "default": "greedy",
+            "enum": [
+              "greedy",
+              "cpsat"
+            ],
+            "title": "Solver",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Europe/Moscow",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "year",
+          "employees"
+        ],
+        "title": "Config",
+        "type": "object"
+      },
+      "Config-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RuleApproval"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "carry_over": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CarryOverState"
+            },
+            "title": "Carry Over",
+            "type": "array"
+          },
+          "employees": {
+            "items": {
+              "$ref": "#/components/schemas/Employee"
+            },
+            "title": "Employees",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "norm_choices": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NormChoice"
+            },
+            "title": "Norm Choices",
+            "type": "array"
+          },
+          "optimization_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptimizationPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pins": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PinnedAssignment"
+            },
+            "title": "Pins",
+            "type": "array"
+          },
+          "previous_schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "production_calendar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductionCalendar"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "solver": {
+            "default": "greedy",
+            "enum": [
+              "greedy",
+              "cpsat"
+            ],
+            "title": "Solver",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "Europe/Moscow",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "year",
+          "employees"
+        ],
+        "title": "Config",
+        "type": "object"
+      },
+      "ConfigValidationResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "errors",
+          "warnings"
+        ],
+        "title": "ConfigValidationResponse",
+        "type": "object"
+      },
+      "DaySchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "day_off": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Day Off",
+            "type": "array"
+          },
+          "evening": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Evening",
+            "type": "array"
+          },
+          "is_holiday": {
+            "default": false,
+            "title": "Is Holiday",
+            "type": "boolean"
+          },
+          "morning": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Morning",
+            "type": "array"
+          },
+          "night": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Night",
+            "type": "array"
+          },
+          "sick_leave": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sick Leave",
+            "type": "array"
+          },
+          "vacation": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Vacation",
+            "type": "array"
+          },
+          "workday": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Workday",
+            "type": "array"
+          },
+          "workday_hours": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Workday Hours",
+            "type": "object"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "DaySchedule",
+        "type": "object"
+      },
+      "Employee": {
+        "additionalProperties": false,
+        "description": "Сотрудник: обычный предел серии 6, персональный предел сохраняется.\n\nЦель 5 рабочих дней относится к качеству, а серия до 7 требует\nотдельного подтверждения конкретной даты и сотрудника.",
+        "properties": {
+          "always_on_duty": {
+            "default": false,
+            "title": "Always On Duty",
+            "type": "boolean"
+          },
+          "city": {
+            "$ref": "#/components/schemas/City"
+          },
+          "days_off_weekly": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Days Off Weekly",
+            "type": "array"
+          },
+          "employee_id": {
+            "default": "",
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "evening_only": {
+            "default": false,
+            "title": "Evening Only",
+            "type": "boolean"
+          },
+          "max_consecutive_working": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Consecutive Working"
+          },
+          "morning_only": {
+            "default": false,
+            "title": "Morning Only",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "on_duty": {
+            "default": true,
+            "title": "On Duty",
+            "type": "boolean"
+          },
+          "preferred_shift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShiftType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule_type": {
+            "$ref": "#/components/schemas/ScheduleType"
+          },
+          "sick_leaves": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VacationPeriod"
+            },
+            "title": "Sick Leaves",
+            "type": "array"
+          },
+          "unavailable_dates": {
+            "default": [],
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Unavailable Dates",
+            "type": "array"
+          },
+          "vacations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VacationPeriod"
+            },
+            "title": "Vacations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "schedule_type"
+        ],
+        "title": "Employee",
+        "type": "object"
+      },
+      "EmployeeDelta": {
+        "properties": {
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricDelta"
+            },
+            "title": "Metrics",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "metrics"
+        ],
+        "title": "EmployeeDelta",
+        "type": "object"
+      },
+      "EmployeeStatsSchema": {
+        "properties": {
+          "absence_reduction_hours": {
+            "default": 0,
+            "title": "Absence Reduction Hours",
+            "type": "integer"
+          },
+          "adjusted_hours": {
+            "default": 0,
+            "title": "Adjusted Hours",
+            "type": "integer"
+          },
+          "boundary_max_streak_rest": {
+            "default": 0,
+            "title": "Boundary Max Streak Rest",
+            "type": "integer"
+          },
+          "boundary_max_streak_work": {
+            "default": 0,
+            "title": "Boundary Max Streak Work",
+            "type": "integer"
+          },
+          "calendar_hours": {
+            "default": 0,
+            "title": "Calendar Hours",
+            "type": "integer"
+          },
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "cost_hours": {
+            "default": 0.0,
+            "title": "Cost Hours",
+            "type": "number"
+          },
+          "day_off": {
+            "title": "Day Off",
+            "type": "integer"
+          },
+          "evening": {
+            "title": "Evening",
+            "type": "integer"
+          },
+          "holiday_work": {
+            "title": "Holiday Work",
+            "type": "integer"
+          },
+          "hours_delta": {
+            "default": 0,
+            "title": "Hours Delta",
+            "type": "integer"
+          },
+          "isolated_off": {
+            "title": "Isolated Off",
+            "type": "integer"
+          },
+          "max_streak_rest": {
+            "title": "Max Streak Rest",
+            "type": "integer"
+          },
+          "max_streak_work": {
+            "title": "Max Streak Work",
+            "type": "integer"
+          },
+          "morning": {
+            "title": "Morning",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "night": {
+            "title": "Night",
+            "type": "integer"
+          },
+          "paired_off": {
+            "title": "Paired Off",
+            "type": "integer"
+          },
+          "selected_hours": {
+            "default": 0,
+            "title": "Selected Hours",
+            "type": "integer"
+          },
+          "sick_leave": {
+            "default": 0,
+            "title": "Sick Leave",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "integer"
+          },
+          "target_hours": {
+            "default": 0,
+            "title": "Target Hours",
+            "type": "integer"
+          },
+          "total_hours": {
+            "title": "Total Hours",
+            "type": "integer"
+          },
+          "total_working": {
+            "title": "Total Working",
+            "type": "integer"
+          },
+          "vacation": {
+            "title": "Vacation",
+            "type": "integer"
+          },
+          "weekend_work": {
+            "title": "Weekend Work",
+            "type": "integer"
+          },
+          "workday": {
+            "title": "Workday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "city",
+          "total_working",
+          "target",
+          "morning",
+          "evening",
+          "night",
+          "workday",
+          "day_off",
+          "vacation",
+          "weekend_work",
+          "holiday_work",
+          "max_streak_work",
+          "max_streak_rest",
+          "isolated_off",
+          "paired_off",
+          "total_hours"
+        ],
+        "title": "EmployeeStatsSchema",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HolidaysResponse": {
+        "properties": {
+          "holidays": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Holidays",
+            "type": "array"
+          },
+          "month": {
+            "title": "Month",
+            "type": "integer"
+          },
+          "short_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Short Days",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "holidays",
+          "short_days"
+        ],
+        "title": "HolidaysResponse",
+        "type": "object"
+      },
+      "MetricDelta": {
+        "properties": {
+          "baseline": {
+            "title": "Baseline",
+            "type": "integer"
+          },
+          "delta": {
+            "title": "Delta",
+            "type": "integer"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "variant": {
+            "title": "Variant",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "baseline",
+          "variant",
+          "delta",
+          "direction"
+        ],
+        "title": "MetricDelta",
+        "type": "object"
+      },
+      "MonthlyTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "absence_reduction_hours": {
+            "title": "Absence Reduction Hours",
+            "type": "integer"
+          },
+          "adjusted_hours": {
+            "title": "Adjusted Hours",
+            "type": "integer"
+          },
+          "calendar_hours": {
+            "title": "Calendar Hours",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "adjusted",
+            "enum": [
+              "adjusted",
+              "full"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "selected_hours": {
+            "title": "Selected Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calendar_hours",
+          "absence_reduction_hours",
+          "adjusted_hours",
+          "selected_hours"
+        ],
+        "title": "MonthlyTarget",
+        "type": "object"
+      },
+      "MultiMonthRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config-Input"
+          },
+          "end_month": {
+            "title": "End Month",
+            "type": "integer"
+          },
+          "end_year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "End Year",
+            "type": "integer"
+          },
+          "start_month": {
+            "title": "Start Month",
+            "type": "integer"
+          },
+          "start_year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Start Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config",
+          "start_month",
+          "start_year",
+          "end_month",
+          "end_year"
+        ],
+        "title": "MultiMonthRequest",
+        "type": "object"
+      },
+      "MultiMonthResponse": {
+        "properties": {
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/Schedule-Output"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules"
+        ],
+        "title": "MultiMonthResponse",
+        "type": "object"
+      },
+      "NormChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "mode": {
+            "default": "adjusted",
+            "enum": [
+              "adjusted",
+              "full"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "month": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "type": "integer"
+          },
+          "year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "employee_name",
+          "year",
+          "month"
+        ],
+        "title": "NormChoice",
+        "type": "object"
+      },
+      "OptimizationPriority": {
+        "enum": [
+          "isolated_weekends",
+          "evening_shifts",
+          "consecutive_days",
+          "weekend_days"
+        ],
+        "title": "OptimizationPriority",
+        "type": "string"
+      },
+      "PinnedAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "shift": {
+            "$ref": "#/components/schemas/ShiftType"
+          },
+          "working_hours": {
+            "anyOf": [
+              {
+                "maximum": 8.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Hours"
+          }
+        },
+        "required": [
+          "date",
+          "employee_name",
+          "shift"
+        ],
+        "title": "PinnedAssignment",
+        "type": "object"
+      },
+      "ProductionCalendar": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "fetched_at": {
+            "format": "date-time",
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "month": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "type": "integer"
+          },
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "used_saved": {
+            "default": false,
+            "title": "Used Saved",
+            "type": "boolean"
+          },
+          "verified": {
+            "default": true,
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "year": {
+            "maximum": 9999.0,
+            "minimum": 2024.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "month",
+          "days",
+          "source",
+          "fetched_at"
+        ],
+        "title": "ProductionCalendar",
+        "type": "object"
+      },
+      "RuleApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_at": {
+            "format": "date-time",
+            "title": "Confirmed At",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "purpose": {
+            "enum": [
+              "coverage",
+              "monthly_norm"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rule": {
+            "enum": [
+              "working_streak",
+              "weekly_day_off",
+              "individual_workday"
+            ],
+            "title": "Rule",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "employee_name",
+          "date",
+          "rule",
+          "purpose"
+        ],
+        "title": "RuleApproval",
+        "type": "object"
+      },
+      "ScenarioResult": {
+        "properties": {
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeStatsSchema"
+            },
+            "title": "Stats",
+            "type": "array"
+          },
+          "status": {
+            "default": "ready",
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SummaryMetrics"
+          }
+        },
+        "required": [
+          "stats",
+          "summary"
+        ],
+        "title": "ScenarioResult",
+        "type": "object"
+      },
+      "Schedule-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config-Input"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DaySchedule"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "monthly_targets": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MonthlyTarget"
+            },
+            "default": {},
+            "title": "Monthly Targets",
+            "type": "object"
+          },
+          "revision_id": {
+            "default": "",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "search_status": {
+            "default": "not_run",
+            "title": "Search Status",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "ready",
+              "diagnostic"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "days"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
+      "Schedule-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config-Output"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DaySchedule"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "monthly_targets": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MonthlyTarget"
+            },
+            "default": {},
+            "title": "Monthly Targets",
+            "type": "object"
+          },
+          "revision_id": {
+            "default": "",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "search_status": {
+            "default": "not_run",
+            "title": "Search Status",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "ready",
+              "diagnostic"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "days"
+        ],
+        "title": "Schedule",
+        "type": "object"
+      },
+      "ScheduleDiagnostic": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_rule": {
+            "anyOf": [
+              {
+                "enum": [
+                  "working_streak",
+                  "weekly_day_off",
+                  "individual_workday"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Rule"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "employee_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "ScheduleDiagnostic",
+        "type": "object"
+      },
+      "ScheduleNotReadyResponse": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "detail",
+          "diagnostics"
+        ],
+        "title": "ScheduleNotReadyResponse",
+        "type": "object"
+      },
+      "ScheduleType": {
+        "enum": [
+          "flexible",
+          "5/2"
+        ],
+        "title": "ScheduleType",
+        "type": "string"
+      },
+      "ShiftType": {
+        "enum": [
+          "morning",
+          "evening",
+          "night",
+          "workday",
+          "day_off",
+          "vacation",
+          "sick_leave"
+        ],
+        "title": "ShiftType",
+        "type": "string"
+      },
+      "SummaryMetrics": {
+        "properties": {
+          "coverage_gaps": {
+            "title": "Coverage Gaps",
+            "type": "integer"
+          },
+          "fairness_score": {
+            "title": "Fairness Score",
+            "type": "number"
+          },
+          "isolated_off_total": {
+            "title": "Isolated Off Total",
+            "type": "integer"
+          },
+          "quality_context": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Quality Context",
+            "type": "object"
+          },
+          "weekend_balance_stddev": {
+            "title": "Weekend Balance Stddev",
+            "type": "number"
+          },
+          "workload_stddev": {
+            "title": "Workload Stddev",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fairness_score",
+          "workload_stddev",
+          "coverage_gaps",
+          "isolated_off_total",
+          "weekend_balance_stddev"
+        ],
+        "title": "SummaryMetrics",
+        "type": "object"
+      },
+      "VacationPeriod": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "VacationPeriod",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VariantPatch": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "title": "Patch",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "patch"
+        ],
+        "title": "VariantPatch",
+        "type": "object"
+      },
+      "VariantResult": {
+        "properties": {
+          "deltas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EmployeeDelta"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deltas"
+          },
+          "diagnostics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EmployeeStatsSchema"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SummaryMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "VariantResult",
+        "type": "object"
+      },
+      "WhatIfRequest": {
+        "properties": {
+          "baseline": {
+            "additionalProperties": true,
+            "title": "Baseline",
+            "type": "object"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantPatch"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline",
+          "variants"
+        ],
+        "title": "WhatIfRequest",
+        "type": "object"
+      },
+      "WhatIfResponse": {
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/ScenarioResult"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantResult"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "baseline",
+          "variants"
+        ],
+        "title": "WhatIfResponse",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "REST API для генератора графиков дежурств 24/7",
+    "title": "Duty Schedule API",
+    "version": "5.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/config/validate": {
+      "post": {
+        "operationId": "validate_config_api_v1_config_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigValidationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Validate Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/v1/export/ics": {
+      "post": {
+        "operationId": "export_ics_endpoint_api_v1_export_ics_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "employee_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/calendar": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Ics Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/pdf": {
+      "post": {
+        "operationId": "export_pdf_endpoint_api_v1_export_pdf_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": "A3",
+              "pattern": "^(A3|A4)$",
+              "title": "Page Size",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Pdf Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/revision/ics": {
+      "post": {
+        "operationId": "export_revision_ics_api_v1_export_revision_ics_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "employee_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Employee Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/calendar": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Revision Ics",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/revision/pdf": {
+      "post": {
+        "operationId": "export_revision_pdf_api_v1_export_revision_pdf_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": "A3",
+              "pattern": "^(A3|A4)$",
+              "title": "Page Size",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Revision Pdf",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/revision/xls": {
+      "post": {
+        "operationId": "export_revision_xls_api_v1_export_revision_xls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Revision Xls",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/export/xls": {
+      "post": {
+        "operationId": "export_xls_endpoint_api_v1_export_xls_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Content-Disposition": {
+                "description": "RFC 5987 attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Export Xls Endpoint",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/api/v1/holidays/{year}/{month}": {
+      "get": {
+        "operationId": "get_holidays_api_v1_holidays__year___month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "minimum": 2024,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Month",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HolidaysResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Get Holidays",
+        "tags": [
+          "holidays"
+        ]
+      }
+    },
+    "/api/v1/schedule/generate": {
+      "post": {
+        "operationId": "generate_api_v1_schedule_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleNotReadyResponse"
+                }
+              }
+            },
+            "description": "Schedule failed mandatory checks"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Generate",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/schedule/generate-range": {
+      "post": {
+        "operationId": "generate_range_api_v1_schedule_generate_range_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiMonthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiMonthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Generate Range",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/schedule/plan": {
+      "post": {
+        "operationId": "plan_api_v1_schedule_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule-Output"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Plan",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/schedule/stats": {
+      "post": {
+        "operationId": "stats_api_v1_schedule_stats_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EmployeeStatsSchema"
+                  },
+                  "title": "Response Stats Api V1 Schedule Stats Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Stats",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/whatif/compare": {
+      "post": {
+        "operationId": "compare_scenarios_api_v1_whatif_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatIfRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatIfResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Compare Scenarios",
+        "tags": [
+          "whatif"
+        ]
+      }
+    }
+  }
+}

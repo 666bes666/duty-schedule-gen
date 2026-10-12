@@ -6,6 +6,8 @@ import random
 
 from duty_schedule.models import City, Config, Employee, ScheduleType
 from duty_schedule.scheduler import generate_schedule
+from duty_schedule.scheduler.postprocess.quality import optimize_candidate, quality_key
+from tests.conftest import complete_config
 
 
 def _random_team(rng: random.Random) -> list[Employee]:
@@ -63,7 +65,9 @@ def test_random_configs_respect_basic_invariants():
 
     for _ in range(10):
         employees = _random_team(rng)
-        cfg = Config(month=3, year=2025, seed=rng.randint(0, 10_000), employees=employees)
+        cfg = complete_config(
+            Config(month=3, year=2025, seed=rng.randint(0, 10_000), employees=employees)
+        )
         schedule = generate_schedule(cfg, set())
 
         assert len(schedule.days) == 31
@@ -87,7 +91,7 @@ def test_random_configs_respect_basic_invariants():
                 f"Дублирование назначений на {day.date}: {all_working}"
             )
 
-        for emp in employees:
-            if emp.on_duty and emp.schedule_type == ScheduleType.FLEXIBLE:
-                iso = _count_isolated_off_for_emp(emp.name, schedule.days)
-                assert iso <= 5, f"{emp.name}: {iso} изолированных выходных (допустимо ≤5)"
+        improved = optimize_candidate(schedule, budget=40)
+        assert quality_key(improved) <= quality_key(schedule)
+        assert improved.status == schedule.status
+        assert improved.monthly_targets == schedule.monthly_targets

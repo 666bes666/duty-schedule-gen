@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from duty_schedule.models import City, Employee, Schedule
 
@@ -29,22 +30,35 @@ class EmployeeStats:
     paired_off: int
     total_hours: int = 0
     cost_hours: float = 0.0
+    sick_leave: int = 0
+    calendar_hours: int = 0
+    absence_reduction_hours: int = 0
+    adjusted_hours: int = 0
+    selected_hours: int = 0
+    target_hours: int = 0
+    hours_delta: int = 0
+    boundary_max_streak_work: int = 0
+    boundary_max_streak_rest: int = 0
 
 
 def diff_schedules(
     a: Schedule,
     b: Schedule,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     assign_a = build_assignments(a)
     assign_b = build_assignments(b)
     all_names = sorted(set(assign_a) | set(assign_b))
     all_dates = sorted({d.date for d in a.days} | {d.date for d in b.days})
-    diffs: list[dict[str, str]] = []
+    diffs: list[dict[str, Any]] = []
+    days_a = {day.date: day for day in a.days}
+    days_b = {day.date: day for day in b.days}
     for d in all_dates:
         for name in all_names:
             old = assign_a.get(name, {}).get(d, "day_off")
             new = assign_b.get(name, {}).get(d, "day_off")
-            if old != new:
+            old_hours = days_a[d].workday_hours.get(name) if d in days_a else None
+            new_hours = days_b[d].workday_hours.get(name) if d in days_b else None
+            if old != new or old_hours != new_hours:
                 diffs.append(
                     {
                         "date": d.isoformat(),
@@ -53,6 +67,9 @@ def diff_schedules(
                         "new_shift": new,
                     }
                 )
+                if old_hours != new_hours:
+                    diffs[-1]["old_hours"] = old_hours
+                    diffs[-1]["new_hours"] = new_hours
     return diffs
 
 
@@ -66,6 +83,7 @@ def build_assignments(schedule: Schedule) -> dict[str, dict[date, str]]:
             "workday": day.workday,
             "day_off": day.day_off,
             "vacation": day.vacation,
+            "sick_leave": day.sick_leave,
         }
         for shift_key, names in mapping.items():
             for name in names:
@@ -79,11 +97,17 @@ def count_isolated_off(emp_name: str, schedule: Schedule) -> int:
     for i, day in enumerate(days):
         if emp_name not in day.day_off:
             continue
-        left_ok = i == 0 or emp_name in days[i - 1].day_off or emp_name in days[i - 1].vacation
+        left_ok = (
+            i == 0
+            or emp_name in days[i - 1].day_off
+            or emp_name in days[i - 1].vacation
+            or emp_name in days[i - 1].sick_leave
+        )
         right_ok = (
             i == len(days) - 1
             or emp_name in days[i + 1].day_off
             or emp_name in days[i + 1].vacation
+            or emp_name in days[i + 1].sick_leave
         )
         if not left_ok and not right_ok:
             count += 1
@@ -95,9 +119,17 @@ def count_paired_off(emp_name: str, schedule: Schedule) -> int:
     days = schedule.days
     i = 0
     while i < len(days):
-        if emp_name in days[i].day_off or emp_name in days[i].vacation:
+        if (
+            emp_name in days[i].day_off
+            or emp_name in days[i].vacation
+            or emp_name in days[i].sick_leave
+        ):
             j = i
-            while j < len(days) and (emp_name in days[j].day_off or emp_name in days[j].vacation):
+            while j < len(days) and (
+                emp_name in days[j].day_off
+                or emp_name in days[j].vacation
+                or emp_name in days[j].sick_leave
+            ):
                 j += 1
             if j - i >= 2:
                 count += 1
@@ -136,9 +168,19 @@ def compute_stats(
     sorted_dates = sorted(day.date for day in schedule.days)
     _employees = employees if employees is not None else schedule.config.employees
 
+    from duty_schedule.calendar import calendar_for_config
     from duty_schedule.costs import CostModel, compute_cost_hours
+    from duty_schedule.workload import assignment_hours, calculate_monthly_targets
 
     _short = short_days or set()
+    calendar = calendar_for_config(schedule.config, holiday_dates)
+    if schedule.config.production_calendar is None:
+        calendar = calendar.model_copy(deep=True)
+        for calendar_day in calendar.days:
+            if calendar_day.date in _short and calendar_day.kind != "off":
+                calendar_day.kind = "short"
+    targets = calculate_monthly_targets(schedule.config, calendar)
+    days_by_date = {day.date: day for day in schedule.days}
     _cost_model = CostModel()
     result = []
     for emp in _employees:
@@ -151,25 +193,47 @@ def compute_stats(
         workday = sum(1 for v in emp_days.values() if v == "workday")
         day_off = sum(1 for v in emp_days.values() if v == "day_off")
         vacation = sum(1 for v in emp_days.values() if v == "vacation")
+        sick_leave = sum(1 for v in emp_days.values() if v == "sick_leave")
         total_working = morning + evening + night + workday
 
         working_keys = {"morning", "evening", "night", "workday"}
 
-        weekend_work = sum(1 for d, v in emp_days.items() if d.weekday() >= 5 and v in working_keys)
+        weekend_work = sum(
+            1
+            for d, v in emp_days.items()
+            if v in working_keys
+            and (
+                not calendar.is_working(d)
+                if schedule.config.production_calendar is not None
+                else d.weekday() >= 5
+            )
+        )
 
         holiday_work = sum(
             1
             for d, v in emp_days.items()
-            if d in holiday_dates and d.weekday() < 5 and v in working_keys
+            if not calendar.is_working(d) and d.weekday() < 5 and v in working_keys
         )
 
         max_streak_work = max_streak(sorted_dates, emp_days, working=True)
         max_streak_rest = max_streak(sorted_dates, emp_days, working=False)
+        from duty_schedule.scheduler.rules import WORKING_SHIFTS, carry_for_employee
+
+        carry = carry_for_employee(schedule.config, emp)
+        streak_work = carry.consecutive_working if carry else 0
+        streak_rest = carry.consecutive_off if carry else 0
+        boundary_work, boundary_rest = 0, 0
+        for day in sorted_dates:
+            working = emp_days.get(day) in {shift.value for shift in WORKING_SHIFTS}
+            streak_work = streak_work + 1 if working else 0
+            streak_rest = 0 if working else streak_rest + 1
+            boundary_work = max(boundary_work, streak_work)
+            boundary_rest = max(boundary_rest, streak_rest)
         isolated_off = count_isolated_off(emp.name, schedule)
         paired_off = count_paired_off(emp.name, schedule)
 
         total_hours = sum(
-            HOURS_SHORT if d in _short else HOURS_NORMAL
+            assignment_hours(days_by_date[d], emp.name, calendar)
             for d, v in emp_days.items()
             if v in working_keys
         )
@@ -194,10 +258,19 @@ def compute_stats(
                 holiday_work=holiday_work,
                 max_streak_work=max_streak_work,
                 max_streak_rest=max_streak_rest,
+                boundary_max_streak_work=boundary_work,
+                boundary_max_streak_rest=boundary_rest,
                 isolated_off=isolated_off,
                 paired_off=paired_off,
                 total_hours=total_hours,
                 cost_hours=cost_hours,
+                sick_leave=sick_leave,
+                calendar_hours=targets[emp.name].calendar_hours,
+                absence_reduction_hours=targets[emp.name].absence_reduction_hours,
+                adjusted_hours=targets[emp.name].adjusted_hours,
+                selected_hours=targets[emp.name].selected_hours,
+                target_hours=targets[emp.name].selected_hours,
+                hours_delta=total_hours - targets[emp.name].selected_hours,
             )
         )
     return result
