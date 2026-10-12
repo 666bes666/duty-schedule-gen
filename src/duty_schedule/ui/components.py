@@ -55,7 +55,6 @@ from duty_schedule.ui.config_io import (
     parse_config_yaml,
 )
 from duty_schedule.ui.mappings import (
-    _DEFAULT_ROWS,
     _SHIFTS_RU,
     _WEEKDAY_OPTIONS,
     MONTHS_RU,
@@ -65,19 +64,9 @@ from duty_schedule.workload import calculate_monthly_targets
 WHATIF_PARAMETERS = tuple(field for field in Config.model_fields if field not in {"month", "year"})
 
 
-def _default_config() -> Config:
-    from duty_schedule.ui.config_io import employees_from_table
-
-    today = date.today()
-    month = today.month % 12 + 1
-    year = today.year + (today.month == 12)
-    return Config(
-        month=month, year=year, employees=employees_from_table(pd.DataFrame(_DEFAULT_ROWS))
-    )
-
-
 def _set_project(state: MutableMapping[Any, Any], project: ScheduleProject) -> None:
     state["project"] = project
+    state.pop("onboarding_draft", None)
     state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
     state.pop("ui_exports", None)
     state.pop("ui_import_notice", None)
@@ -214,7 +203,7 @@ def _key(label: str) -> str:
     return f"ui_{st.session_state.get('ui_epoch', 0)}_{label}"
 
 
-def _sidebar(project: ScheduleProject) -> None:
+def _sidebar(project: ScheduleProject | None) -> None:
     with st.sidebar:
         st.header("Рабочий проект")
         for label, file_types in (
@@ -242,6 +231,28 @@ def _sidebar(project: ScheduleProject) -> None:
             st.warning(notice)
         if st.session_state.get("ui_import_notice"):
             st.text(st.session_state["ui_import_notice"])
+        if project is None:
+            from duty_schedule.ui.onboarding import import_draft_into_state, serialize_draft
+
+            uploaded = st.file_uploader("Открыть подготовку персонала (.json)", type=["json"])
+            if uploaded is not None:
+                token = (uploaded.file_id, hashlib.sha256(uploaded.getvalue()).hexdigest())
+                if st.session_state.get("loaded_onboarding") != token:
+                    try:
+                        import_draft_into_state(st.session_state, uploaded.getvalue())
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["loaded_onboarding"] = token
+                        st.session_state["ui_import_notice"] = f"Загружено: {uploaded.name}"
+                        st.rerun()
+            st.download_button(
+                "Сохранить подготовку персонала",
+                serialize_draft(st.session_state["onboarding_draft"]),
+                file_name="personnel-draft.json",
+                mime="application/json",
+            )
+            return
         st.download_button(
             "Сохранить рабочий проект",
             serialize_project(project),
@@ -261,6 +272,17 @@ def _sidebar(project: ScheduleProject) -> None:
         st.caption(
             "Проект сохраняет календарь, версии, ручные назначения, подтверждения и историю."
         )
+        if st.button(
+            "Новый проект",
+            key=_key("new_project"),
+            disabled=st.session_state.get("autosave_status") != "saved"
+            or st.session_state.get("autosave_hash")
+            != st.session_state.get("autosave_expected_hash"),
+        ):
+            from duty_schedule.ui.onboarding import start_new_onboarding
+
+            start_new_onboarding(st.session_state)
+            st.rerun()
         periods = sorted(set(project.active_revisions) | {project.selected_period})
         if periods:
             selected = st.selectbox(
@@ -1386,14 +1408,187 @@ def _results(project: ScheduleProject) -> None:
     _downloads(schedule)
 
 
+def _render_onboarding() -> None:
+    from duty_schedule.ui.onboarding import (
+        OnboardingDraft,
+        apply_city_lists,
+        assign_roles,
+        city_counts,
+        complete_onboarding,
+        incomplete_roles,
+        rename_personnel,
+    )
+
+    draft = st.session_state["onboarding_draft"]
+    tabs = st.tabs(
+        ["0. Персонал", "1. Состав"],
+        default="1. Состав" if draft.employees else "0. Персонал",
+        key=_key("onboarding_tabs"),
+    )
+    with tabs[0]:
+        st.subheader("0. Внесите весь персонал")
+        st.caption("По одному имени на строке. Количество считается после применения списка.")
+        with st.form(_key("personnel_form")):
+            columns = st.columns(2)
+            moscow = columns[0].text_area(
+                "Персонал Москвы",
+                value="\n".join(e.name for e in draft.employees if e.city == City.MOSCOW),
+            )
+            khabarovsk = columns[1].text_area(
+                "Персонал Хабаровска",
+                value="\n".join(e.name for e in draft.employees if e.city == City.KHABAROVSK),
+            )
+            month = st.selectbox(
+                "Месяц подготовки",
+                range(1, 13),
+                index=draft.month - 1,
+                format_func=lambda value: MONTHS_RU[value - 1],
+            )
+            year = st.number_input(
+                "Год подготовки", min_value=2024, max_value=9999, value=draft.year
+            )
+            if st.form_submit_button("Применить персонал"):
+                try:
+                    updated = apply_city_lists(draft, moscow, khabarovsk)
+                    updated = OnboardingDraft.model_validate(
+                        {**updated.model_dump(), "year": year, "month": month}
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state["onboarding_draft"] = updated
+                    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                    st.rerun()
+        st.caption(
+            f"Москва: {city_counts(draft, City.MOSCOW)['total']}; "
+            f"Хабаровск: {city_counts(draft, City.KHABAROVSK)['total']}; "
+            f"всего внесено: {len(draft.employees)}"
+        )
+        if draft.employees:
+            st.caption(
+                "Для исправления имени с сохранением настроек используйте шаг 1. "
+                "Замена имени в списке удаляет старую запись и добавляет новую."
+            )
+    with tabs[1]:
+        st.subheader("1. Настройте работу сотрудников")
+        st.caption("График и участие в дежурствах независимы. 5/2 может участвовать в дежурствах.")
+        for city, label in ((City.MOSCOW, "Москва"), (City.KHABAROVSK, "Хабаровск")):
+            counts = city_counts(draft, city)
+            st.text(
+                f"{label}: всего {counts['total']}; 5/2 — {counts['five_two']}; "
+                f"гибкий — {counts['flexible']}; дежурит — {counts['on_duty']}; "
+                f"не настроено — {counts['incomplete']}"
+            )
+        if not draft.employees:
+            st.info("Сначала внесите персонал на шаге 0")
+            return
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Имя": e.name,
+                        "Город": "Москва" if e.city == City.MOSCOW else "Хабаровск",
+                        "График": "Не настроено"
+                        if e.schedule_type is None
+                        else ("5/2" if e.schedule_type == ScheduleType.FIVE_TWO else "Гибкий"),
+                        "Дежурит": "Не настроено"
+                        if e.on_duty is None
+                        else ("Да" if e.on_duty else "Нет"),
+                    }
+                    for e in draft.employees
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+        by_id = {e.employee_id: e for e in draft.employees}
+        selected = st.selectbox(
+            "Сотрудник",
+            list(by_id),
+            format_func=lambda identity: by_id[identity].name,
+            key=_key("personnel_selection"),
+        )
+        employee = by_id[selected]
+        schedules = {
+            "Не настроено": None,
+            "5/2": ScheduleType.FIVE_TWO,
+            "Гибкий": ScheduleType.FLEXIBLE,
+        }
+        duties = {"Не настроено": None, "Да": True, "Нет": False}
+        with st.form(_key(f"personnel_role_{selected}")):
+            name = st.text_input("Имя сотрудника", value=employee.name)
+            schedule = st.radio(
+                "График сотрудника",
+                list(schedules),
+                index=list(schedules.values()).index(employee.schedule_type),
+                horizontal=True,
+            )
+            duty = st.radio(
+                "Участие в дежурствах",
+                list(duties),
+                index=list(duties.values()).index(employee.on_duty),
+                horizontal=True,
+            )
+            if st.form_submit_button("Применить сотруднику"):
+                try:
+                    updated = rename_personnel(draft, selected, name)
+                    updated = assign_roles(
+                        updated, [selected], schedules[schedule], duties[duty], replace=True
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state["onboarding_draft"] = updated
+                    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                    st.rerun()
+        with st.form(_key("personnel_group")):
+            everyone = st.checkbox("Весь персонал")
+            identities = st.multiselect(
+                "Сотрудники группы", list(by_id), format_func=lambda identity: by_id[identity].name
+            )
+            schedule = st.radio("График группы", ["Не менять", "5/2", "Гибкий"], horizontal=True)
+            duty = st.radio("Дежурства группы", ["Не менять", "Да", "Нет"], horizontal=True)
+            if st.form_submit_button("Применить к группе"):
+                try:
+                    updated = assign_roles(
+                        draft,
+                        list(by_id) if everyone else identities,
+                        schedules.get(schedule),
+                        duties.get(duty),
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state["onboarding_draft"] = updated
+                    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                    st.rerun()
+        missing = incomplete_roles(draft)
+        if missing:
+            st.warning("Не настроено: " + "; ".join(missing))
+        if st.button("Продолжить подготовку", disabled=bool(missing), type="primary"):
+            try:
+                complete_onboarding(st.session_state)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.rerun()
+
+
 def render_application() -> None:
-    if "project" not in st.session_state:
-        st.session_state["project"] = new_project(_default_config())
+    if "project" not in st.session_state and "onboarding_draft" not in st.session_state:
+        from duty_schedule.ui.onboarding import OnboardingDraft
+
+        st.session_state["onboarding_draft"] = OnboardingDraft()
     from duty_schedule.ui.autosave import render_autosave
 
-    render_autosave()
-    project = st.session_state["project"]
+    if not render_autosave():
+        st.info("Проверяем сохранённую работу в этом браузере…")
+        return
+    project = st.session_state.get("project")
     _sidebar(project)
+    if project is None:
+        _render_onboarding()
+        return
     tabs = st.tabs(
         ["1. Состав", "2. Ограничения", "3. История", "4. Закрепления", "5. Подтверждения"],
         key="configuration_tabs",

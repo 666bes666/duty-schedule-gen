@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Generator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,14 +17,29 @@ def streamlit_url() -> Generator[str, None, None]:
     if external_url:
         yield external_url
         return
-    with tempfile.TemporaryFile() as log:
+    with tempfile.TemporaryFile() as log, tempfile.TemporaryDirectory() as temp:
+        runner = Path(temp) / "browser_app.py"
+        runner.write_text(
+            "import sys, runpy\n"
+            "from pathlib import Path\n"
+            "sys.path.insert(0, str(Path.cwd()))\n"
+            "from tests.ui.fixtures import journey_config\n"
+            "from duty_schedule.ui import components\n"
+            "from duty_schedule.calendar import CalendarError\n"
+            "def saved_calendar(year, month, saved=None):\n"
+            "    if (year, month) != (2026, 4):\n"
+            "        raise CalendarError('Offline browser fixture supports April 2026')\n"
+            "    return journey_config().production_calendar.model_copy(deep=True)\n"
+            "components.fetch_production_calendar = saved_calendar\n"
+            "runpy.run_path('app.py', run_name='__main__')\n"
+        )
         proc = subprocess.Popen(
             [
                 "uv",
                 "run",
                 "streamlit",
                 "run",
-                "app.py",
+                str(runner),
                 "--server.headless",
                 "true",
                 "--server.port",

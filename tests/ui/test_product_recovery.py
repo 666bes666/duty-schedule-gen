@@ -93,6 +93,12 @@ def test_two_tabs_do_not_silently_overwrite_newer_revision(page: Page, streamlit
 @pytest.mark.ui
 def test_corrupt_and_refused_storage_preserve_snapshot(page: Page, streamlit_url: str):
     page.goto(streamlit_url, wait_until="networkidle")
+    _upload(
+        page,
+        "Загрузить конфиг (.yaml)",
+        "initial.yaml",
+        dump_config_yaml(journey_config()).encode(),
+    )
     wait_saved(page)
     before = page.evaluate(
         "localStorage.getItem('duty-schedule:project:'+localStorage.getItem('duty-schedule:last'))"

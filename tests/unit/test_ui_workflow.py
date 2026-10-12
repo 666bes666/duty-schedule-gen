@@ -242,6 +242,7 @@ def test_real_streamlit_project_edit_check_and_reopen(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr("duty_schedule.ui.components.fetch_production_calendar", no_network)
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = new_project(journey_config())
     app.run(timeout=20)
     assert not app.exception
@@ -277,6 +278,7 @@ def test_real_streamlit_project_edit_check_and_reopen(monkeypatch: pytest.Monkey
     assert schedule.days[9].workday_hours["M0"] == 4
     assert schedule.monthly_targets["M0"].selected_hours == 136
     reopened = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    reopened.session_state["autosave_initialized"] = True
     reopened.session_state["project"] = load_project(serialize_project(project))
     reopened.run(timeout=20)
     assert not reopened.exception
@@ -391,6 +393,7 @@ def test_whatif_calendar_mismatch_is_reported_without_crashing_application() -> 
 
     config = journey_config()
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = add_revision(
         new_project(config), Schedule(config=config, days=journey_days(config))
     )
@@ -431,6 +434,7 @@ def test_revision_comparison_displays_changed_individual_workday_hours(
     edited_days[1].workday_hours["M0"] = 4
     project = apply_assignments(project, edited_days)
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = project
 
     app.run(timeout=20)

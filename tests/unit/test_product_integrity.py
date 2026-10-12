@@ -188,6 +188,7 @@ def test_ui_period_change_selects_new_calendar_before_validation():
     from duty_schedule.project import new_project
 
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = new_project(journey_config())
     app.run(timeout=20)
     next(widget for widget in app.selectbox if widget.label == "Месяц").select(5)

@@ -52,6 +52,15 @@ def _assign_four_hour_workday(page: Page, number: int) -> None:
         page.get_by_text("Текущая версия изменена и требует проверки", exact=True)
     ).to_be_visible(timeout=20000)
     page.get_by_role("button", name="Проверить текущую версию", exact=True).click()
+    message = (
+        "Диагностический черновик: обычный экспорт недоступен"
+        if number == 2
+        else "Текущая версия прошла обязательные проверки"
+    )
+    expect(page.get_by_text(message, exact=True)).to_be_visible(timeout=20000)
+    from tests.ui.test_product_recovery import wait_saved
+
+    wait_saved(page)
 
 
 def _active_schedule(data: dict) -> dict:
