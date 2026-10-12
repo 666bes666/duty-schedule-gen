@@ -46,7 +46,7 @@
 | [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | complete | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
 | [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | complete | REPAIR-001, REPAIR-002 |
 | [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | complete | QUALITY-001, QUALITY-002, QUALITY-003 |
-| [specs/018-personnel-onboarding](../specs/018-personnel-onboarding/spec.md) | in-progress | STAFF-001, STAFF-002, STAFF-003, STAFF-004, STAFF-005, STAFF-006 |
+| [specs/018-personnel-onboarding](../specs/018-personnel-onboarding/spec.md) | complete | STAFF-001, STAFF-002, STAFF-003, STAFF-004, STAFF-005, STAFF-006 |
 
 ## API операции
 

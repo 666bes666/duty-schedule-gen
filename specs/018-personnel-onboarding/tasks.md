@@ -18,4 +18,4 @@ T005/T007 после T004; T008/T009 после интеграции. Реали
 - [x] T010 [STAFF-002/STAFF-005] Проверить atomic add/rename/remove, стабильные ID/роли и пустой draft.
 - [x] T011 [STAFF-002/STAFF-005] Реализовать две городские панели и явный переход к ролям с persisted stage.
 - [x] T012 [STAFF-002/STAFF-005/STAFF-006] Проверить browser создание, редактирование, удаление, reload и старые snapshots; обновить руководство.
-- [ ] T013 Выполнить gates и независимое ревью, добавить evidence, commit/push в dev и обновить PR67.
+- [x] T013 Выполнить gates и независимое ревью, добавить evidence, commit/push в dev и обновить PR67.

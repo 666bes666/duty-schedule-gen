@@ -160,3 +160,14 @@ UUID/role preservation и draft JSON round-trip: PASS.
 exit0, **32 passed**. STAFF-002 и STAFF-005 подтверждены реальными native
 add/edit/remove/reload tests; остальные сценарии ролей/поиска/старых проектов
 сохранены в полном suite. T010–T012 закрыты, T013 остаётся до dev delivery.
+
+## Native dev delivery
+
+2026-10-12: commit c63a40036d9027c6c4dcdc09b1d23794f50e172e
+(`feat: use native controls for personnel entry`) отправлен в origin/dev.
+Staged SDD/diff и hooks прошли; после коммита --base HEAD~1 и index --check
+прошли. Локальный dev и origin/dev совпали, дерево чистое. T010–T013 закрыты:
+866 non-UI /32browser pass,coverage88.20%, wheel smoke и два APPROVE.
+Status complete восстанавливается после этой проверенной native реализации.
+PR67 dev→test обновляется новым head; CI этого SHA проверяется отдельно,
+test/main promotion не выполнен. Local preview localhost8504 перезапущен.

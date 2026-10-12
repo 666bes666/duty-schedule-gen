@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "in-progress",
+  "status": "complete",
   "files": [
     "app.py",
     "src/duty_schedule/ui/onboarding.py",

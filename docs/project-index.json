@@ -6860,7 +6860,7 @@
     {
       "path": "specs/018-personnel-onboarding",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "STAFF-001",
