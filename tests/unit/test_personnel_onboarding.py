@@ -214,3 +214,26 @@ def test_legacy_draft_without_stage_keeps_personnel_and_roles():
     raw["draft"]["employees"][0]["name"] = "Иван\rПётр"
     with pytest.raises(ValueError):
         load_draft(json.dumps(raw))
+
+
+def test_pending_profiles_are_atomic_and_exclude_configured():
+    from duty_schedule.ui.onboarding import assign_pending_roles, pending_personnel
+
+    original = roster()
+    ids = [e.employee_id for e in original.employees]
+    partial = assign_pending_roles(original, ids[:2], ScheduleType.FIVE_TWO)
+    assert len(pending_personnel(partial)) == 6
+    configured = assign_pending_roles(partial, ids[:2], on_duty=True)
+    assert [e.employee_id for e in pending_personnel(configured, City.MOSCOW)] == ids[2:4]
+    before = serialize_draft(configured)
+    for chosen in ([], [ids[0]], [ids[2], ids[0]], ["missing"]):
+        with pytest.raises(ValueError, match="без полного назначения"):
+            assign_pending_roles(configured, chosen, ScheduleType.FLEXIBLE, False)
+        assert serialize_draft(configured) == before
+    for schedule in ScheduleType:
+        for duty in (True, False):
+            changed = assign_pending_roles(original, ids, schedule, duty)
+            assert not pending_personnel(changed)
+            assert all(e.schedule_type == schedule and e.on_duty is duty for e in changed.employees)
+            assert [e.employee_id for e in changed.employees] == ids
+            assert load_draft(serialize_draft(changed)) == changed

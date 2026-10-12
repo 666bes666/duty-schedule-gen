@@ -16,6 +16,7 @@ def test_preflight_explains_unknown_history_and_pin_conflict(page: Page, streaml
     _upload(page, "Загрузить конфиг (.yaml)", "incomplete.yaml", dump_config_yaml(config).encode())
     expect(page.get_by_text("История отдыха: требует исправления", exact=True)).to_be_visible()
     expect(page.get_by_role("button", name="Сгенерировать расписание", exact=True)).to_be_disabled()
+    page.get_by_text("Все причины подготовки", exact=True).click()
     expect(
         page.get_by_text("Неизвестна история до начала месяца", exact=False).first
     ).to_be_visible()

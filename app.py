@@ -15,8 +15,8 @@ st.markdown(
     --fs-section:    1.05rem;
     --fs-tab:        0.9rem;
     --fs-body:       0.875rem;
-    --fs-caption:    0.78rem;
-    --fs-alert:      0.82rem;
+    --fs-caption:    0.875rem;
+    --fs-alert:      1rem;
 }
 
 /* Tabs: full-width stretch */
@@ -52,6 +52,25 @@ h3 {
 .stAlert > div {
     padding: 0.45rem 0.75rem !important;
     font-size: var(--fs-alert) !important;
+}
+[data-testid="stMainBlockContainer"] {
+    padding-top: 2.5rem;
+}
+[data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button {
+    min-height: 44px;
+}
+@media (max-width: 640px) {
+    .stTabs [data-baseweb="tab"] {
+        flex: 0 0 auto;
+        padding: 0 0.75rem;
+    }
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap;
+    }
+    [data-testid="stColumn"] {
+        min-width: min(100%, 18rem);
+        flex: 1 1 100%;
+    }
 }
 </style>
 """,

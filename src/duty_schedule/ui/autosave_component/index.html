@@ -1,4 +1,4 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><body style="margin:0;font:14px sans-serif">
+<!doctype html><html lang="ru"><meta charset="utf-8"><body style="margin:0;font:14px sans-serif;color:CanvasText;color-scheme:light dark">
 <div id="status" role="status">Сохранение идёт…</div>
 <script>
 const label=document.getElementById('status');
@@ -9,6 +9,8 @@ function record(raw){const data=JSON.parse(raw);if(data.version!==1||typeof data
 window.addEventListener('message',async event=>{
  if(event.source!==parent)return;
  if(event.data.type!=='streamlit:render')return;
+ const theme=event.data.theme;
+ if(theme){document.body.style.color=theme.textColor;document.body.style.backgroundColor=theme.backgroundColor;}
  const args=event.data.args;
  if(lastHash!==args.hash){dirty=false;lastHash=args.hash;}
  try{

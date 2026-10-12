@@ -28,30 +28,25 @@ def add_native_employee(page: Page, city: str, name: str):
 
 
 def start_roster(page: Page, url: str, moscow="M0\nM1\nM2\nM3", khabarovsk="K0\nK1"):
-    page.set_viewport_size({"width": 1440, "height": 1200})
+    page.set_viewport_size({"width": 1440, "height": 2000})
     page.goto(url, wait_until="networkidle")
     wait_saved(page)
+    for city, content in (("Москва", moscow), ("Хабаровск", khabarovsk)):
+        for name in content.splitlines():
+            if name.strip():
+                add_native_employee(page, city, name)
+    wait_saved(page)
+    page.wait_for_function("() => !document.querySelector('[data-stale=\"true\"]')")
     box = page.get_by_test_id("stSelectbox").filter(
         has=page.get_by_text("Месяц подготовки", exact=True)
     )
     control = box.get_by_role("combobox", name="Месяц подготовки", exact=True)
-    box.get_by_role("button", name="Open", exact=True).click()
-    expect(control).to_have_attribute("aria-expanded", "true")
+    control.press("ArrowDown")
     option = page.get_by_role("option", name="Апрель", exact=True)
     expect(option).to_be_visible()
     option.click()
     expect(control).to_have_value("Апрель")
     page.get_by_label("Год подготовки", exact=True).fill("2026")
-    page.get_by_role("button", name="Сохранить период", exact=True).click()
-    page.wait_for_function(
-        "() => {const id=localStorage.getItem('duty-schedule:last');"
-        "const p=JSON.parse(JSON.parse(localStorage.getItem('duty-schedule:project:'+id)).project);"
-        "return p.draft?.month===4 && p.draft.year===2026;}"
-    )
-    for city, content in (("Москва", moscow), ("Хабаровск", khabarovsk)):
-        for name in content.splitlines():
-            if name.strip():
-                add_native_employee(page, city, name)
     page.get_by_role("button", name="Перейти к настройке состава", exact=True).click()
     expect(page.get_by_text("Не настроено:", exact=False).first).to_be_visible()
     page.wait_for_function(
@@ -62,12 +57,17 @@ def start_roster(page: Page, url: str, moscow="M0\nM1\nM2\nM3", khabarovsk="K0\n
 
 
 def all_roles(page: Page, schedule="Гибкий", duty="Да"):
-    if not page.get_by_label("Весь персонал", exact=True).is_checked():
-        page.get_by_text("Весь персонал", exact=True).click()
+    expander = page.get_by_test_id("stExpander").filter(
+        has=page.get_by_text("Назначить только график или дежурства", exact=True)
+    )
+    if expander.locator("details").get_attribute("open") is None:
+        expander.locator("summary").click()
+    if not page.get_by_label("Все оставшиеся", exact=True).is_checked():
+        page.get_by_text("Все оставшиеся", exact=True).click()
     choose(page, "График группы", schedule)
     choose(page, "Дежурства группы", duty)
     page.get_by_role("button", name="Применить к группе", exact=True).click()
-    expect(page.get_by_label("Весь персонал", exact=True)).not_to_be_checked()
+    expect(page.get_by_label("Все оставшиеся", exact=True)).not_to_be_checked()
 
 
 @pytest.mark.ui
@@ -89,6 +89,7 @@ def test_empty_start_and_city_lists_create_actual_roster(page: Page, streamlit_u
 @pytest.mark.ui
 def test_schedule_and_duty_are_independent(page: Page, streamlit_url: str):
     start_roster(page, streamlit_url)
+    page.get_by_text("Изменить персональные настройки", exact=True).click()
     choose(page, "График сотрудника", "5/2")
     choose(page, "Участие в дежурствах", "Да")
     page.get_by_role("button", name="Применить сотруднику", exact=True).click()
@@ -112,6 +113,7 @@ def test_partial_group_roles_and_independent_city_counts(page: Page, streamlit_u
     expect(page.get_by_role("button", name="Продолжить подготовку", exact=True)).to_be_disabled()
     expect(page.get_by_text("участие в дежурствах", exact=False).first).to_be_visible()
     all_roles(page, "Не менять", "Да")
+    page.get_by_text("Посмотреть весь состав", exact=True).click()
     expect(
         page.get_by_text(
             "Москва: всего 4; 5/2 — 4; гибкий — 0; дежурит — 4; не настроено — 0", exact=True
@@ -339,6 +341,7 @@ def test_corrupt_draft_recovers_previous_snapshot(page: Page, streamlit_url: str
 def test_draft_rename_and_unset_keep_id_and_other_roles(page: Page, streamlit_url: str):
     start_roster(page, streamlit_url)
     all_roles(page)
+    page.get_by_text("Изменить персональные настройки", exact=True).click()
     page.get_by_label("Имя сотрудника", exact=True).fill("Иванов, Иван")
     choose(page, "График сотрудника", "Не настроено")
     page.get_by_role("button", name="Применить сотруднику", exact=True).click()

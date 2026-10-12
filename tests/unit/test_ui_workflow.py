@@ -444,3 +444,32 @@ def test_revision_comparison_displays_changed_individual_workday_hours(
     changed = comparison[comparison["Сотрудник"] == "M0"].iloc[0]
     assert changed["Было, ч"] == expected_hours
     assert changed["Стало, ч"] == 4
+
+
+def test_duty_only_label_and_hidden_fields_preserved(complete_config):
+    from streamlit.testing.v1 import AppTest
+
+    from duty_schedule.project import new_project
+
+    config = complete_config.model_copy(deep=True)
+    config.employees[0].morning_only = True
+    config.employees[0].always_on_duty = True
+    app = AppTest.from_file(
+        str(__import__("pathlib").Path(__file__).resolve().parents[2] / "app.py")
+    )
+    app.session_state["project"] = new_project(config)
+    app.session_state["autosave_initialized"] = True
+    app.run()
+    assert not app.exception
+    import json
+
+    editor = next(e for e in app.dataframe if "Всегда на деж." in json.loads(e.proto.columns))
+
+    columns = json.loads(editor.proto.columns)
+    assert columns["Всегда на деж."]["label"] == "Только дежурства"
+    assert list(editor.proto.column_order) == ["Имя", "Город", "График", "Дежурный"]
+    next(b for b in app.button if b.label == "Сохранить настройки").click().run()
+    assert not app.exception
+    employee = app.session_state["project"].config.employees[0]
+    assert employee.always_on_duty and employee.morning_only
+    assert employee.employee_id == config.employees[0].employee_id

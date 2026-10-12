@@ -306,6 +306,7 @@ def _sidebar(project: ScheduleProject | None) -> None:
 def _basic_configuration(project: ScheduleProject) -> None:
     config = project.config
     tables = config_to_tables(config)
+    special = st.checkbox("Показать особые условия", key=_key("show_special_conditions"))
     with st.form(_key("configuration_form")):
         c1, c2, c3 = st.columns(3)
         month = c1.selectbox(
@@ -325,6 +326,15 @@ def _basic_configuration(project: ScheduleProject) -> None:
             tables.employees,
             column_config={
                 "ID": None,
+                "Дежурный": st.column_config.CheckboxColumn("Дежурит"),
+                "Всегда на деж.": st.column_config.CheckboxColumn(
+                    "Только дежурства",
+                    help=(
+                        "Без обычного рабочего дня Р. Не означает дежурство каждый день: "
+                        "выходные, отдых и отпуска сохраняются. Для московских дежурных "
+                        "с ограничением утра или вечера."
+                    ),
+                ),
                 "Город": st.column_config.SelectboxColumn(options=["Москва", "Хабаровск"]),
                 "График": st.column_config.SelectboxColumn(options=["Гибкий", "5/2"]),
                 "Предпочт. смена": st.column_config.SelectboxColumn(
@@ -339,6 +349,7 @@ def _basic_configuration(project: ScheduleProject) -> None:
                     ),
                 ),
             },
+            column_order=None if special else ["Имя", "Город", "График", "Дежурный"],
             disabled=["ID"],
             num_rows="dynamic",
             hide_index=True,
@@ -436,7 +447,7 @@ def _employee_tools(project: ScheduleProject) -> None:
             "Город": "city",
             "График": "schedule_type",
             "Дежурный": "on_duty",
-            "Всегда на деж.": "always_on_duty",
+            "Только дежурства": "always_on_duty",
             "Только утро": "morning_only",
             "Только вечер": "evening_only",
             "Предпочт. смена": "preferred_shift",
@@ -1094,25 +1105,27 @@ def _preparation(project: ScheduleProject) -> list[ScheduleDiagnostic]:
         ),
         ("Нормы часов", {"norm_choice_invalid", "norm_employee_unknown"}, "2. Ограничения"),
     ]
-    for label, codes, action in groups:
-        problems = [item for item in issues if item.code in codes]
-        st.write(f"{label}: {'требует исправления' if problems else 'подготовлено'}")
-        actions = {
-            "1. Состав"
-            if item.code in {"duplicate_employee", "duplicate_employee_id", "config_invalid"}
-            else action
-            for item in problems
-        }
-        for target in sorted(actions):
-            if st.button(f"Открыть «{target}»", key=f"preflight_{label}_{target}"):
-                st.session_state["configuration_tabs"] = target
-                st.rerun()
-        for item in problems[:3]:
-            st.warning(
-                f"{item.employee_name or ''} {item.date or ''}: {item.detail}. Откройте «{action}»."
-            )
+    opened_actions: set[str] = set()
+    columns = st.columns(len(groups))
+    for index, (label, codes, action) in enumerate(groups):
+        with columns[index]:
+            problems = [item for item in issues if item.code in codes]
+            st.write(f"{label}: {'требует исправления' if problems else 'подготовлено'}")
+            actions = {
+                "1. Состав"
+                if item.code in {"duplicate_employee", "duplicate_employee_id", "config_invalid"}
+                else action
+                for item in problems
+            }
+            for target in sorted(actions - opened_actions):
+                opened_actions.add(target)
+                if st.button(f"Открыть «{target}»", key=f"preflight_{label}_{target}"):
+                    st.session_state["configuration_tab_target"] = target
+                    st.rerun()
     if issues:
         with st.expander("Все причины подготовки"):
+            for item in issues[:3]:
+                st.warning(f"{item.employee_name or ''} {item.date or ''}: {item.detail}")
             st.dataframe(pd.DataFrame([item.model_dump() for item in issues]), hide_index=True)
     st.caption(
         "Правки форм применяются кнопкой сохранения. "
@@ -1121,10 +1134,10 @@ def _preparation(project: ScheduleProject) -> list[ScheduleDiagnostic]:
     return issues
 
 
-def _planning(project: ScheduleProject) -> None:
-    issues = _preparation(project)
-    diagnostic = st.checkbox("Диагностическое исследование неполных данных")
-    rebuild = st.checkbox("Полный пересчёт без сохранения назначений")
+def _planning(project: ScheduleProject, issues: list[ScheduleDiagnostic]) -> None:
+    with st.expander("Расширенный расчёт"):
+        diagnostic = st.checkbox("Диагностическое исследование неполных данных")
+        rebuild = st.checkbox("Полный пересчёт без сохранения назначений")
     if project.repair_candidate is not None:
         st.warning("Пересчёт не дал готового результата. Исходная версия остаётся текущей.")
         _diagnostics(project.repair_candidate)
@@ -1251,7 +1264,7 @@ def _diagnostics(schedule: Schedule) -> None:
                     f"Исправить: {target}",
                     key=f"diagnostics_{schedule.revision_id}_{label}_{target}",
                 ):
-                    st.session_state["configuration_tabs"] = target
+                    st.session_state["configuration_tab_target"] = target
                     st.rerun()
     if schedule.diagnostics:
         st.dataframe(
@@ -1378,7 +1391,9 @@ def _results(project: ScheduleProject) -> None:
         for revision in project.revisions
     ]
     tabs = st.tabs(
-        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"]
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"],
+        key="result_tabs",
+        on_change="rerun",
     )
     with tabs[0]:
         _render_calendar(schedule)
@@ -1412,10 +1427,12 @@ def _render_onboarding() -> None:
     from duty_schedule.ui.onboarding import (
         OnboardingDraft,
         add_personnel,
+        assign_pending_roles,
         assign_roles,
         city_counts,
         complete_onboarding,
         incomplete_roles,
+        pending_personnel,
         remove_personnel,
         rename_personnel,
     )
@@ -1492,105 +1509,172 @@ def _render_onboarding() -> None:
             year = period[1].number_input(
                 "Год подготовки", min_value=2024, max_value=9999, value=draft.year
             )
-            if st.form_submit_button("Сохранить период"):
+            if st.form_submit_button(
+                "Перейти к настройке состава", disabled=not draft.employees, type="primary"
+            ):
                 st.session_state["onboarding_draft"] = OnboardingDraft.model_validate(
-                    {**draft.model_dump(), "year": year, "month": month, "stage": "personnel"}
+                    {**draft.model_dump(), "year": year, "month": month, "stage": "roles"}
                 )
                 st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
                 st.rerun()
-        if st.button("Перейти к настройке состава", disabled=not draft.employees, type="primary"):
-            st.session_state["onboarding_draft"] = draft.model_copy(
-                update={"stage": "roles"}, deep=True
-            )
-            st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
-            st.rerun()
     with tabs[1]:
         st.subheader("1. Настройте работу сотрудников")
         st.caption("График и участие в дежурствах независимы. 5/2 может участвовать в дежурствах.")
-        for city, label in ((City.MOSCOW, "Москва"), (City.KHABAROVSK, "Хабаровск")):
-            counts = city_counts(draft, city)
-            st.text(
-                f"{label}: всего {counts['total']}; 5/2 — {counts['five_two']}; "
-                f"гибкий — {counts['flexible']}; дежурит — {counts['on_duty']}; "
-                f"не настроено — {counts['incomplete']}"
-            )
         if not draft.employees:
             st.info("Сначала внесите персонал на шаге 0")
             return
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        "Имя": e.name,
-                        "Город": "Москва" if e.city == City.MOSCOW else "Хабаровск",
-                        "График": "Не настроено"
-                        if e.schedule_type is None
-                        else ("5/2" if e.schedule_type == ScheduleType.FIVE_TWO else "Гибкий"),
-                        "Дежурит": "Не настроено"
-                        if e.on_duty is None
-                        else ("Да" if e.on_duty else "Нет"),
-                    }
-                    for e in draft.employees
-                ]
-            ),
-            hide_index=True,
-            use_container_width=True,
+        pending = pending_personnel(draft)
+        configured = len(draft.employees) - len(pending)
+        st.progress(
+            configured / len(draft.employees),
+            text=f"Настроено {configured} из {len(draft.employees)}",
         )
-        by_id = {e.employee_id: e for e in draft.employees}
-        selected = st.selectbox(
-            "Сотрудник",
-            list(by_id),
-            format_func=lambda identity: by_id[identity].name,
-            key=_key("personnel_selection"),
-        )
-        employee = by_id[selected]
-        schedules = {
-            "Не настроено": None,
-            "5/2": ScheduleType.FIVE_TWO,
-            "Гибкий": ScheduleType.FLEXIBLE,
-        }
-        duties = {"Не настроено": None, "Да": True, "Нет": False}
-        with st.form(_key(f"personnel_role_{selected}")):
-            name = st.text_input("Имя сотрудника", value=employee.name)
-            schedule = st.radio(
-                "График сотрудника",
-                list(schedules),
-                index=list(schedules.values()).index(employee.schedule_type),
+        if pending:
+            st.caption("Выберите оставшихся сотрудников и назначьте им готовый вариант работы.")
+            city_label = st.radio(
+                "Кого настроить",
+                ["Оба города", "Москва", "Хабаровск"],
                 horizontal=True,
+                key=_key("role_city"),
             )
-            duty = st.radio(
-                "Участие в дежурствах",
-                list(duties),
-                index=list(duties.values()).index(employee.on_duty),
-                horizontal=True,
-            )
-            if st.form_submit_button("Применить сотруднику"):
-                try:
-                    updated = rename_personnel(draft, selected, name)
-                    updated = assign_roles(
-                        updated, [selected], schedules[schedule], duties[duty], replace=True
-                    )
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.session_state["onboarding_draft"] = updated.model_copy(
-                        update={"stage": "roles"}, deep=True
-                    )
-                    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
-                    st.rerun()
-        with st.form(_key("personnel_group")):
-            everyone = st.checkbox("Весь персонал")
+            selected_city = {
+                "Оба города": None,
+                "Москва": City.MOSCOW,
+                "Хабаровск": City.KHABAROVSK,
+            }[city_label]
+            remaining = {e.employee_id: e for e in pending_personnel(draft, selected_city)}
             identities = st.multiselect(
-                "Сотрудники группы", list(by_id), format_func=lambda identity: by_id[identity].name
+                "Осталось назначить",
+                list(remaining),
+                default=list(remaining),
+                format_func=lambda identity: remaining[identity].name,
+                key=_key(f"pending_{city_label}"),
+            )
+            columns = st.columns(2)
+            for index, (label, profile_schedule, profile_duty) in enumerate(
+                (
+                    ("Гибкий · дежурит", ScheduleType.FLEXIBLE, True),
+                    ("5/2 · не дежурит", ScheduleType.FIVE_TWO, False),
+                    ("5/2 · дежурит", ScheduleType.FIVE_TWO, True),
+                    ("Гибкий · не дежурит", ScheduleType.FLEXIBLE, False),
+                )
+            ):
+                if columns[index % 2].button(
+                    label, disabled=not identities, use_container_width=True
+                ):
+                    try:
+                        updated = assign_pending_roles(
+                            draft, identities, profile_schedule, profile_duty
+                        )
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["onboarding_draft"] = updated.model_copy(
+                            update={"stage": "roles"}, deep=True
+                        )
+                        st.session_state["role_notice"] = (
+                            updated.model_copy(update={"stage": "roles"}).model_dump_json(),
+                            f"Назначено: {len(identities)} · {label}",
+                        )
+                        st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                        st.rerun()
+        else:
+            st.success("Все сотрудники настроены. Можно продолжить подготовку.")
+        notice = st.session_state.get("role_notice")
+        if notice and notice[0] == draft.model_dump_json():
+            st.info(notice[1])
+        elif notice:
+            st.session_state.pop("role_notice", None)
+        with st.expander("Посмотреть весь состав"):
+            for city, label in ((City.MOSCOW, "Москва"), (City.KHABAROVSK, "Хабаровск")):
+                counts = city_counts(draft, city)
+                st.text(
+                    f"{label}: всего {counts['total']}; 5/2 — {counts['five_two']}; "
+                    f"гибкий — {counts['flexible']}; дежурит — {counts['on_duty']}; "
+                    f"не настроено — {counts['incomplete']}"
+                )
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Имя": e.name,
+                            "Город": "Москва" if e.city == City.MOSCOW else "Хабаровск",
+                            "График": "Не настроено"
+                            if e.schedule_type is None
+                            else ("5/2" if e.schedule_type == ScheduleType.FIVE_TWO else "Гибкий"),
+                            "Дежурит": "Не настроено"
+                            if e.on_duty is None
+                            else ("Да" if e.on_duty else "Нет"),
+                        }
+                        for e in draft.employees
+                    ]
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
+        with st.expander("Изменить персональные настройки"):
+            by_id = {e.employee_id: e for e in draft.employees}
+            selected = st.selectbox(
+                "Сотрудник",
+                list(by_id),
+                format_func=lambda identity: by_id[identity].name,
+                key=_key("personnel_selection"),
+            )
+            employee = by_id[selected]
+            schedules = {
+                "Не настроено": None,
+                "5/2": ScheduleType.FIVE_TWO,
+                "Гибкий": ScheduleType.FLEXIBLE,
+            }
+            duties = {"Не настроено": None, "Да": True, "Нет": False}
+            with st.form(_key(f"personnel_role_{selected}")):
+                name = st.text_input("Имя сотрудника", value=employee.name)
+                schedule = st.radio(
+                    "График сотрудника",
+                    list(schedules),
+                    index=list(schedules.values()).index(employee.schedule_type),
+                    horizontal=True,
+                )
+                duty = st.radio(
+                    "Участие в дежурствах",
+                    list(duties),
+                    index=list(duties.values()).index(employee.on_duty),
+                    horizontal=True,
+                )
+                if st.form_submit_button("Применить сотруднику"):
+                    try:
+                        updated = rename_personnel(draft, selected, name)
+                        updated = assign_roles(
+                            updated, [selected], schedules[schedule], duties[duty], replace=True
+                        )
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["onboarding_draft"] = updated.model_copy(
+                            update={"stage": "roles"}, deep=True
+                        )
+                        st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                        st.rerun()
+        with st.expander("Назначить только график или дежурства"), st.form(_key("personnel_group")):
+            remaining = {e.employee_id: e for e in pending_personnel(draft)}
+            everyone = st.checkbox("Все оставшиеся", help="Все сотрудники без полного назначения")
+            identities = st.multiselect(
+                "Сотрудники группы",
+                list(remaining),
+                format_func=lambda identity: remaining[identity].name,
             )
             schedule = st.radio("График группы", ["Не менять", "5/2", "Гибкий"], horizontal=True)
             duty = st.radio("Дежурства группы", ["Не менять", "Да", "Нет"], horizontal=True)
             if st.form_submit_button("Применить к группе"):
                 try:
-                    updated = assign_roles(
+                    updated = assign_pending_roles(
                         draft,
-                        list(by_id) if everyone else identities,
-                        schedules.get(schedule),
+                        list(remaining) if everyone else identities,
+                        {
+                            "Не менять": None,
+                            "5/2": ScheduleType.FIVE_TWO,
+                            "Гибкий": ScheduleType.FLEXIBLE,
+                        }[schedule],
                         duties.get(duty),
                     )
                 except ValueError as exc:
@@ -1603,7 +1687,7 @@ def _render_onboarding() -> None:
                     st.rerun()
         missing = incomplete_roles(draft)
         if missing:
-            st.warning("Не настроено: " + "; ".join(missing))
+            st.warning(f"Не настроено: {len(missing)}. Выберите график и участие в дежурствах.")
         if st.button("Продолжить подготовку", disabled=bool(missing), type="primary"):
             try:
                 complete_onboarding(st.session_state)
@@ -1628,13 +1712,18 @@ def render_application() -> None:
     if project is None:
         _render_onboarding()
         return
+    issues = _preparation(project)
+    if target := st.session_state.pop("configuration_tab_target", None):
+        st.session_state["configuration_tabs"] = target
     tabs = st.tabs(
         ["1. Состав", "2. Ограничения", "3. История", "4. Закрепления", "5. Подтверждения"],
         key="configuration_tabs",
+        on_change="rerun",
     )
     with tabs[0]:
         _basic_configuration(project)
-        _employee_tools(project)
+        with st.expander("Дополнительные операции со составом"):
+            _employee_tools(project)
     with tabs[1]:
         _employee_constraints(project)
         _calendar_configuration(project)
@@ -1649,5 +1738,5 @@ def render_application() -> None:
         "баланс вечеров/ночей → баланс дежурств в нерабочие даты. "
         "Норма выполняется строго по часам."
     )
-    _planning(project)
+    _planning(project, issues)
     _results(project)

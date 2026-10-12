@@ -1,7 +1,7 @@
 # Индекс проекта
 
 Генерируется `uv run python scripts/project_context.py --write`; ручные изменения запрещены.
-Версия приложения: 5.0.0. Файлов: 367. Полные symbols/imports/traceability: [JSON](project-index.json).
+Версия приложения: 5.0.0. Файлов: 374. Полные symbols/imports/traceability: [JSON](project-index.json).
 
 Холодный старт: [руководство](cold-start.md). Правила: [AGENTS](../AGENTS.md), [SDD](sdd.md), [конституция](../.specify/memory/constitution.md).
 
@@ -18,9 +18,9 @@
 | export | 5 |
 | project | 20 |
 | scheduler | 19 |
-| sdd_contract | 102 |
+| sdd_contract | 108 |
 | sdd_toolkit | 25 |
-| tests | 114 |
+| tests | 115 |
 | tooling | 8 |
 | ui | 10 |
 
@@ -47,6 +47,7 @@
 | [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | complete | REPAIR-001, REPAIR-002 |
 | [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | complete | QUALITY-001, QUALITY-002, QUALITY-003 |
 | [specs/018-personnel-onboarding](../specs/018-personnel-onboarding/spec.md) | complete | STAFF-001, STAFF-002, STAFF-003, STAFF-004, STAFF-005, STAFF-006 |
+| [specs/019-smooth-authoring](../specs/019-smooth-authoring/spec.md) | complete | UX-001, UX-002, UX-003, UX-004, UX-005 |
 
 ## API операции
 
@@ -259,6 +260,12 @@
 | [specs/018-personnel-onboarding/spec.md](../specs/018-personnel-onboarding/spec.md) | sdd_contract |
 | [specs/018-personnel-onboarding/tasks.md](../specs/018-personnel-onboarding/tasks.md) | sdd_contract |
 | [specs/018-personnel-onboarding/traceability.json](../specs/018-personnel-onboarding/traceability.json) | sdd_contract |
+| [specs/019-smooth-authoring/analysis.md](../specs/019-smooth-authoring/analysis.md) | sdd_contract |
+| [specs/019-smooth-authoring/evidence.md](../specs/019-smooth-authoring/evidence.md) | sdd_contract |
+| [specs/019-smooth-authoring/plan.md](../specs/019-smooth-authoring/plan.md) | sdd_contract |
+| [specs/019-smooth-authoring/spec.md](../specs/019-smooth-authoring/spec.md) | sdd_contract |
+| [specs/019-smooth-authoring/tasks.md](../specs/019-smooth-authoring/tasks.md) | sdd_contract |
+| [specs/019-smooth-authoring/traceability.json](../specs/019-smooth-authoring/traceability.json) | sdd_contract |
 | [src/duty_schedule/__init__.py](../src/duty_schedule/__init__.py) | domain |
 | [src/duty_schedule/_errors_fmt.py](../src/duty_schedule/_errors_fmt.py) | domain |
 | [src/duty_schedule/api/__init__.py](../src/duty_schedule/api/__init__.py) | api |
@@ -381,6 +388,7 @@
 | [tests/ui/test_quality_journey.py](../tests/ui/test_quality_journey.py) | tests |
 | [tests/ui/test_replanning_journey.py](../tests/ui/test_replanning_journey.py) | tests |
 | [tests/ui/test_schedule_generation.py](../tests/ui/test_schedule_generation.py) | tests |
+| [tests/ui/test_smooth_authoring.py](../tests/ui/test_smooth_authoring.py) | tests |
 | [tests/unit/__init__.py](../tests/unit/__init__.py) | tests |
 | [tests/unit/test_api_auth.py](../tests/unit/test_api_auth.py) | tests |
 | [tests/unit/test_api_errors.py](../tests/unit/test_api_errors.py) | tests |

@@ -139,6 +139,28 @@ def assign_roles(
     return OnboardingDraft.model_validate({**draft.model_dump(), "employees": employees})
 
 
+def pending_personnel(draft: OnboardingDraft, city: City | None = None) -> list[PersonnelEntry]:
+    return [
+        employee
+        for employee in draft.employees
+        if (employee.schedule_type is None or employee.on_duty is None)
+        and (city is None or employee.city == city)
+    ]
+
+
+def assign_pending_roles(
+    draft: OnboardingDraft,
+    employee_ids: list[str],
+    schedule_type: ScheduleType | None = None,
+    on_duty: bool | None = None,
+) -> OnboardingDraft:
+    if not employee_ids or not set(employee_ids) <= {
+        employee.employee_id for employee in pending_personnel(draft)
+    }:
+        raise ValueError("Выберите сотрудников без полного назначения")
+    return assign_roles(draft, employee_ids, schedule_type, on_duty)
+
+
 def rename_personnel(draft: OnboardingDraft, employee_id: str, name: str) -> OnboardingDraft:
     if employee_id not in {e.employee_id for e in draft.employees}:
         raise ValueError("Неизвестный сотрудник")

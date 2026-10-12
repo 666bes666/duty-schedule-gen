@@ -22,6 +22,7 @@ def test_default_repair_and_explicit_rebuild_show_changed_cells(page: Page, stre
     active = snapshot["active_revisions"]["2026-04"]
     schedule = next(r["schedule"] for r in snapshot["revisions"] if r["id"] == active)
     assert schedule["metadata"]["repair"]["baseline_id"] == project.active_revisions["2026-04"]
+    page.get_by_text("Расширенный расчёт", exact=True).click()
     page.get_by_text("Полный пересчёт без сохранения назначений", exact=True).click()
     page.get_by_role("button", name="Сгенерировать расписание", exact=True).click()
     wait_saved(page)

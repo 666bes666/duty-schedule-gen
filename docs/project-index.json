@@ -921,6 +921,30 @@
       "role": "sdd_contract"
     },
     {
+      "path": "specs/019-smooth-authoring/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
       "path": "src/duty_schedule/__init__.py",
       "role": "domain",
       "symbols": [],
@@ -2255,6 +2279,7 @@
         "_next_period",
         "add_personnel",
         "apply_city_lists",
+        "assign_pending_roles",
         "assign_roles",
         "city_counts",
         "complete_onboarding",
@@ -2262,6 +2287,7 @@
         "import_draft_into_state",
         "incomplete_roles",
         "load_draft",
+        "pending_personnel",
         "remove_personnel",
         "rename_personnel",
         "restore_snapshot",
@@ -3608,6 +3634,22 @@
       ]
     },
     {
+      "path": "tests/ui/test_smooth_authoring.py",
+      "role": "tests",
+      "symbols": [
+        "test_mobile_and_theme_status",
+        "test_pending_profiles_city_and_reload",
+        "test_ready_navigation_and_advanced_controls"
+      ],
+      "imports": [
+        "pathlib",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.test_personnel_onboarding",
+        "tests.ui.test_product_recovery"
+      ]
+    },
+    {
       "path": "tests/unit/__init__.py",
       "role": "tests",
       "symbols": [],
@@ -4383,6 +4425,7 @@
         "test_native_personnel_operations_are_atomic_and_preserve_ids",
         "test_new_onboarding_has_separate_id_and_does_not_mutate_previous_project",
         "test_partial_group_roles_and_independent_counts",
+        "test_pending_profiles_are_atomic_and_exclude_configured",
         "test_reapplying_and_reordering_preserve_employee_ids",
         "test_rename_and_explicit_unset_preserve_identity"
       ],
@@ -4941,6 +4984,7 @@
       "symbols": [
         "complete_config",
         "test_blank_dataframe_names_are_not_stringified_nan",
+        "test_duty_only_label_and_hidden_fields_preserved",
         "test_editor_preserves_individual_workday_hours",
         "test_empty_team_is_rejected_instead_of_demo_substitution",
         "test_individual_workday_rejects_calendar_nonworking_date",
@@ -6937,6 +6981,66 @@
         "tests/unit/test_product_integrity.py",
         "tests/unit/test_ui_workflow.py",
         "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "path": "specs/019-smooth-authoring",
+      "kind": "change",
+      "status": "complete",
+      "requirements": [
+        {
+          "id": "UX-001",
+          "tests": [
+            "tests/unit/test_personnel_onboarding.py::test_pending_profiles_are_atomic_and_exclude_configured",
+            "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload"
+          ]
+        },
+        {
+          "id": "UX-002",
+          "tests": [
+            "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload",
+            "tests/ui/test_personnel_onboarding.py::test_schedule_and_duty_are_independent"
+          ]
+        },
+        {
+          "id": "UX-003",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins",
+            "tests/ui/test_smooth_authoring.py::test_ready_navigation_and_advanced_controls",
+            "tests/ui/test_project_journey.py::test_project_generation_edit_download_and_reopen",
+            "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict",
+            "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells"
+          ]
+        },
+        {
+          "id": "UX-004",
+          "tests": [
+            "tests/unit/test_ui_workflow.py::test_duty_only_label_and_hidden_fields_preserved"
+          ]
+        },
+        {
+          "id": "UX-005",
+          "tests": [
+            "tests/ui/test_smooth_authoring.py::test_mobile_and_theme_status"
+          ]
+        }
+      ],
+      "files": [
+        "app.py",
+        "src/duty_schedule/ui/onboarding.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/autosave_component/index.html",
+        "tests/unit/test_personnel_onboarding.py",
+        "tests/unit/test_ui_workflow.py",
+        "tests/ui/test_personnel_onboarding.py",
+        "tests/ui/test_smooth_authoring.py",
+        "tests/ui/test_project_journey.py",
+        "docs/scheduling-workflow.md",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/019-smooth-authoring/analysis.md",
+        "tests/ui/test_first_month_journey.py",
+        "tests/ui/test_replanning_journey.py"
       ]
     }
   ],
