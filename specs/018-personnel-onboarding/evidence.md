@@ -120,3 +120,43 @@ Conventional Commit) прошли. После коммита --base HEAD~1 и in
 T001–T009 закрыты; STAFF-001–006 проверены. Status complete означает реализованный
 и проверенный объём с dev delivery. Документ закрытия доставляется отдельным
 docs commit. CI нового SHA проверяется отдельно; test/main promotion не выполнен.
+
+## 2026-10-12 — нативный персонал после пользовательской приёмки
+
+Владелец отверг многострочные списки и прямо поручил более нативный ввод.
+Контракт переоткрыт до реализации: STAFF-002 уточнён, добавлены T010–T013,
+plan/traceability/analysis обновлены. Исторические результаты выше сохранены.
+
+Введены две городские панели: отдельное поле Add для сотрудника, отдельные
+ID-based строки Rename/Remove. Принятая операция сохраняется автоматически;
+этап personnel/roles хранится в draft, переход явный. Старый draft без stage
+сохраняет людей/роли и открывается на personnel. Project/Config/API неизменны.
+
+TDD: первый новый unit test failed на отсутствии add_personnel; после реализации
+18 targeted onboarding/autosave tests passed. Проверены atomic errors, UUID и
+роли при rename, remove последней записи, неизвестный ID, дубли/blank names,
+legacy draft и CR/Unicode line-break rejection. Независимый Python review нашёл
+несогласованную CR проверку и import ordering; обе исправлены и получили
+проверки. Python review и independent code review: APPROVE без оставшихся замечаний.
+
+Native add/rename/remove/reload browser acceptance: 2 passed,10.74s.
+Первый полный UI повтор: 30 pass / 2 failures в automation выбора месяца;
+фокус/keyboard popup не был готов в коротком viewport. Helper использует
+видимый select popup и desktop viewport с проверкой aria-expanded перед выбором.
+Полный повтор выполняется; итог добавляется ниже. Runtime не менялся ради этих failures.
+
+Полный non-UI `uv run pytest tests/ -q --ignore=tests/ui --cov=duty_schedule --cov-fail-under=80 --tb=short`:
+exit0,866passed; `coverage report --precision=2` подтверждает88.20%.
+Collect-only того же набора:866. Browser collect-only:32.
+Runtime environment и native PDF flags те же, что выше.
+Ruff lint/format184files, mypy70files, scoped SDD/index/diff checks: PASS.
+
+Fresh installed wheel: uv build --wheel в /tmp/duty-native-artifacts-20261012,
+uv pip install --target /tmp/duty-native-personnel-wheel-20261012 --no-deps;
+python -I импортировал именно этот package path, проверил native add/rename/remove,
+UUID/role preservation и draft JSON round-trip: PASS.
+
+Итог native UI полного повтора: `uv run pytest tests/ui/ -q --tb=short`:
+exit0, **32 passed**. STAFF-002 и STAFF-005 подтверждены реальными native
+add/edit/remove/reload tests; остальные сценарии ролей/поиска/старых проектов
+сохранены в полном suite. T010–T012 закрыты, T013 остаётся до dev delivery.

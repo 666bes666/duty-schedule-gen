@@ -14,23 +14,50 @@ def choose(page: Page, label: str, value: str):
     group.get_by_text(value, exact=True).click()
 
 
+def add_native_employee(page: Page, city: str, name: str):
+    field = page.get_by_label(f"Новый сотрудник — {city}", exact=True)
+    field.fill(name)
+    page.get_by_role("button", name=f"Добавить — {city}", exact=True).click()
+    expect(field).to_have_value("")
+    page.wait_for_function(
+        "name => {const id=localStorage.getItem('duty-schedule:last');"
+        "const p=JSON.parse(JSON.parse(localStorage.getItem('duty-schedule:project:'+id)).project);"
+        "return p.draft?.employees.some(e=>e.name===name);}",
+        arg=name.strip(),
+    )
+
+
 def start_roster(page: Page, url: str, moscow="M0\nM1\nM2\nM3", khabarovsk="K0\nK1"):
+    page.set_viewport_size({"width": 1440, "height": 1200})
     page.goto(url, wait_until="networkidle")
     wait_saved(page)
-    page.get_by_label("Персонал Москвы", exact=True).fill(moscow)
-    page.get_by_label("Персонал Хабаровска", exact=True).fill(khabarovsk)
     box = page.get_by_test_id("stSelectbox").filter(
         has=page.get_by_text("Месяц подготовки", exact=True)
     )
+    control = box.get_by_role("combobox", name="Месяц подготовки", exact=True)
     box.get_by_role("button", name="Open", exact=True).click()
-    page.get_by_role("option", name="Апрель", exact=True).click()
+    expect(control).to_have_attribute("aria-expanded", "true")
+    option = page.get_by_role("option", name="Апрель", exact=True)
+    expect(option).to_be_visible()
+    option.click()
+    expect(control).to_have_value("Апрель")
     page.get_by_label("Год подготовки", exact=True).fill("2026")
-    page.get_by_role("button", name="Применить персонал", exact=True).click()
+    page.get_by_role("button", name="Сохранить период", exact=True).click()
+    page.wait_for_function(
+        "() => {const id=localStorage.getItem('duty-schedule:last');"
+        "const p=JSON.parse(JSON.parse(localStorage.getItem('duty-schedule:project:'+id)).project);"
+        "return p.draft?.month===4 && p.draft.year===2026;}"
+    )
+    for city, content in (("Москва", moscow), ("Хабаровск", khabarovsk)):
+        for name in content.splitlines():
+            if name.strip():
+                add_native_employee(page, city, name)
+    page.get_by_role("button", name="Перейти к настройке состава", exact=True).click()
     expect(page.get_by_text("Не настроено:", exact=False).first).to_be_visible()
     page.wait_for_function(
         "() => {const id=localStorage.getItem('duty-schedule:last');"
         "const r=localStorage.getItem('duty-schedule:project:'+id);"
-        "return r && JSON.parse(JSON.parse(r).project).draft?.employees.length>0;}"
+        "return r && JSON.parse(JSON.parse(r).project).draft?.stage==='roles';}"
     )
 
 
@@ -48,8 +75,8 @@ def test_empty_start_and_city_lists_create_actual_roster(page: Page, streamlit_u
     page.goto(streamlit_url, wait_until="networkidle")
     wait_saved(page)
     assert saved(page)["draft"]["employees"] == []
-    expect(page.get_by_label("Персонал Москвы", exact=True)).to_have_value("")
-    expect(page.get_by_label("Персонал Хабаровска", exact=True)).to_have_value("")
+    expect(page.get_by_label("Новый сотрудник — Москва", exact=True)).to_have_value("")
+    expect(page.get_by_label("Новый сотрудник — Хабаровск", exact=True)).to_have_value("")
     expect(page.get_by_role("button", name="Сгенерировать расписание", exact=True)).to_have_count(0)
     start_roster(page, streamlit_url, " Иванов, Иван \n\nПётр", "")
     assert [e["name"] for e in saved(page)["draft"]["employees"]] == ["Иванов, Иван", "Пётр"]
@@ -148,7 +175,7 @@ def test_existing_project_and_yaml_bypass_onboarding_without_loss(page: Page, st
     page.reload(wait_until="networkidle")
     wait_saved(page)
     assert saved(page) == before
-    expect(page.get_by_label("Персонал Москвы", exact=True)).to_have_count(0)
+    expect(page.get_by_label("Новый сотрудник — Москва", exact=True)).to_have_count(0)
 
 
 @pytest.mark.ui
@@ -336,7 +363,7 @@ def test_new_project_starts_empty_without_deleting_old_snapshot(page: Page, stre
     wait_saved(page)
     old = saved(page)
     page.get_by_role("button", name="Новый проект", exact=True).click()
-    expect(page.get_by_label("Персонал Москвы", exact=True)).to_have_value("")
+    expect(page.get_by_label("Новый сотрудник — Москва", exact=True)).to_have_value("")
     wait_saved(page)
     page.wait_for_function(
         "old => localStorage.getItem('duty-schedule:last') !== old", arg=old["id"]
@@ -350,3 +377,44 @@ def test_new_project_starts_empty_without_deleting_old_snapshot(page: Page, stre
         )
         == old
     )
+
+
+@pytest.mark.ui
+def test_native_rows_edit_remove_and_reload(page: Page, streamlit_url: str):
+    start_roster(page, streamlit_url)
+    all_roles(page)
+    page.get_by_role("tab", name="0. Персонал", exact=True).click()
+    expect(page.locator("textarea")).to_have_count(0)
+    before = saved(page)["draft"]
+    field = page.get_by_label("Имя — M0", exact=True)
+    form = page.get_by_test_id("stForm").filter(has=field)
+    field.fill("Иванов, Иван")
+    form.get_by_role("button", name="Сохранить имя", exact=True).click()
+    expect(page.get_by_label("Имя — Иванов, Иван", exact=True)).to_be_visible()
+    page.wait_for_function(
+        "() => {const id=localStorage.getItem('duty-schedule:last');"
+        "return JSON.parse(JSON.parse(localStorage.getItem('duty-schedule:project:'+id)).project)"
+        ".draft.employees[0].name==='Иванов, Иван';}"
+    )
+    first = saved(page)["draft"]["employees"][0]
+    assert first["employee_id"] == before["employees"][0]["employee_id"]
+    assert first["on_duty"] is True
+    assert first["schedule_type"] == "flexible"
+    page.get_by_label("Новый сотрудник — Хабаровск", exact=True).fill("Иванов, Иван")
+    page.get_by_role("button", name="Добавить — Хабаровск", exact=True).click()
+    expect(page.get_by_text("уже внесён в персонал", exact=False)).to_be_visible()
+    assert len(saved(page)["draft"]["employees"]) == 6
+    row = page.get_by_test_id("stForm").filter(has=page.get_by_label("Имя — K1", exact=True))
+    row.get_by_role("button", name="Удалить", exact=True).click()
+    expect(page.get_by_label("Имя — K1", exact=True)).to_have_count(0)
+    page.wait_for_function(
+        "() => {const id=localStorage.getItem('duty-schedule:last');"
+        "return JSON.parse(JSON.parse(localStorage.getItem('duty-schedule:project:'+id)).project)"
+        ".draft.employees.length===5;}"
+    )
+    before_reload = saved(page)
+    page.reload(wait_until="networkidle")
+    wait_saved(page)
+    assert saved(page) == before_reload
+    expect(page.get_by_label("Имя — Иванов, Иван", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Хабаровск · 1", exact=True)).to_be_visible()

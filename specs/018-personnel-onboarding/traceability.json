@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "complete",
+  "status": "in-progress",
   "files": [
     "app.py",
     "src/duty_schedule/ui/onboarding.py",
@@ -36,7 +36,8 @@
       "id": "STAFF-002",
       "tests": [
         "tests/ui/test_personnel_onboarding.py::test_empty_start_and_city_lists_create_actual_roster",
-        "tests/unit/test_personnel_onboarding.py::test_city_lists_preserve_names_and_reject_duplicates_atomically"
+        "tests/unit/test_personnel_onboarding.py::test_city_lists_preserve_names_and_reject_duplicates_atomically",
+        "tests/unit/test_personnel_onboarding.py::test_native_personnel_operations_are_atomic_and_preserve_ids"
       ]
     },
     {
@@ -62,7 +63,8 @@
         "tests/ui/test_personnel_onboarding.py::test_draft_two_tabs_conflict_preserves_newer_snapshot",
         "tests/ui/test_personnel_onboarding.py::test_draft_quota_and_transition_failure_preserve_backup",
         "tests/ui/test_personnel_onboarding.py::test_corrupt_draft_recovers_previous_snapshot",
-        "tests/unit/test_personnel_onboarding.py::test_rename_and_explicit_unset_preserve_identity"
+        "tests/unit/test_personnel_onboarding.py::test_rename_and_explicit_unset_preserve_identity",
+        "tests/ui/test_personnel_onboarding.py::test_native_rows_edit_remove_and_reload"
       ]
     },
     {

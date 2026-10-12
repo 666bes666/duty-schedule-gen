@@ -147,7 +147,7 @@ def test_rename_and_explicit_unset_preserve_identity():
     assert renamed.employees[0].employee_id == identity
     assert renamed.employees[0].on_duty is True
     assert renamed.employees[0].schedule_type == ScheduleType.FIVE_TWO
-    for name in (" ", "M1", "Иван\nПётр"):
+    for name in (" ", "M1", "Иван\nПётр", "Иван\rПётр", "Иван\u2028Пётр"):
         with pytest.raises(ValueError):
             rename_personnel(renamed, identity, name)
     unset = assign_roles(renamed, [identity], None, False, replace=True)
@@ -172,3 +172,45 @@ def test_new_onboarding_has_separate_id_and_does_not_mutate_previous_project():
     assert serialize_project(project) == before
     assert "project" not in state
     assert state["autosave_token"] is None
+
+
+def test_native_personnel_operations_are_atomic_and_preserve_ids():
+    from duty_schedule.ui.onboarding import add_personnel, remove_personnel, rename_personnel
+
+    original = OnboardingDraft(year=2026, month=4)
+    draft = add_personnel(original, City.MOSCOW, "  Иванов, Иван  ")
+    assert draft.employees[0].name == "Иванов, Иван"
+    identity = draft.employees[0].employee_id
+    draft = assign_roles(draft, [identity], ScheduleType.FIVE_TWO, True)
+    draft = add_personnel(draft, City.KHABAROVSK, "Пётр")
+    assert draft.stage == "personnel"
+    assert draft.employees[1].on_duty is None
+    renamed = rename_personnel(draft, identity, "Иванов, Илья")
+    assert renamed.employees[0].employee_id == identity
+    assert renamed.employees[0].on_duty is True
+    for name in ["", "  ", "Пётр", "Иван\nПётр", "Иван\rПётр"]:
+        with pytest.raises(ValueError):
+            add_personnel(renamed, City.MOSCOW, name)
+    remaining = remove_personnel(renamed, renamed.employees[1].employee_id)
+    assert len(remaining.employees) == 1
+    assert remaining.employees[0] == renamed.employees[0]
+    with pytest.raises(ValueError):
+        remove_personnel(remaining, "unknown")
+    empty = remove_personnel(remaining.model_copy(update={"stage": "roles"}), identity)
+    assert empty.employees == []
+    assert empty.stage == "personnel"
+    assert original.employees == []
+    assert load_draft(serialize_draft(remaining)) == remaining
+
+
+def test_legacy_draft_without_stage_keeps_personnel_and_roles():
+    draft = roster()
+    draft = assign_roles(draft, [draft.employees[0].employee_id], ScheduleType.FIVE_TWO, True)
+    raw = json.loads(serialize_draft(draft))
+    raw["draft"].pop("stage")
+    restored = load_draft(json.dumps(raw))
+    assert restored.employees == draft.employees
+    assert restored.stage == "personnel"
+    raw["draft"]["employees"][0]["name"] = "Иван\rПётр"
+    with pytest.raises(ValueError):
+        load_draft(json.dumps(raw))

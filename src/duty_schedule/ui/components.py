@@ -1411,64 +1411,99 @@ def _results(project: ScheduleProject) -> None:
 def _render_onboarding() -> None:
     from duty_schedule.ui.onboarding import (
         OnboardingDraft,
-        apply_city_lists,
+        add_personnel,
         assign_roles,
         city_counts,
         complete_onboarding,
         incomplete_roles,
+        remove_personnel,
         rename_personnel,
     )
 
     draft = st.session_state["onboarding_draft"]
     tabs = st.tabs(
         ["0. Персонал", "1. Состав"],
-        default="1. Состав" if draft.employees else "0. Персонал",
+        default="1. Состав" if draft.stage == "roles" else "0. Персонал",
         key=_key("onboarding_tabs"),
     )
     with tabs[0]:
         st.subheader("0. Внесите весь персонал")
-        st.caption("По одному имени на строке. Количество считается после применения списка.")
-        with st.form(_key("personnel_form")):
-            columns = st.columns(2)
-            moscow = columns[0].text_area(
-                "Персонал Москвы",
-                value="\n".join(e.name for e in draft.employees if e.city == City.MOSCOW),
-            )
-            khabarovsk = columns[1].text_area(
-                "Персонал Хабаровска",
-                value="\n".join(e.name for e in draft.employees if e.city == City.KHABAROVSK),
-            )
-            month = st.selectbox(
+        st.caption("Добавьте сотрудников по городам. Каждое имя — отдельная запись.")
+        columns = st.columns(2)
+        for column, city, label in (
+            (columns[0], City.MOSCOW, "Москва"),
+            (columns[1], City.KHABAROVSK, "Хабаровск"),
+        ):
+            with column:
+                personnel = [employee for employee in draft.employees if employee.city == city]
+                st.subheader(f"{label} · {len(personnel)}")
+                with st.form(_key(f"add_personnel_{city.value}")):
+                    name = st.text_input(f"Новый сотрудник — {label}", placeholder="Имя или ФИО")
+                    if st.form_submit_button(f"Добавить — {label}"):
+                        try:
+                            updated = add_personnel(draft, city, name)
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.session_state["onboarding_draft"] = updated.model_copy(
+                                update={"stage": "personnel"}, deep=True
+                            )
+                            st.session_state["ui_epoch"] = (
+                                int(st.session_state.get("ui_epoch", 0)) + 1
+                            )
+                            st.rerun()
+                if not personnel:
+                    st.caption("Сотрудники ещё не добавлены")
+                for employee in personnel:
+                    with st.form(_key(f"personnel_name_{employee.employee_id}")):
+                        name = st.text_input(
+                            f"Имя — {employee.name}",
+                            value=employee.name,
+                        )
+                        buttons = st.columns(2)
+                        save = buttons[0].form_submit_button("Сохранить имя")
+                        remove = buttons[1].form_submit_button("Удалить")
+                        if save or remove:
+                            try:
+                                updated = (
+                                    remove_personnel(draft, employee.employee_id)
+                                    if remove
+                                    else rename_personnel(draft, employee.employee_id, name)
+                                )
+                            except ValueError as exc:
+                                st.error(str(exc))
+                            else:
+                                st.session_state["onboarding_draft"] = updated.model_copy(
+                                    update={"stage": "personnel"}, deep=True
+                                )
+                                st.session_state["ui_epoch"] = (
+                                    int(st.session_state.get("ui_epoch", 0)) + 1
+                                )
+                                st.rerun()
+        st.caption(f"Всего сотрудников: {len(draft.employees)}")
+        with st.form(_key("personnel_period")):
+            period = st.columns(2)
+            month = period[0].selectbox(
                 "Месяц подготовки",
                 range(1, 13),
                 index=draft.month - 1,
                 format_func=lambda value: MONTHS_RU[value - 1],
             )
-            year = st.number_input(
+            year = period[1].number_input(
                 "Год подготовки", min_value=2024, max_value=9999, value=draft.year
             )
-            if st.form_submit_button("Применить персонал"):
-                try:
-                    updated = apply_city_lists(draft, moscow, khabarovsk)
-                    updated = OnboardingDraft.model_validate(
-                        {**updated.model_dump(), "year": year, "month": month}
-                    )
-                except ValueError as exc:
-                    st.error(str(exc))
-                else:
-                    st.session_state["onboarding_draft"] = updated
-                    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
-                    st.rerun()
-        st.caption(
-            f"Москва: {city_counts(draft, City.MOSCOW)['total']}; "
-            f"Хабаровск: {city_counts(draft, City.KHABAROVSK)['total']}; "
-            f"всего внесено: {len(draft.employees)}"
-        )
-        if draft.employees:
-            st.caption(
-                "Для исправления имени с сохранением настроек используйте шаг 1. "
-                "Замена имени в списке удаляет старую запись и добавляет новую."
+            if st.form_submit_button("Сохранить период"):
+                st.session_state["onboarding_draft"] = OnboardingDraft.model_validate(
+                    {**draft.model_dump(), "year": year, "month": month, "stage": "personnel"}
+                )
+                st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+                st.rerun()
+        if st.button("Перейти к настройке состава", disabled=not draft.employees, type="primary"):
+            st.session_state["onboarding_draft"] = draft.model_copy(
+                update={"stage": "roles"}, deep=True
             )
+            st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+            st.rerun()
     with tabs[1]:
         st.subheader("1. Настройте работу сотрудников")
         st.caption("График и участие в дежурствах независимы. 5/2 может участвовать в дежурствах.")
@@ -1538,7 +1573,9 @@ def _render_onboarding() -> None:
                 except ValueError as exc:
                     st.error(str(exc))
                 else:
-                    st.session_state["onboarding_draft"] = updated
+                    st.session_state["onboarding_draft"] = updated.model_copy(
+                        update={"stage": "roles"}, deep=True
+                    )
                     st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
                     st.rerun()
         with st.form(_key("personnel_group")):
@@ -1559,7 +1596,9 @@ def _render_onboarding() -> None:
                 except ValueError as exc:
                     st.error(str(exc))
                 else:
-                    st.session_state["onboarding_draft"] = updated
+                    st.session_state["onboarding_draft"] = updated.model_copy(
+                        update={"stage": "roles"}, deep=True
+                    )
                     st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
                     st.rerun()
         missing = incomplete_roles(draft)

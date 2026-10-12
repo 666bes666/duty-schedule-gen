@@ -39,3 +39,12 @@ envelope, independent role assignments и ID-based rename реализованы
 Для испытаний в scope добавлены legacy AppTest harness, UI conftest и project
 journey, runtime границы не расширены. Independent Python review Approve.
 Итоговые full suites и delivery фиксируются в evidence, не выводятся из gate.
+
+## Повторный анализ нативного ввода
+
+Прямая коррекция владельца отменяет multiline UI. STAFF-002→T010/T011/T012;
+STAFF-005→T010/T011/T012. STAFF-001/003/004/006 сохраняют смысл. Stage хранится
+только в draft envelope; отсутствие stage у старого draft возвращает personnel
+без потери данных. Принятая операция одного человека не меняет остальные ID
+и роли, ошибки не стирают черновик. Scope точный; старые результаты исторические.
+План согласован перед реализацией; новый итог не следует из старого complete.

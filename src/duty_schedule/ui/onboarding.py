@@ -23,7 +23,11 @@ class PersonnelEntry(BaseModel):
 
     @model_validator(mode="after")
     def validate_name(self) -> PersonnelEntry:
-        if not self.name.strip() or self.name != self.name.strip() or "\n" in self.name:
+        if (
+            not self.name.strip()
+            or self.name != self.name.strip()
+            or len(self.name.splitlines()) != 1
+        ):
             raise ValueError("Имя сотрудника должно быть непустой строкой без внешних пробелов")
         return self
 
@@ -40,6 +44,7 @@ class OnboardingDraft(BaseModel):
     year: int = Field(default_factory=lambda: _next_period().year, ge=2024, le=9999)
     month: int = Field(default_factory=lambda: _next_period().month, ge=1, le=12)
     employees: list[PersonnelEntry] = []
+    stage: Literal["personnel", "roles"] = "personnel"
 
     @model_validator(mode="after")
     def unique_personnel(self) -> OnboardingDraft:
@@ -64,6 +69,31 @@ def serialize_draft(draft: OnboardingDraft) -> str:
 
 def load_draft(content: str | bytes) -> OnboardingDraft:
     return DraftSnapshot.model_validate_json(content).draft
+
+
+def add_personnel(draft: OnboardingDraft, city: City, name: str) -> OnboardingDraft:
+    name = name.strip()
+    if not name or len(name.splitlines()) != 1:
+        raise ValueError("Укажите имя одного сотрудника")
+    if name in {employee.name for employee in draft.employees}:
+        raise ValueError(f"Сотрудник «{name}» уже внесён в персонал")
+    employee = PersonnelEntry(name=name, city=city)
+    return OnboardingDraft.model_validate(
+        {**draft.model_dump(), "employees": [*draft.employees, employee]}
+    )
+
+
+def remove_personnel(draft: OnboardingDraft, employee_id: str) -> OnboardingDraft:
+    if employee_id not in {employee.employee_id for employee in draft.employees}:
+        raise ValueError("Неизвестный сотрудник")
+    employees = [employee for employee in draft.employees if employee.employee_id != employee_id]
+    return OnboardingDraft.model_validate(
+        {
+            **draft.model_dump(),
+            "employees": employees,
+            "stage": draft.stage if employees else "personnel",
+        }
+    )
 
 
 def apply_city_lists(draft: OnboardingDraft, moscow: str, khabarovsk: str) -> OnboardingDraft:
