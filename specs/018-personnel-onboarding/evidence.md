@@ -105,3 +105,18 @@ wrapper не применяется при обычном запуске и не
 Рабочее дерево проверено на dev; перед delivery HEAD и origin/dev равны
 c5616674f941a81344540e5f8f6d49546a3358fa. Ни feature branch, ни pointer feature.json
 не создавались; test/main данным изменением ещё не обновлены.
+
+## Dev delivery и закрытие контракта
+
+2026-10-12: реализация доставлена commit
+98426aa5b9c8d27ed97c9d1ceba9feaa5df01334 (`feat: add personnel onboarding before roster configuration`).
+Staged SDD gate, diff whitespace и commit hooks (SDD, Ruff, format,
+Conventional Commit) прошли. После коммита --base HEAD~1 и index --check прошли;
+`git push origin dev` успешно отправил commit. Локальный dev и origin/dev
+совпали, рабочее дерево было чистым. Обычный direct-dev push использует
+действующую привилегию владельца для checks, которые GitHub запускает после push;
+это не утверждение о зелёном CI нового SHA. Runtime подтверждён локальными gates.
+
+T001–T009 закрыты; STAFF-001–006 проверены. Status complete означает реализованный
+и проверенный объём с dev delivery. Документ закрытия доставляется отдельным
+docs commit. CI нового SHA проверяется отдельно; test/main promotion не выполнен.
