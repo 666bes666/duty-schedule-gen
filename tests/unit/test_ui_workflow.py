@@ -242,6 +242,7 @@ def test_real_streamlit_project_edit_check_and_reopen(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr("duty_schedule.ui.components.fetch_production_calendar", no_network)
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = new_project(journey_config())
     app.run(timeout=20)
     assert not app.exception
@@ -277,6 +278,7 @@ def test_real_streamlit_project_edit_check_and_reopen(monkeypatch: pytest.Monkey
     assert schedule.days[9].workday_hours["M0"] == 4
     assert schedule.monthly_targets["M0"].selected_hours == 136
     reopened = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    reopened.session_state["autosave_initialized"] = True
     reopened.session_state["project"] = load_project(serialize_project(project))
     reopened.run(timeout=20)
     assert not reopened.exception
@@ -391,6 +393,7 @@ def test_whatif_calendar_mismatch_is_reported_without_crashing_application() -> 
 
     config = journey_config()
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = add_revision(
         new_project(config), Schedule(config=config, days=journey_days(config))
     )
@@ -431,6 +434,7 @@ def test_revision_comparison_displays_changed_individual_workday_hours(
     edited_days[1].workday_hours["M0"] = 4
     project = apply_assignments(project, edited_days)
     app = AppTest.from_file(str(Path(__file__).resolve().parents[2] / "app.py"))
+    app.session_state["autosave_initialized"] = True
     app.session_state["project"] = project
 
     app.run(timeout=20)
@@ -440,3 +444,33 @@ def test_revision_comparison_displays_changed_individual_workday_hours(
     changed = comparison[comparison["Сотрудник"] == "M0"].iloc[0]
     assert changed["Было, ч"] == expected_hours
     assert changed["Стало, ч"] == 4
+
+
+def test_duty_only_label_and_hidden_fields_preserved(complete_config):
+    from streamlit.testing.v1 import AppTest
+
+    from duty_schedule.project import new_project
+
+    config = complete_config.model_copy(deep=True)
+    config.employees[0].morning_only = True
+    config.employees[0].always_on_duty = True
+    app = AppTest.from_file(
+        str(__import__("pathlib").Path(__file__).resolve().parents[2] / "app.py")
+    )
+    app.session_state["project"] = new_project(config)
+    app.session_state["autosave_initialized"] = True
+    app.run()
+    assert not app.exception
+    import json
+
+    editor = next(e for e in app.dataframe if "Всегда на деж." in json.loads(e.proto.columns))
+
+    columns = json.loads(editor.proto.columns)
+    assert columns["Всегда на деж."]["label"] == "Только дежурства"
+    assert list(editor.proto.column_order) == ["Имя", "Город", "График", "Дежурный"]
+    next(c for c in app.checkbox if c.label == "Показать особые условия").check().run()
+    next(c for c in app.checkbox if c.label == "Показать особые условия").uncheck().run()
+    assert not app.exception
+    employee = app.session_state["project"].config.employees[0]
+    assert employee.always_on_duty and employee.morning_only
+    assert employee.employee_id == config.employees[0].employee_id

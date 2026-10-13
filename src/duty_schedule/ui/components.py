@@ -41,7 +41,6 @@ from duty_schedule.project import (
     load_project,
     new_project,
     remove_pin,
-    serialize_project,
     update_config,
 )
 from duty_schedule.scheduler import ScheduleError, generate_schedule
@@ -49,13 +48,11 @@ from duty_schedule.stats import build_assignments, compute_stats
 from duty_schedule.ui.builders import _edit_df_to_schedule, _schedule_to_edit_df
 from duty_schedule.ui.config_io import (
     _pins_df_to_list,
-    config_from_tables,
     config_to_tables,
     dump_config_yaml,
     parse_config_yaml,
 )
 from duty_schedule.ui.mappings import (
-    _DEFAULT_ROWS,
     _SHIFTS_RU,
     _WEEKDAY_OPTIONS,
     MONTHS_RU,
@@ -65,19 +62,13 @@ from duty_schedule.workload import calculate_monthly_targets
 WHATIF_PARAMETERS = tuple(field for field in Config.model_fields if field not in {"month", "year"})
 
 
-def _default_config() -> Config:
-    from duty_schedule.ui.config_io import employees_from_table
-
-    today = date.today()
-    month = today.month % 12 + 1
-    year = today.year + (today.month == 12)
-    return Config(
-        month=month, year=year, employees=employees_from_table(pd.DataFrame(_DEFAULT_ROWS))
-    )
-
-
 def _set_project(state: MutableMapping[Any, Any], project: ScheduleProject) -> None:
     state["project"] = project
+    if "roster_draft" in state and not state.get("roster_errors"):
+        from duty_schedule.ui.roster import from_project
+
+        state["roster_draft"] = from_project(project)
+    state.pop("onboarding_draft", None)
     state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
     state.pop("ui_exports", None)
     state.pop("ui_import_notice", None)
@@ -94,6 +85,7 @@ def import_config_into_state(state: MutableMapping[Any, Any], content: str) -> C
         if isinstance(previous, ScheduleProject)
         else new_project(config)
     )
+    state.pop("roster_draft", None)
     _set_project(state, project)
     return config
 
@@ -102,6 +94,7 @@ def import_project_into_state(
     state: MutableMapping[Any, Any], content: bytes | str
 ) -> ScheduleProject:
     project = load_project(content)
+    state.pop("roster_draft", None)
     _set_project(state, project)
     return project
 
@@ -214,7 +207,7 @@ def _key(label: str) -> str:
     return f"ui_{st.session_state.get('ui_epoch', 0)}_{label}"
 
 
-def _sidebar(project: ScheduleProject) -> None:
+def _sidebar(project: ScheduleProject | None) -> None:
     with st.sidebar:
         st.header("Рабочий проект")
         for label, file_types in (
@@ -231,7 +224,9 @@ def _sidebar(project: ScheduleProject) -> None:
                         if file_types[0] == "yaml":
                             import_config_into_state(st.session_state, content.decode("utf-8"))
                         else:
-                            import_project_into_state(st.session_state, content)
+                            from duty_schedule.ui.onboarding import restore_snapshot
+
+                            restore_snapshot(st.session_state, content)
                     except (ValueError, UnicodeDecodeError) as exc:
                         st.error(str(exc))
                     else:
@@ -242,9 +237,33 @@ def _sidebar(project: ScheduleProject) -> None:
             st.warning(notice)
         if st.session_state.get("ui_import_notice"):
             st.text(st.session_state["ui_import_notice"])
+        if project is None:
+            from duty_schedule.ui.onboarding import restore_snapshot, storage_snapshot
+
+            uploaded = st.file_uploader("Открыть черновик состава (.json)", type=["json"])
+            if uploaded is not None:
+                token = (uploaded.file_id, hashlib.sha256(uploaded.getvalue()).hexdigest())
+                if st.session_state.get("loaded_onboarding") != token:
+                    try:
+                        restore_snapshot(st.session_state, uploaded.getvalue())
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["loaded_onboarding"] = token
+                        st.session_state["ui_import_notice"] = f"Загружено: {uploaded.name}"
+                        st.rerun()
+            st.download_button(
+                "Сохранить черновик состава",
+                storage_snapshot(st.session_state)[0],
+                file_name="roster-draft.json",
+                mime="application/json",
+            )
+            return
+        from duty_schedule.ui.onboarding import storage_snapshot
+
         st.download_button(
             "Сохранить рабочий проект",
-            serialize_project(project),
+            storage_snapshot(st.session_state)[0],
             file_name="schedule-project.json",
             mime="application/json",
             key=_key("save_project"),
@@ -261,6 +280,18 @@ def _sidebar(project: ScheduleProject) -> None:
         st.caption(
             "Проект сохраняет календарь, версии, ручные назначения, подтверждения и историю."
         )
+        if st.button("Новый проект", key=_key("new_project")):
+            if st.session_state.get("autosave_status") != "saved" or st.session_state.get(
+                "autosave_hash"
+            ) != st.session_state.get("autosave_expected_hash"):
+                st.warning(
+                    "Дождитесь сохранения или скачайте резервную копию перед новым проектом."
+                )
+            else:
+                from duty_schedule.ui.onboarding import start_new_onboarding
+
+                start_new_onboarding(st.session_state)
+                st.rerun()
         periods = sorted(set(project.active_revisions) | {project.selected_period})
         if periods:
             selected = st.selectbox(
@@ -270,6 +301,7 @@ def _sidebar(project: ScheduleProject) -> None:
                 if project.selected_period in periods
                 else 0,
                 key=_key("selected_period"),
+                disabled=bool(st.session_state.get("roster_errors")),
             )
             if selected != project.selected_period:
                 changed = project.model_copy(deep=True)
@@ -281,75 +313,167 @@ def _sidebar(project: ScheduleProject) -> None:
                 st.rerun()
 
 
-def _basic_configuration(project: ScheduleProject) -> None:
-    config = project.config
-    tables = config_to_tables(config)
-    with st.form(_key("configuration_form")):
-        c1, c2, c3 = st.columns(3)
-        month = c1.selectbox(
-            "Месяц",
-            range(1, 13),
-            index=config.month - 1,
-            format_func=lambda value: MONTHS_RU[value - 1],
-        )
-        year = c2.number_input("Год", min_value=2024, value=config.year, step=1)
-        with st.expander("Дополнительные настройки"):
-            seed = st.number_input("Seed", min_value=0, value=config.seed, step=1)
-            solver = st.selectbox(
-                "Алгоритм", ["greedy", "cpsat"], index=int(config.solver == "cpsat")
-            )
-        timezone_name = config.timezone
-        employees = st.data_editor(
-            tables.employees,
-            column_config={
-                "ID": None,
-                "Город": st.column_config.SelectboxColumn(options=["Москва", "Хабаровск"]),
-                "График": st.column_config.SelectboxColumn(options=["Гибкий", "5/2"]),
-                "Предпочт. смена": st.column_config.SelectboxColumn(
-                    options=["", "Утро", "Вечер", "Ночь", "Рабочий день"]
-                ),
-                "Макс. подряд": st.column_config.NumberColumn(
-                    min_value=1,
-                    max_value=7,
-                    step=1,
-                    help=(
-                        "Обычный предел 6; превышение персонального лимита подтверждается отдельно"
-                    ),
-                ),
-            },
-            disabled=["ID"],
-            num_rows="dynamic",
-            hide_index=True,
-            use_container_width=True,
-            key=_key("employees_table"),
-        )
-        if st.form_submit_button("Сохранить настройки"):
-            try:
-                updated = config_from_tables(employees, config, tables.employee_dates)
-                updated = Config.model_validate(
-                    {
-                        **updated.model_dump(),
-                        "month": month,
-                        "year": year,
-                        "seed": seed,
-                        "solver": solver,
-                        "timezone": timezone_name,
-                        "production_calendar": _saved_calendar(project, year, month),
-                    }
-                )
-                if updated.production_calendar is not None and (
-                    updated.production_calendar.year,
-                    updated.production_calendar.month,
-                ) != (year, month):
-                    updated.production_calendar = _saved_calendar(project, year, month)
-            except ValueError as exc:
-                st.error(str(exc))
-            else:
-                _commit(updated)
-    st.caption(
-        "Дежурства: утро 08–17 МСК, вечер 15–00 МСК, ночь 00–08 МСК одной даты. "
-        "«Р» начинается в 09:00 местного времени."
+def _synchronize_roster() -> None:
+    from duty_schedule.ui.roster import roster_config
+
+    draft = st.session_state["roster_draft"]
+    project = st.session_state.get("project")
+    try:
+        config = roster_config(draft, project)
+    except ValueError as exc:
+        st.session_state["roster_errors"] = str(exc).splitlines()
+        return
+    st.session_state["roster_errors"] = []
+    if project is None:
+        project = new_project(config)
+        project.id = draft.id
+        st.session_state["project"] = project
+        _reset_roster_editor()
+    elif config.model_dump(mode="json") != project.config.model_dump(mode="json"):
+        st.session_state["project"] = update_config(project, config)
+        st.session_state.pop("ui_exports", None)
+
+
+def _roster_changed(seed: Any, editor_key: str) -> None:
+    from duty_schedule.ui.roster import apply_delta
+
+    if editor_key != _key(f"roster_table_{st.session_state.get('roster_special', False)}"):
+        return
+    identities = st.session_state.setdefault(f"{editor_key}_added_ids", {})
+    current = st.session_state["roster_draft"]
+    updated = apply_delta(seed, st.session_state[editor_key], identities)
+    st.session_state["roster_draft"] = updated.model_copy(
+        update={"id": current.id, "month": current.month, "year": current.year}, deep=True
     )
+    _synchronize_roster()
+    changes = st.session_state[editor_key]
+    if changes.get("added_rows") or changes.get("deleted_rows"):
+        _reset_roster_editor()
+
+
+def _roster_period_changed(month_key: str, year_key: str) -> None:
+    if (month_key, year_key) != (_key("roster_month"), _key("roster_year")):
+        return
+    draft = st.session_state["roster_draft"]
+    st.session_state["roster_draft"] = draft.model_copy(
+        update={
+            "month": st.session_state[month_key],
+            "year": st.session_state[year_key],
+        },
+        deep=True,
+    )
+    _synchronize_roster()
+
+
+def _reset_roster_editor() -> None:
+    st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+
+
+def _basic_configuration(project: ScheduleProject | None) -> None:
+    from duty_schedule.ui.roster import RosterRow, copy_row, row_frame
+
+    draft = st.session_state["roster_draft"]
+    st.subheader("1. Состав")
+    st.caption(
+        "Один сотрудник — одна строка. Изменения сохраняются автоматически после выхода из ячейки."
+    )
+    period = st.columns(2)
+    month_key, year_key = _key("roster_month"), _key("roster_year")
+    period[0].selectbox(
+        "Месяц",
+        range(1, 13),
+        index=draft.month - 1,
+        format_func=lambda value: MONTHS_RU[value - 1],
+        key=month_key,
+        on_change=_roster_period_changed,
+        args=(month_key, year_key),
+    )
+    period[1].number_input(
+        "Год",
+        min_value=2024,
+        max_value=9999,
+        value=draft.year,
+        key=year_key,
+        on_change=_roster_period_changed,
+        args=(month_key, year_key),
+    )
+    special = st.checkbox(
+        "Показать особые условия", key="roster_special", on_change=_reset_roster_editor
+    )
+    editor_key = _key(f"roster_table_{special}")
+    seed_key = f"{editor_key}_seed"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = draft.model_copy(deep=True)
+    seed = st.session_state[seed_key]
+    st.data_editor(
+        row_frame(seed),
+        column_config={
+            "ID": None,
+            "Имя": st.column_config.TextColumn("Имя"),
+            "Город": st.column_config.SelectboxColumn(options=["", "Москва", "Хабаровск"]),
+            "График": st.column_config.SelectboxColumn(options=["", "Гибкий", "5/2"]),
+            "Дежурный": st.column_config.SelectboxColumn("Дежурит", options=["", "Да", "Нет"]),
+            "Всегда на деж.": st.column_config.CheckboxColumn(
+                "Только дежурства",
+                help="Без обычного рабочего дня Р. Выходные, отдых и отпуска сохраняются.",
+            ),
+            "Предпочт. смена": st.column_config.SelectboxColumn(
+                options=["", "Утро", "Вечер", "Ночь", "Рабочий день"]
+            ),
+            "Макс. подряд": st.column_config.NumberColumn(min_value=1, max_value=7, step=1),
+        },
+        column_order=None if special else ["Имя", "Город", "График", "Дежурный"],
+        disabled=["ID"],
+        num_rows="dynamic",
+        hide_index=True,
+        width="stretch",
+        key=editor_key,
+        on_change=_roster_changed,
+        args=(seed, editor_key),
+    )
+    toolbar = st.columns([1, 2, 1, 1])
+    add = toolbar[0].button("Добавить строку", key=_key("add_roster_row"), width="stretch")
+    identities = [row.employee_id for row in draft.rows]
+    selected = toolbar[1].selectbox(
+        "Строка",
+        identities,
+        format_func=lambda identity: next(
+            f"{index}. {row.name or 'Без имени'}"
+            for index, row in enumerate(draft.rows, 1)
+            if row.employee_id == identity
+        ),
+        key=_key("roster_selection"),
+        disabled=not identities,
+    )
+    copy = toolbar[2].button("Копировать строку", disabled=not identities, width="stretch")
+    remove = toolbar[3].button("Удалить строку", disabled=not identities, width="stretch")
+    if add or copy or remove:
+        updated = draft.model_copy(deep=True)
+        if add:
+            updated.rows.append(RosterRow())
+        elif copy:
+            updated = copy_row(draft, selected)
+        else:
+            updated.rows = [row for row in updated.rows if row.employee_id != selected]
+        st.session_state["roster_draft"] = updated
+        st.session_state["ui_epoch"] = int(st.session_state.get("ui_epoch", 0)) + 1
+        _synchronize_roster()
+        st.rerun()
+    st.caption(f"Сотрудников: {len(draft.rows)}")
+    for issue in st.session_state.get("roster_errors", []):
+        st.warning(issue)
+    if project is not None:
+        with st.expander("Дополнительные настройки расчёта"), st.form(_key("solver_form")):
+            seed_value = st.number_input("Seed", min_value=0, value=project.config.seed, step=1)
+            solver = st.selectbox(
+                "Алгоритм", ["greedy", "cpsat"], index=int(project.config.solver == "cpsat")
+            )
+            if st.form_submit_button("Сохранить параметры расчёта"):
+                _commit(
+                    Config.model_validate(
+                        {**project.config.model_dump(), "seed": seed_value, "solver": solver}
+                    )
+                )
 
 
 def _period_frame(periods: list[VacationPeriod]) -> pd.DataFrame:
@@ -414,7 +538,7 @@ def _employee_tools(project: ScheduleProject) -> None:
             "Город": "city",
             "График": "schedule_type",
             "Дежурный": "on_duty",
-            "Всегда на деж.": "always_on_duty",
+            "Только дежурства": "always_on_duty",
             "Только утро": "morning_only",
             "Только вечер": "evening_only",
             "Предпочт. смена": "preferred_shift",
@@ -1072,37 +1196,39 @@ def _preparation(project: ScheduleProject) -> list[ScheduleDiagnostic]:
         ),
         ("Нормы часов", {"norm_choice_invalid", "norm_employee_unknown"}, "2. Ограничения"),
     ]
-    for label, codes, action in groups:
-        problems = [item for item in issues if item.code in codes]
-        st.write(f"{label}: {'требует исправления' if problems else 'подготовлено'}")
-        actions = {
-            "1. Состав"
-            if item.code in {"duplicate_employee", "duplicate_employee_id", "config_invalid"}
-            else action
-            for item in problems
-        }
-        for target in sorted(actions):
-            if st.button(f"Открыть «{target}»", key=f"preflight_{label}_{target}"):
-                st.session_state["configuration_tabs"] = target
-                st.rerun()
-        for item in problems[:3]:
-            st.warning(
-                f"{item.employee_name or ''} {item.date or ''}: {item.detail}. Откройте «{action}»."
-            )
+    opened_actions: set[str] = set()
+    columns = st.columns(len(groups))
+    for index, (label, codes, action) in enumerate(groups):
+        with columns[index]:
+            problems = [item for item in issues if item.code in codes]
+            st.write(f"{label}: {'требует исправления' if problems else 'подготовлено'}")
+            actions = {
+                "1. Состав"
+                if item.code in {"duplicate_employee", "duplicate_employee_id", "config_invalid"}
+                else action
+                for item in problems
+            }
+            for target in sorted(actions - opened_actions):
+                opened_actions.add(target)
+                if st.button(f"Открыть «{target}»", key=f"preflight_{label}_{target}"):
+                    st.session_state["configuration_tab_target"] = target
+                    st.rerun()
     if issues:
         with st.expander("Все причины подготовки"):
+            for item in issues[:3]:
+                st.warning(f"{item.employee_name or ''} {item.date or ''}: {item.detail}")
             st.dataframe(pd.DataFrame([item.model_dump() for item in issues]), hide_index=True)
     st.caption(
-        "Правки форм применяются кнопкой сохранения. "
+        "Состав сохраняется автоматически. Правки остальных форм применяются кнопкой сохранения. "
         "Неприменённые правки не входят в сохранённую версию."
     )
     return issues
 
 
-def _planning(project: ScheduleProject) -> None:
-    issues = _preparation(project)
-    diagnostic = st.checkbox("Диагностическое исследование неполных данных")
-    rebuild = st.checkbox("Полный пересчёт без сохранения назначений")
+def _planning(project: ScheduleProject, issues: list[ScheduleDiagnostic]) -> None:
+    with st.expander("Расширенный расчёт"):
+        diagnostic = st.checkbox("Диагностическое исследование неполных данных")
+        rebuild = st.checkbox("Полный пересчёт без сохранения назначений")
     if project.repair_candidate is not None:
         st.warning("Пересчёт не дал готового результата. Исходная версия остаётся текущей.")
         _diagnostics(project.repair_candidate)
@@ -1120,7 +1246,7 @@ def _planning(project: ScheduleProject) -> None:
         "Сгенерировать расписание",
         type="primary",
         use_container_width=True,
-        disabled=bool(issues) and not diagnostic,
+        disabled=bool(st.session_state.get("roster_errors")) or (bool(issues) and not diagnostic),
     ):
         with st.spinner("Строим и проверяем график…"):
             try:
@@ -1229,7 +1355,7 @@ def _diagnostics(schedule: Schedule) -> None:
                     f"Исправить: {target}",
                     key=f"diagnostics_{schedule.revision_id}_{label}_{target}",
                 ):
-                    st.session_state["configuration_tabs"] = target
+                    st.session_state["configuration_tab_target"] = target
                     st.rerun()
     if schedule.diagnostics:
         st.dataframe(
@@ -1356,7 +1482,9 @@ def _results(project: ScheduleProject) -> None:
         for revision in project.revisions
     ]
     tabs = st.tabs(
-        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"]
+        ["Календарь", "Нагрузка", "Редактирование", "Лог оптимизации", "Сравнение", "Что если?"],
+        key="result_tabs",
+        on_change="rerun",
     )
     with tabs[0]:
         _render_calendar(schedule)
@@ -1386,21 +1514,40 @@ def _results(project: ScheduleProject) -> None:
     _downloads(schedule)
 
 
+def _render_onboarding() -> None:
+    with st.tabs(["1. Состав"])[0]:
+        _basic_configuration(None)
+    st.info("Заполните состав, чтобы перейти к календарю, истории и расчёту.")
+
+
 def render_application() -> None:
-    if "project" not in st.session_state:
-        st.session_state["project"] = new_project(_default_config())
+    from duty_schedule.ui.roster import initialize_roster
+
+    initialize_roster(st.session_state)
+    _synchronize_roster()
     from duty_schedule.ui.autosave import render_autosave
 
-    render_autosave()
-    project = st.session_state["project"]
+    if not render_autosave():
+        st.info("Проверяем сохранённую работу в этом браузере…")
+        return
+    project = st.session_state.get("project")
     _sidebar(project)
+    if project is None:
+        _render_onboarding()
+        return
+    issues = _preparation(project)
+    if st.session_state.get("roster_errors"):
+        issues.append(ScheduleDiagnostic(code="roster_invalid", detail="Исправьте состав"))
+    if target := st.session_state.pop("configuration_tab_target", None):
+        st.session_state["configuration_tabs"] = target
     tabs = st.tabs(
         ["1. Состав", "2. Ограничения", "3. История", "4. Закрепления", "5. Подтверждения"],
         key="configuration_tabs",
+        on_change="rerun",
     )
     with tabs[0]:
         _basic_configuration(project)
-        _employee_tools(project)
+
     with tabs[1]:
         _employee_constraints(project)
         _calendar_configuration(project)
@@ -1415,5 +1562,6 @@ def render_application() -> None:
         "баланс вечеров/ночей → баланс дежурств в нерабочие даты. "
         "Норма выполняется строго по часам."
     )
-    _planning(project)
-    _results(project)
+    _planning(project, issues)
+    if not st.session_state.get("roster_errors"):
+        _results(project)

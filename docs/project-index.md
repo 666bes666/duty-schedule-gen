@@ -1,7 +1,7 @@
 # Индекс проекта
 
 Генерируется `uv run python scripts/project_context.py --write`; ручные изменения запрещены.
-Версия приложения: 5.0.0. Файлов: 358. Полные symbols/imports/traceability: [JSON](project-index.json).
+Версия приложения: 5.0.0. Файлов: 382. Полные symbols/imports/traceability: [JSON](project-index.json).
 
 Холодный старт: [руководство](cold-start.md). Правила: [AGENTS](../AGENTS.md), [SDD](sdd.md), [конституция](../.specify/memory/constitution.md).
 
@@ -18,11 +18,11 @@
 | export | 5 |
 | project | 20 |
 | scheduler | 19 |
-| sdd_contract | 96 |
+| sdd_contract | 114 |
 | sdd_toolkit | 25 |
-| tests | 112 |
+| tests | 116 |
 | tooling | 8 |
-| ui | 9 |
+| ui | 11 |
 
 ## Спецификации и требования
 
@@ -46,6 +46,9 @@
 | [specs/015-guided-authoring](../specs/015-guided-authoring/spec.md) | complete | FLOW-001, FLOW-002, FLOW-003, FLOW-004 |
 | [specs/016-stable-replanning](../specs/016-stable-replanning/spec.md) | complete | REPAIR-001, REPAIR-002 |
 | [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | complete | QUALITY-001, QUALITY-002, QUALITY-003 |
+| [specs/018-personnel-onboarding](../specs/018-personnel-onboarding/spec.md) | complete | STAFF-001, STAFF-002, STAFF-003, STAFF-004, STAFF-005, STAFF-006 |
+| [specs/019-smooth-authoring](../specs/019-smooth-authoring/spec.md) | complete | UX-001, UX-002, UX-003, UX-004, UX-005 |
+| [specs/020-direct-roster](../specs/020-direct-roster/spec.md) | complete | ROSTER-001, ROSTER-002, ROSTER-003, ROSTER-004, ROSTER-005 |
 
 ## API операции
 
@@ -252,6 +255,24 @@
 | [specs/017-two-month-quality/spec.md](../specs/017-two-month-quality/spec.md) | sdd_contract |
 | [specs/017-two-month-quality/tasks.md](../specs/017-two-month-quality/tasks.md) | sdd_contract |
 | [specs/017-two-month-quality/traceability.json](../specs/017-two-month-quality/traceability.json) | sdd_contract |
+| [specs/018-personnel-onboarding/analysis.md](../specs/018-personnel-onboarding/analysis.md) | sdd_contract |
+| [specs/018-personnel-onboarding/evidence.md](../specs/018-personnel-onboarding/evidence.md) | sdd_contract |
+| [specs/018-personnel-onboarding/plan.md](../specs/018-personnel-onboarding/plan.md) | sdd_contract |
+| [specs/018-personnel-onboarding/spec.md](../specs/018-personnel-onboarding/spec.md) | sdd_contract |
+| [specs/018-personnel-onboarding/tasks.md](../specs/018-personnel-onboarding/tasks.md) | sdd_contract |
+| [specs/018-personnel-onboarding/traceability.json](../specs/018-personnel-onboarding/traceability.json) | sdd_contract |
+| [specs/019-smooth-authoring/analysis.md](../specs/019-smooth-authoring/analysis.md) | sdd_contract |
+| [specs/019-smooth-authoring/evidence.md](../specs/019-smooth-authoring/evidence.md) | sdd_contract |
+| [specs/019-smooth-authoring/plan.md](../specs/019-smooth-authoring/plan.md) | sdd_contract |
+| [specs/019-smooth-authoring/spec.md](../specs/019-smooth-authoring/spec.md) | sdd_contract |
+| [specs/019-smooth-authoring/tasks.md](../specs/019-smooth-authoring/tasks.md) | sdd_contract |
+| [specs/019-smooth-authoring/traceability.json](../specs/019-smooth-authoring/traceability.json) | sdd_contract |
+| [specs/020-direct-roster/analysis.md](../specs/020-direct-roster/analysis.md) | sdd_contract |
+| [specs/020-direct-roster/evidence.md](../specs/020-direct-roster/evidence.md) | sdd_contract |
+| [specs/020-direct-roster/plan.md](../specs/020-direct-roster/plan.md) | sdd_contract |
+| [specs/020-direct-roster/spec.md](../specs/020-direct-roster/spec.md) | sdd_contract |
+| [specs/020-direct-roster/tasks.md](../specs/020-direct-roster/tasks.md) | sdd_contract |
+| [specs/020-direct-roster/traceability.json](../specs/020-direct-roster/traceability.json) | sdd_contract |
 | [src/duty_schedule/__init__.py](../src/duty_schedule/__init__.py) | domain |
 | [src/duty_schedule/_errors_fmt.py](../src/duty_schedule/_errors_fmt.py) | domain |
 | [src/duty_schedule/api/__init__.py](../src/duty_schedule/api/__init__.py) | api |
@@ -309,6 +330,8 @@
 | [src/duty_schedule/ui/components.py](../src/duty_schedule/ui/components.py) | ui |
 | [src/duty_schedule/ui/config_io.py](../src/duty_schedule/ui/config_io.py) | ui |
 | [src/duty_schedule/ui/mappings.py](../src/duty_schedule/ui/mappings.py) | ui |
+| [src/duty_schedule/ui/onboarding.py](../src/duty_schedule/ui/onboarding.py) | ui |
+| [src/duty_schedule/ui/roster.py](../src/duty_schedule/ui/roster.py) | ui |
 | [src/duty_schedule/ui/state.py](../src/duty_schedule/ui/state.py) | ui |
 | [src/duty_schedule/ui/views.py](../src/duty_schedule/ui/views.py) | ui |
 | [src/duty_schedule/validation.py](../src/duty_schedule/validation.py) | domain |
@@ -367,11 +390,13 @@
 | [tests/ui/test_export_download.py](../tests/ui/test_export_download.py) | tests |
 | [tests/ui/test_first_month_journey.py](../tests/ui/test_first_month_journey.py) | tests |
 | [tests/ui/test_page_load.py](../tests/ui/test_page_load.py) | tests |
+| [tests/ui/test_personnel_onboarding.py](../tests/ui/test_personnel_onboarding.py) | tests |
 | [tests/ui/test_product_recovery.py](../tests/ui/test_product_recovery.py) | tests |
 | [tests/ui/test_project_journey.py](../tests/ui/test_project_journey.py) | tests |
 | [tests/ui/test_quality_journey.py](../tests/ui/test_quality_journey.py) | tests |
 | [tests/ui/test_replanning_journey.py](../tests/ui/test_replanning_journey.py) | tests |
 | [tests/ui/test_schedule_generation.py](../tests/ui/test_schedule_generation.py) | tests |
+| [tests/ui/test_smooth_authoring.py](../tests/ui/test_smooth_authoring.py) | tests |
 | [tests/unit/__init__.py](../tests/unit/__init__.py) | tests |
 | [tests/unit/test_api_auth.py](../tests/unit/test_api_auth.py) | tests |
 | [tests/unit/test_api_errors.py](../tests/unit/test_api_errors.py) | tests |
@@ -388,6 +413,7 @@
 | [tests/unit/test_constraints.py](../tests/unit/test_constraints.py) | tests |
 | [tests/unit/test_costs.py](../tests/unit/test_costs.py) | tests |
 | [tests/unit/test_delivery_workflows.py](../tests/unit/test_delivery_workflows.py) | tests |
+| [tests/unit/test_direct_roster.py](../tests/unit/test_direct_roster.py) | tests |
 | [tests/unit/test_equalize_cross_city.py](../tests/unit/test_equalize_cross_city.py) | tests |
 | [tests/unit/test_export_security.py](../tests/unit/test_export_security.py) | tests |
 | [tests/unit/test_export_time_model.py](../tests/unit/test_export_time_model.py) | tests |
@@ -402,6 +428,7 @@
 | [tests/unit/test_models.py](../tests/unit/test_models.py) | tests |
 | [tests/unit/test_multimonth.py](../tests/unit/test_multimonth.py) | tests |
 | [tests/unit/test_pdf_export.py](../tests/unit/test_pdf_export.py) | tests |
+| [tests/unit/test_personnel_onboarding.py](../tests/unit/test_personnel_onboarding.py) | tests |
 | [tests/unit/test_pipeline.py](../tests/unit/test_pipeline.py) | tests |
 | [tests/unit/test_pipeline_integrity.py](../tests/unit/test_pipeline_integrity.py) | tests |
 | [tests/unit/test_planning_rules.py](../tests/unit/test_planning_rules.py) | tests |

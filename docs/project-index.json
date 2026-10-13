@@ -897,6 +897,78 @@
       "role": "sdd_contract"
     },
     {
+      "path": "specs/018-personnel-onboarding/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/018-personnel-onboarding/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/018-personnel-onboarding/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/018-personnel-onboarding/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/018-personnel-onboarding/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/018-personnel-onboarding/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/019-smooth-authoring/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/020-direct-roster/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
       "path": "src/duty_schedule/__init__.py",
       "role": "domain",
       "symbols": [],
@@ -2071,7 +2143,7 @@
       "imports": [
         "__future__",
         "collections.abc",
-        "duty_schedule.project",
+        "duty_schedule.ui.onboarding",
         "hashlib",
         "pathlib",
         "streamlit",
@@ -2117,7 +2189,6 @@
         "_carry_from_frame",
         "_commit",
         "_config_for_period",
-        "_default_config",
         "_diagnostics",
         "_downloads",
         "_edit_current",
@@ -2133,10 +2204,15 @@
         "_planning",
         "_preparation",
         "_read_periods",
+        "_render_onboarding",
+        "_reset_roster_editor",
         "_results",
+        "_roster_changed",
+        "_roster_period_changed",
         "_saved_calendar",
         "_set_project",
         "_sidebar",
+        "_synchronize_roster",
         "assign_individual_workday",
         "generate_project",
         "import_config_into_state",
@@ -2162,6 +2238,8 @@
         "duty_schedule.ui.builders",
         "duty_schedule.ui.config_io",
         "duty_schedule.ui.mappings",
+        "duty_schedule.ui.onboarding",
+        "duty_schedule.ui.roster",
         "duty_schedule.ui.views",
         "duty_schedule.workload",
         "duty_schedule.xls_import",
@@ -2216,6 +2294,82 @@
         "__future__",
         "duty_schedule.constants",
         "duty_schedule.models"
+      ]
+    },
+    {
+      "path": "src/duty_schedule/ui/onboarding.py",
+      "role": "ui",
+      "symbols": [
+        "DraftSnapshot",
+        "OnboardingDraft",
+        "OnboardingDraft.unique_personnel",
+        "PersonnelEntry",
+        "PersonnelEntry.validate_name",
+        "_next_period",
+        "add_personnel",
+        "apply_city_lists",
+        "assign_pending_roles",
+        "assign_roles",
+        "city_counts",
+        "complete_onboarding",
+        "draft_to_config",
+        "import_draft_into_state",
+        "incomplete_roles",
+        "load_draft",
+        "pending_personnel",
+        "remove_personnel",
+        "rename_personnel",
+        "restore_snapshot",
+        "serialize_draft",
+        "start_new_onboarding",
+        "storage_snapshot"
+      ],
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "datetime",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui.roster",
+        "json",
+        "pydantic",
+        "typing",
+        "uuid"
+      ]
+    },
+    {
+      "path": "src/duty_schedule/ui/roster.py",
+      "role": "ui",
+      "symbols": [
+        "RosterDraft",
+        "RosterDraft.unique_ids",
+        "RosterRow",
+        "apply_delta",
+        "copy_row",
+        "from_project",
+        "initialize_roster",
+        "load_roster",
+        "roster_config",
+        "row_frame",
+        "row_issues",
+        "rows_from_frame",
+        "rows_from_frame.value",
+        "serialize_roster"
+      ],
+      "imports": [
+        "__future__",
+        "collections.abc",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui.components",
+        "duty_schedule.ui.config_io",
+        "duty_schedule.ui.mappings",
+        "duty_schedule.ui.onboarding",
+        "json",
+        "pandas",
+        "pydantic",
+        "typing",
+        "uuid"
       ]
     },
     {
@@ -3344,6 +3498,7 @@
         "collections.abc",
         "httpx",
         "os",
+        "pathlib",
         "pytest",
         "subprocess",
         "tempfile",
@@ -3408,6 +3563,44 @@
       ]
     },
     {
+      "path": "tests/ui/test_personnel_onboarding.py",
+      "role": "tests",
+      "symbols": [
+        "all_roles",
+        "edit_cell",
+        "open_cell",
+        "rows",
+        "start_roster",
+        "test_corrupt_draft_recovers_previous_snapshot",
+        "test_draft_quota_and_transition_failure_preserve_backup",
+        "test_draft_rename_and_unset_keep_id_and_other_roles",
+        "test_draft_two_tabs_conflict_preserves_newer_snapshot",
+        "test_empty_start_and_city_lists_create_actual_roster",
+        "test_existing_project_and_yaml_bypass_onboarding_without_loss",
+        "test_invalid_team_preserves_draft_and_explains_fix",
+        "test_native_rows_edit_remove_and_reload",
+        "test_new_project_starts_empty_without_deleting_old_snapshot",
+        "test_onboarding_to_first_month_without_all_cell_pins",
+        "test_partial_draft_reload_and_backup",
+        "test_partial_group_roles_and_independent_city_counts",
+        "test_schedule_and_duty_are_independent",
+        "wait_rows"
+      ],
+      "imports": [
+        "duty_schedule.ui.config_io",
+        "duty_schedule.ui.onboarding",
+        "io",
+        "json",
+        "openpyxl",
+        "pathlib",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_product_recovery",
+        "tests.ui.test_project_journey"
+      ]
+    },
+    {
       "path": "tests/ui/test_product_recovery.py",
       "role": "tests",
       "symbols": [
@@ -3457,7 +3650,8 @@
         "playwright.sync_api",
         "pytest",
         "re",
-        "tests.ui.fixtures"
+        "tests.ui.fixtures",
+        "tests.ui.test_product_recovery"
       ]
     },
     {
@@ -3501,8 +3695,31 @@
       ],
       "imports": [
         "__future__",
+        "duty_schedule.ui.config_io",
         "playwright.sync_api",
-        "pytest"
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_project_journey"
+      ]
+    },
+    {
+      "path": "tests/ui/test_smooth_authoring.py",
+      "role": "tests",
+      "symbols": [
+        "test_mobile_and_theme_status",
+        "test_pending_profiles_city_and_reload",
+        "test_ready_navigation_and_advanced_controls"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "pathlib",
+        "playwright.sync_api",
+        "pytest",
+        "tests.ui.fixtures",
+        "tests.ui.test_personnel_onboarding",
+        "tests.ui.test_product_recovery",
+        "tests.ui.test_project_journey"
       ]
     },
     {
@@ -3907,6 +4124,31 @@
       ]
     },
     {
+      "path": "tests/unit/test_direct_roster.py",
+      "role": "tests",
+      "symbols": [
+        "test_copy_preserves_columns_with_new_identity",
+        "test_cumulative_delta_keeps_ids_and_deletion_is_exact",
+        "test_forked_draft_keeps_identity_on_next_edit",
+        "test_incomplete_duplicate_and_invalid_rows_persist",
+        "test_snapshot_and_legacy_migration_are_atomic",
+        "test_stale_editor_callbacks_cannot_change_imported_roster",
+        "test_valid_edit_preserves_base_and_dates_by_id"
+      ],
+      "imports": [
+        "datetime",
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui",
+        "duty_schedule.ui.onboarding",
+        "duty_schedule.ui.roster",
+        "json",
+        "pytest",
+        "tests.ui.fixtures",
+        "types"
+      ]
+    },
+    {
       "path": "tests/unit/test_equalize_cross_city.py",
       "role": "tests",
       "symbols": [
@@ -4264,6 +4506,37 @@
         "duty_schedule.scheduler",
         "pytest",
         "weasyprint"
+      ]
+    },
+    {
+      "path": "tests/unit/test_personnel_onboarding.py",
+      "role": "tests",
+      "symbols": [
+        "roster",
+        "test_city_lists_preserve_names_and_reject_duplicates_atomically",
+        "test_config_validation_remains_enforced",
+        "test_draft_envelope_rejects_unsupported_payloads",
+        "test_incomplete_roles_never_start_search",
+        "test_incomplete_roles_never_start_search.forbidden",
+        "test_invalid_import_preserves_draft_and_old_snapshots_restore",
+        "test_legacy_draft_without_stage_keeps_personnel_and_roles",
+        "test_native_personnel_operations_are_atomic_and_preserve_ids",
+        "test_new_onboarding_has_separate_id_and_does_not_mutate_previous_project",
+        "test_partial_group_roles_and_independent_counts",
+        "test_pending_profiles_are_atomic_and_exclude_configured",
+        "test_reapplying_and_reordering_preserve_employee_ids",
+        "test_rename_and_explicit_unset_preserve_identity"
+      ],
+      "imports": [
+        "duty_schedule.models",
+        "duty_schedule.project",
+        "duty_schedule.ui",
+        "duty_schedule.ui.autosave",
+        "duty_schedule.ui.components",
+        "duty_schedule.ui.onboarding",
+        "json",
+        "pytest",
+        "tests.ui.fixtures"
       ]
     },
     {
@@ -4755,13 +5028,16 @@
       "path": "tests/unit/test_ui_autosave.py",
       "role": "tests",
       "symbols": [
+        "test_draft_failure_conflict_and_transition_preserve_backup",
         "test_failed_and_corrupt_storage_preserve_valid_snapshot",
-        "test_restore_revalidates_saved_ready"
+        "test_restore_revalidates_saved_ready",
+        "test_stale_hash_cannot_acknowledge_draft_or_project"
       ],
       "imports": [
         "duty_schedule.models",
         "duty_schedule.project",
         "duty_schedule.ui.autosave",
+        "duty_schedule.ui.onboarding",
         "json",
         "tests.ui.fixtures"
       ]
@@ -4806,6 +5082,7 @@
       "symbols": [
         "complete_config",
         "test_blank_dataframe_names_are_not_stringified_nan",
+        "test_duty_only_label_and_hidden_fields_preserved",
         "test_editor_preserves_individual_workday_hours",
         "test_empty_team_is_rejected_instead_of_demo_substitution",
         "test_individual_workday_rejects_calendar_nonworking_date",
@@ -6720,6 +6997,217 @@
         "tests/unit/test_planning_rules.py",
         "tests/unit/test_two_month_quality.py",
         "tests/unit/test_whatif_service.py"
+      ]
+    },
+    {
+      "path": "specs/018-personnel-onboarding",
+      "kind": "change",
+      "status": "complete",
+      "requirements": [
+        {
+          "id": "STAFF-001",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_schedule_and_duty_are_independent",
+            "tests/unit/test_personnel_onboarding.py::test_config_validation_remains_enforced"
+          ]
+        },
+        {
+          "id": "STAFF-002",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_empty_start_and_city_lists_create_actual_roster",
+            "tests/unit/test_personnel_onboarding.py::test_city_lists_preserve_names_and_reject_duplicates_atomically",
+            "tests/unit/test_personnel_onboarding.py::test_native_personnel_operations_are_atomic_and_preserve_ids"
+          ]
+        },
+        {
+          "id": "STAFF-003",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_partial_group_roles_and_independent_city_counts"
+          ]
+        },
+        {
+          "id": "STAFF-004",
+          "tests": [
+            "tests/unit/test_personnel_onboarding.py::test_incomplete_roles_never_start_search",
+            "tests/ui/test_personnel_onboarding.py::test_invalid_team_preserves_draft_and_explains_fix",
+            "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins"
+          ]
+        },
+        {
+          "id": "STAFF-005",
+          "tests": [
+            "tests/unit/test_personnel_onboarding.py::test_reapplying_and_reordering_preserve_employee_ids",
+            "tests/ui/test_personnel_onboarding.py::test_partial_draft_reload_and_backup",
+            "tests/unit/test_ui_autosave.py::test_draft_failure_conflict_and_transition_preserve_backup",
+            "tests/ui/test_personnel_onboarding.py::test_draft_two_tabs_conflict_preserves_newer_snapshot",
+            "tests/ui/test_personnel_onboarding.py::test_draft_quota_and_transition_failure_preserve_backup",
+            "tests/ui/test_personnel_onboarding.py::test_corrupt_draft_recovers_previous_snapshot",
+            "tests/unit/test_personnel_onboarding.py::test_rename_and_explicit_unset_preserve_identity",
+            "tests/ui/test_personnel_onboarding.py::test_native_rows_edit_remove_and_reload"
+          ]
+        },
+        {
+          "id": "STAFF-006",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_existing_project_and_yaml_bypass_onboarding_without_loss",
+            "tests/unit/test_personnel_onboarding.py::test_invalid_import_preserves_draft_and_old_snapshots_restore",
+            "tests/unit/test_product_integrity.py::test_ui_period_change_selects_new_calendar_before_validation",
+            "tests/unit/test_ui_workflow.py::test_real_streamlit_project_edit_check_and_reopen",
+            "tests/ui/test_personnel_onboarding.py::test_new_project_starts_empty_without_deleting_old_snapshot"
+          ]
+        }
+      ],
+      "files": [
+        "app.py",
+        "src/duty_schedule/ui/onboarding.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/state.py",
+        "src/duty_schedule/ui/mappings.py",
+        "src/duty_schedule/ui/autosave.py",
+        "src/duty_schedule/ui/autosave_component/index.html",
+        "tests/unit/test_personnel_onboarding.py",
+        "tests/unit/test_ui_autosave.py",
+        "tests/ui/test_personnel_onboarding.py",
+        "tests/ui/test_first_month_journey.py",
+        "tests/ui/test_product_recovery.py",
+        "docs/scheduling-workflow.md",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/018-personnel-onboarding/analysis.md",
+        "tests/ui/test_schedule_generation.py",
+        "tests/ui/conftest.py",
+        "tests/unit/test_product_integrity.py",
+        "tests/unit/test_ui_workflow.py",
+        "tests/ui/test_project_journey.py"
+      ]
+    },
+    {
+      "path": "specs/019-smooth-authoring",
+      "kind": "change",
+      "status": "complete",
+      "requirements": [
+        {
+          "id": "UX-001",
+          "tests": [
+            "tests/unit/test_personnel_onboarding.py::test_pending_profiles_are_atomic_and_exclude_configured",
+            "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload"
+          ]
+        },
+        {
+          "id": "UX-002",
+          "tests": [
+            "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload",
+            "tests/ui/test_personnel_onboarding.py::test_schedule_and_duty_are_independent"
+          ]
+        },
+        {
+          "id": "UX-003",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins",
+            "tests/ui/test_smooth_authoring.py::test_ready_navigation_and_advanced_controls",
+            "tests/ui/test_project_journey.py::test_project_generation_edit_download_and_reopen",
+            "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict",
+            "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells"
+          ]
+        },
+        {
+          "id": "UX-004",
+          "tests": [
+            "tests/unit/test_ui_workflow.py::test_duty_only_label_and_hidden_fields_preserved"
+          ]
+        },
+        {
+          "id": "UX-005",
+          "tests": [
+            "tests/ui/test_smooth_authoring.py::test_mobile_and_theme_status"
+          ]
+        }
+      ],
+      "files": [
+        "app.py",
+        "src/duty_schedule/ui/onboarding.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/autosave_component/index.html",
+        "tests/unit/test_personnel_onboarding.py",
+        "tests/unit/test_ui_workflow.py",
+        "tests/ui/test_personnel_onboarding.py",
+        "tests/ui/test_smooth_authoring.py",
+        "tests/ui/test_project_journey.py",
+        "docs/scheduling-workflow.md",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/019-smooth-authoring/analysis.md",
+        "tests/ui/test_first_month_journey.py",
+        "tests/ui/test_replanning_journey.py"
+      ]
+    },
+    {
+      "path": "specs/020-direct-roster",
+      "kind": "change",
+      "status": "complete",
+      "requirements": [
+        {
+          "id": "ROSTER-001",
+          "tests": [
+            "tests/ui/test_personnel_onboarding.py::test_empty_start_and_city_lists_create_actual_roster"
+          ]
+        },
+        {
+          "id": "ROSTER-002",
+          "tests": [
+            "tests/unit/test_direct_roster.py::test_copy_preserves_columns_with_new_identity",
+            "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload"
+          ]
+        },
+        {
+          "id": "ROSTER-003",
+          "tests": [
+            "tests/unit/test_direct_roster.py::test_incomplete_duplicate_and_invalid_rows_persist",
+            "tests/ui/test_personnel_onboarding.py::test_partial_draft_reload_and_backup",
+            "tests/ui/test_personnel_onboarding.py::test_draft_two_tabs_conflict_preserves_newer_snapshot"
+          ]
+        },
+        {
+          "id": "ROSTER-004",
+          "tests": [
+            "tests/unit/test_direct_roster.py::test_snapshot_and_legacy_migration_are_atomic",
+            "tests/ui/test_personnel_onboarding.py::test_existing_project_and_yaml_bypass_onboarding_without_loss",
+            "tests/unit/test_direct_roster.py::test_forked_draft_keeps_identity_on_next_edit",
+            "tests/unit/test_direct_roster.py::test_stale_editor_callbacks_cannot_change_imported_roster",
+            "tests/ui/test_first_month_journey.py::test_first_month_without_all_cell_pins_and_technical_operations"
+          ]
+        },
+        {
+          "id": "ROSTER-005",
+          "tests": [
+            "tests/unit/test_direct_roster.py::test_valid_edit_preserves_base_and_dates_by_id",
+            "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins",
+            "tests/ui/test_smooth_authoring.py::test_mobile_and_theme_status"
+          ]
+        }
+      ],
+      "files": [
+        "src/duty_schedule/ui/roster.py",
+        "src/duty_schedule/ui/components.py",
+        "src/duty_schedule/ui/onboarding.py",
+        "src/duty_schedule/ui/config_io.py",
+        "tests/unit/test_direct_roster.py",
+        "tests/unit/test_ui_workflow.py",
+        "tests/unit/test_product_integrity.py",
+        "tests/ui/test_personnel_onboarding.py",
+        "tests/ui/test_smooth_authoring.py",
+        "tests/ui/test_project_journey.py",
+        "tests/ui/test_product_recovery.py",
+        "tests/ui/conftest.py",
+        "docs/scheduling-workflow.md",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/018-personnel-onboarding/spec.md",
+        "specs/019-smooth-authoring/spec.md",
+        "specs/020-direct-roster/analysis.md",
+        "src/duty_schedule/ui/autosave.py",
+        "tests/ui/test_schedule_generation.py",
+        "src/duty_schedule/ui/autosave_component/index.html"
       ]
     }
   ],

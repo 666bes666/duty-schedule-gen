@@ -16,6 +16,9 @@ from tests.ui.fixtures import journey_config
 
 
 def _upload(page: Page, label: str, name: str, data: bytes, valid: bool = True) -> None:
+    page.wait_for_function(
+        "document.querySelector('[data-testid=stApp]')?.dataset.testScriptState === 'notRunning'"
+    )
     uploader = page.get_by_test_id("stFileUploader").filter(has=page.get_by_text(label, exact=True))
     uploader.locator('input[type="file"]').set_input_files(
         {
@@ -26,6 +29,8 @@ def _upload(page: Page, label: str, name: str, data: bytes, valid: bool = True) 
     )
     if valid:
         expect(page.get_by_text(f"Загружено: {name}", exact=True)).to_be_visible(timeout=20000)
+    else:
+        expect(page.get_by_text(name, exact=True)).to_be_visible(timeout=20000)
 
 
 def _download(page: Page, button: Locator, directory: Path) -> Path:
@@ -34,6 +39,9 @@ def _download(page: Page, button: Locator, directory: Path) -> Path:
     download = event.value
     path = directory / download.suggested_filename
     download.save_as(path)
+    page.wait_for_function(
+        "document.querySelector('[data-testid=stApp]')?.dataset.testScriptState === 'notRunning'"
+    )
     return path
 
 
@@ -52,6 +60,15 @@ def _assign_four_hour_workday(page: Page, number: int) -> None:
         page.get_by_text("Текущая версия изменена и требует проверки", exact=True)
     ).to_be_visible(timeout=20000)
     page.get_by_role("button", name="Проверить текущую версию", exact=True).click()
+    message = (
+        "Диагностический черновик: обычный экспорт недоступен"
+        if number == 2
+        else "Текущая версия прошла обязательные проверки"
+    )
+    expect(page.get_by_text(message, exact=True)).to_be_visible(timeout=20000)
+    from tests.ui.test_product_recovery import wait_saved
+
+    wait_saved(page)
 
 
 def _active_schedule(data: dict) -> dict:

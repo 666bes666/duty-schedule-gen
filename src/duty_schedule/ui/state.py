@@ -7,7 +7,6 @@ import pandas as pd
 import streamlit as st
 
 from duty_schedule.ui.mappings import (
-    _DEFAULT_ROWS,
     _EMPTY_PIN_ROW,
 )
 
@@ -16,7 +15,7 @@ def _init_state() -> None:
     if "table_version" not in st.session_state:
         st.session_state["table_version"] = 0
     if "employees_df" not in st.session_state:
-        st.session_state["employees_df"] = pd.DataFrame(_DEFAULT_ROWS)
+        st.session_state["employees_df"] = pd.DataFrame()
     if "cfg_month" not in st.session_state or "cfg_year" not in st.session_state:
         _today = date.today()
         _next_month = _today.month % 12 + 1
@@ -34,7 +33,7 @@ def _init_state() -> None:
     if "employee_dates" not in st.session_state:
         st.session_state["employee_dates"] = {}
     if "_df_for_download" not in st.session_state:
-        st.session_state["_df_for_download"] = pd.DataFrame(_DEFAULT_ROWS)
+        st.session_state["_df_for_download"] = pd.DataFrame()
     if "_pins_for_download" not in st.session_state:
         st.session_state["_pins_for_download"] = pd.DataFrame([_EMPTY_PIN_ROW])
     if "last_result" not in st.session_state:

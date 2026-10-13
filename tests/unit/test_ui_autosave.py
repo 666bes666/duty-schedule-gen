@@ -34,3 +34,62 @@ def test_restore_revalidates_saved_ready():
         state, {"status": "restore", "project": json.dumps(raw), "token": "one"}
     )
     assert current_schedule(state["project"]).status == "diagnostic"
+
+
+def test_draft_failure_conflict_and_transition_preserve_backup():
+    import json
+
+    from duty_schedule.models import ScheduleType
+    from duty_schedule.ui.autosave import accept_storage_result
+    from duty_schedule.ui.onboarding import (
+        OnboardingDraft,
+        apply_city_lists,
+        assign_roles,
+        complete_onboarding,
+        serialize_draft,
+        storage_snapshot,
+    )
+
+    draft = apply_city_lists(OnboardingDraft(year=2026, month=4), "M0\nM1\nM2\nM3", "K0\nK1")
+    state = {"onboarding_draft": draft, "autosave_token": "old"}
+    original = serialize_draft(draft)
+    for response in [
+        {"status": "error", "error": "QuotaExceededError"},
+        {"status": "conflict", "token": "new"},
+        {"status": "restore", "project": "corrupt", "token": "new"},
+        {"status": "restore", "project": original},
+    ]:
+        assert not accept_storage_result(state, response)
+        assert serialize_draft(state["onboarding_draft"]) == original
+        assert state["autosave_token"] == "old"
+    assert accept_storage_result(
+        state, {"status": "restore", "project": original, "token": "confirmed"}
+    )
+    state["onboarding_draft"] = assign_roles(
+        draft, [e.employee_id for e in draft.employees], ScheduleType.FLEXIBLE, True
+    )
+    complete_onboarding(state)
+    snapshot, identity = storage_snapshot(state)
+    assert identity == draft.id
+    assert "kind" not in json.loads(snapshot)
+    assert state["autosave_token"] == "confirmed"
+    accept_storage_result(state, {"status": "error", "error": "QuotaExceededError"})
+    assert state["onboarding_draft"].id == identity
+    assert state["project"].id == identity
+    assert state["autosave_token"] == "confirmed"
+    assert accept_storage_result(
+        state, {"status": "restore", "project": original, "token": "old-draft"}
+    )
+    assert "project" not in state
+    assert serialize_draft(state["onboarding_draft"]) == original
+
+
+def test_stale_hash_cannot_acknowledge_draft_or_project():
+    from duty_schedule.ui.autosave import accept_storage_result
+    from duty_schedule.ui.onboarding import OnboardingDraft
+
+    state = {"onboarding_draft": OnboardingDraft(), "autosave_expected_hash": "latest"}
+    assert not accept_storage_result(
+        state, {"status": "saved", "hash": "stale", "token": "unexpected"}
+    )
+    assert "autosave_token" not in state

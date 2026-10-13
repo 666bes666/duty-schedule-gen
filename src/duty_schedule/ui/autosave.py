@@ -9,7 +9,7 @@ from uuid import uuid4
 import streamlit as st
 import streamlit.components.v1 as components
 
-from duty_schedule.project import load_project, serialize_project
+from duty_schedule.ui.onboarding import restore_snapshot, storage_snapshot
 
 _bridge = components.declare_component(
     "duty_autosave", path=str(Path(__file__).with_name("autosave_component"))
@@ -20,13 +20,15 @@ def accept_storage_result(state: MutableMapping[Any, Any], response: dict) -> bo
     status = response.get("status")
     if status == "restore":
         try:
-            restored = load_project(response["project"])
+            token = response["token"]
+            if not isinstance(token, str):
+                raise ValueError("Неверный token записи")
+            restore_snapshot(state, response["project"])
         except (ValueError, KeyError, TypeError) as exc:
             state["autosave_status"] = "error"
             state["autosave_error"] = str(exc)
             return False
-        state["project"] = restored
-        state["autosave_token"] = response["token"]
+        state["autosave_token"] = token
         state["autosave_status"] = "error" if response.get("recovered") else "saved"
         if response.get("recovered"):
             state["autosave_error"] = (
@@ -47,9 +49,10 @@ def accept_storage_result(state: MutableMapping[Any, Any], response: dict) -> bo
     return False
 
 
+@st.fragment
 def render_autosave() -> bool:
     state = st.session_state
-    snapshot = serialize_project(state["project"]).decode()
+    snapshot, identity = storage_snapshot(state)
     digest = hashlib.sha256(snapshot.encode()).hexdigest()
     state["autosave_expected_hash"] = digest
     phase = "write" if state.get("autosave_initialized") else "read"
@@ -57,7 +60,7 @@ def render_autosave() -> bool:
     response = _bridge(
         phase=phase,
         project=snapshot,
-        project_id=state["project"].id,
+        project_id=identity,
         expected_token=state.get("autosave_token"),
         hash=digest,
         writer=state["autosave_writer"],
@@ -81,7 +84,16 @@ def render_autosave() -> bool:
             state["autosave_retry"] = state.get("autosave_retry", 0) + 1
             st.rerun()
         if st.button("Сохранить копию в этом браузере"):
-            state["project"] = state["project"].model_copy(update={"id": uuid4().hex}, deep=True)
+            key = (
+                "roster_draft"
+                if "roster_draft" in state
+                else ("project" if "project" in state else "onboarding_draft")
+            )
+            identity = uuid4().hex
+            state[key] = state[key].model_copy(update={"id": identity}, deep=True)
+            if key == "roster_draft" and "project" in state:
+                state["project"] = state["project"].model_copy(update={"id": identity}, deep=True)
+            state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
             state["autosave_token"] = None
             state["autosave_status"] = "saving"
             st.rerun()

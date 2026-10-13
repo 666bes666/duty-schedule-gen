@@ -1,0 +1,59 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "files": [
+    "app.py",
+    "src/duty_schedule/ui/onboarding.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/autosave_component/index.html",
+    "tests/unit/test_personnel_onboarding.py",
+    "tests/unit/test_ui_workflow.py",
+    "tests/ui/test_personnel_onboarding.py",
+    "tests/ui/test_smooth_authoring.py",
+    "tests/ui/test_project_journey.py",
+    "docs/scheduling-workflow.md",
+    "docs/project-index.md",
+    "docs/project-index.json",
+    "specs/019-smooth-authoring/analysis.md",
+    "tests/ui/test_first_month_journey.py",
+    "tests/ui/test_replanning_journey.py"
+  ],
+  "requirements": [
+    {
+      "id": "UX-001",
+      "tests": [
+        "tests/unit/test_personnel_onboarding.py::test_pending_profiles_are_atomic_and_exclude_configured",
+        "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload"
+      ]
+    },
+    {
+      "id": "UX-002",
+      "tests": [
+        "tests/ui/test_smooth_authoring.py::test_pending_profiles_city_and_reload",
+        "tests/ui/test_personnel_onboarding.py::test_schedule_and_duty_are_independent"
+      ]
+    },
+    {
+      "id": "UX-003",
+      "tests": [
+        "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins",
+        "tests/ui/test_smooth_authoring.py::test_ready_navigation_and_advanced_controls",
+        "tests/ui/test_project_journey.py::test_project_generation_edit_download_and_reopen",
+        "tests/ui/test_first_month_journey.py::test_preflight_explains_unknown_history_and_pin_conflict",
+        "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells"
+      ]
+    },
+    {
+      "id": "UX-004",
+      "tests": [
+        "tests/unit/test_ui_workflow.py::test_duty_only_label_and_hidden_fields_preserved"
+      ]
+    },
+    {
+      "id": "UX-005",
+      "tests": [
+        "tests/ui/test_smooth_authoring.py::test_mobile_and_theme_status"
+      ]
+    }
+  ]
+}
