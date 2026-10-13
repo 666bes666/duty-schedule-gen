@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "in-progress",
+  "status": "complete",
   "files": [
     "src/duty_schedule/ui/roster.py",
     "src/duty_schedule/ui/components.py",

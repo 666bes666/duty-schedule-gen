@@ -48,7 +48,7 @@
 | [specs/017-two-month-quality](../specs/017-two-month-quality/spec.md) | complete | QUALITY-001, QUALITY-002, QUALITY-003 |
 | [specs/018-personnel-onboarding](../specs/018-personnel-onboarding/spec.md) | complete | STAFF-001, STAFF-002, STAFF-003, STAFF-004, STAFF-005, STAFF-006 |
 | [specs/019-smooth-authoring](../specs/019-smooth-authoring/spec.md) | complete | UX-001, UX-002, UX-003, UX-004, UX-005 |
-| [specs/020-direct-roster](../specs/020-direct-roster/spec.md) | in-progress | ROSTER-001, ROSTER-002, ROSTER-003, ROSTER-004, ROSTER-005 |
+| [specs/020-direct-roster](../specs/020-direct-roster/spec.md) | complete | ROSTER-001, ROSTER-002, ROSTER-003, ROSTER-004, ROSTER-005 |
 
 ## API операции
 

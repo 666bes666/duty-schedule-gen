@@ -4,4 +4,4 @@
 - [x] T002 Реализовать типизированную таблицу/копирование/черновик с unit проверками.
 - [x] T003 Объединить UI и autosave/import с AppTest/browser проверками.
 - [x] T004 Проверить recovery и путь первого месяца, обновить старые UI контракты/руководство.
-- [ ] T005 Полные проверки, independent reviews, evidence и доставка dev.
+- [x] T005 Полные проверки, independent reviews, evidence и доставка dev.

@@ -80,3 +80,14 @@ project; standalone smooth suite4passed, включая375px иlight/dark. Form 
 875 non-UI +36 UI passed. Coverage88.28% (existing non-UI configuration), Ruff/format,
 mypy71files, SDD/index, packaging checks PASS. Python/JS/general reviews APPROVE.
 Feature implementation and acceptance complete; T005 delivery remains open until push.
+
+
+## Доставка dev 2026-10-13
+
+Feature commit6523009: `feat(ui): start with an empty roster and copy employee rows`.
+`check_sdd.py --staged`, Git cached diff check и pre-commit gates PASS;
+`check_sdd.py --base HEAD~1` PASS. `git push origin dev` exit0,
+remote dev903cf74→6523009 подтверждён. Все задачи и критерии020 закрыты.
+Закрытие SDD статуса/index выполняется отдельным docs commit; full code regression
+не повторяется для изменения только этих артефактов. PR67 dev→test обновляется
+под итоговый direct-roster scope; дальнейшее продвижение требует CI соответствующегоSHA.

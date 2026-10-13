@@ -7144,7 +7144,7 @@
     {
       "path": "specs/020-direct-roster",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "ROSTER-001",
