@@ -468,7 +468,8 @@ def test_duty_only_label_and_hidden_fields_preserved(complete_config):
     columns = json.loads(editor.proto.columns)
     assert columns["Всегда на деж."]["label"] == "Только дежурства"
     assert list(editor.proto.column_order) == ["Имя", "Город", "График", "Дежурный"]
-    next(b for b in app.button if b.label == "Сохранить настройки").click().run()
+    next(c for c in app.checkbox if c.label == "Показать особые условия").check().run()
+    next(c for c in app.checkbox if c.label == "Показать особые условия").uncheck().run()
     assert not app.exception
     employee = app.session_state["project"].config.employees[0]
     assert employee.always_on_duty and employee.morning_only

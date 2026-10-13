@@ -192,9 +192,7 @@ def test_ui_period_change_selects_new_calendar_before_validation():
     app.session_state["project"] = new_project(journey_config())
     app.run(timeout=20)
     next(widget for widget in app.selectbox if widget.label == "Месяц").select(5)
-    next(button for button in app.button if button.label == "Сохранить настройки").click().run(
-        timeout=20
-    )
+    app.run(timeout=20)
     assert not app.exception
     assert app.session_state["project"].config.month == 5
     assert app.session_state["project"].config.production_calendar is None

@@ -222,6 +222,7 @@ def complete_onboarding(state: MutableMapping[Any, Any]) -> ScheduleProject:
 def start_new_onboarding(state: MutableMapping[Any, Any]) -> None:
     state["onboarding_draft"] = OnboardingDraft()
     state.pop("project", None)
+    state.pop("roster_draft", None)
     state["autosave_token"] = None
     state["autosave_status"] = "saving"
     state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
@@ -231,6 +232,7 @@ def start_new_onboarding(state: MutableMapping[Any, Any]) -> None:
 
 def import_draft_into_state(state: MutableMapping[Any, Any], content: str | bytes) -> None:
     draft = load_draft(content)
+    state.pop("roster_draft", None)
     state["onboarding_draft"] = draft
     state.pop("project", None)
     state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
@@ -239,6 +241,20 @@ def import_draft_into_state(state: MutableMapping[Any, Any], content: str | byte
 def storage_snapshot(state: MutableMapping[Any, Any]) -> tuple[str, str]:
     from duty_schedule.project import serialize_project
 
+    if "roster_draft" in state:
+        from duty_schedule.ui.roster import roster_config, serialize_roster
+
+        draft = state["roster_draft"]
+        project = state.get("project")
+        if project is not None:
+            try:
+                checked = roster_config(draft, project)
+            except ValueError:
+                pass
+            else:
+                if checked.model_dump(mode="json") == project.config.model_dump(mode="json"):
+                    return serialize_project(project).decode(), project.id
+        return serialize_roster(draft, project), draft.id
     if "project" in state:
         project = state["project"]
         return serialize_project(project).decode(), project.id
@@ -252,12 +268,24 @@ def restore_snapshot(state: MutableMapping[Any, Any], content: str | bytes) -> N
     raw = json.loads(content)
     if not isinstance(raw, dict):
         raise ValueError("Запись должна содержать объект проекта или подготовки")
-    if "kind" in raw:
+    if raw.get("kind") == "roster_draft":
+        from duty_schedule.ui.roster import load_roster
+
+        draft, project = load_roster(content)
+        state["roster_draft"] = draft
+        state.pop("onboarding_draft", None)
+        if project is None:
+            state.pop("project", None)
+        else:
+            state["project"] = project
+    elif "kind" in raw:
         restored_draft = load_draft(content)
+        state.pop("roster_draft", None)
         state["onboarding_draft"] = restored_draft
         state.pop("project", None)
     else:
         restored_project = load_project(content)
+        state.pop("roster_draft", None)
         state["project"] = restored_project
         state.pop("onboarding_draft", None)
     state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1

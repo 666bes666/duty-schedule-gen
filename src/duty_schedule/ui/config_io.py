@@ -117,7 +117,7 @@ def employees_from_table(
                 raise ValueError("Имя сотрудника не должно быть пустым")
             continue
         employee_id = _text(row.get("ID"))
-        previous = by_id.get(employee_id) or by_name.get(name)
+        previous = by_id.get(employee_id) if employee_id else by_name.get(name)
         data = previous.model_dump(mode="json") if previous else {}
         data.update(
             {

@@ -49,6 +49,7 @@ def accept_storage_result(state: MutableMapping[Any, Any], response: dict) -> bo
     return False
 
 
+@st.fragment
 def render_autosave() -> bool:
     state = st.session_state
     snapshot, identity = storage_snapshot(state)
@@ -83,8 +84,16 @@ def render_autosave() -> bool:
             state["autosave_retry"] = state.get("autosave_retry", 0) + 1
             st.rerun()
         if st.button("Сохранить копию в этом браузере"):
-            key = "project" if "project" in state else "onboarding_draft"
-            state[key] = state[key].model_copy(update={"id": uuid4().hex}, deep=True)
+            key = (
+                "roster_draft"
+                if "roster_draft" in state
+                else ("project" if "project" in state else "onboarding_draft")
+            )
+            identity = uuid4().hex
+            state[key] = state[key].model_copy(update={"id": identity}, deep=True)
+            if key == "roster_draft" and "project" in state:
+                state["project"] = state["project"].model_copy(update={"id": identity}, deep=True)
+            state["ui_epoch"] = int(state.get("ui_epoch", 0)) + 1
             state["autosave_token"] = None
             state["autosave_status"] = "saving"
             st.rerun()

@@ -25,8 +25,9 @@ def wait_saved(page: Page):
             "prefix => { const id=localStorage.getItem('duty-schedule:last'); "
             "const key='duty-schedule:project:'+id; "
             "const raw=localStorage.getItem(key); "
-            "if (!raw) return false; const p=JSON.parse(JSON.parse(raw).project); "
-            "return (p.active_revisions[p.selected_period]||'').startsWith(prefix); }",
+            "if (!raw) return false; const snapshot=JSON.parse(JSON.parse(raw).project); "
+            "const p=snapshot.kind==='roster_draft'?snapshot.project:snapshot; "
+            "return (p?.active_revisions?.[p.selected_period]||'').startsWith(prefix); }",
             arg=expected,
         )
 
@@ -174,7 +175,8 @@ def test_unsubmitted_form_is_not_reported_as_saved(page: Page, streamlit_url: st
     )
     wait_saved(page)
     before = saved(page)
-    page.get_by_label("Год", exact=True).fill("2027")
+    page.get_by_text("Дополнительные настройки расчёта", exact=True).click()
+    page.get_by_label("Seed", exact=True).fill("77")
     component = page.frame_locator('iframe[title="duty_schedule.ui.autosave.duty_autosave"]')
     expect(component.get_by_text("Есть неприменённые правки формы", exact=True)).to_be_visible()
     assert saved(page) == before

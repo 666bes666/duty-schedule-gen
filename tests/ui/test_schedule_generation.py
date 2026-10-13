@@ -12,7 +12,7 @@ from tests.ui.test_project_journey import _upload
 class TestScheduleGeneration:
     def test_generate_button_visible(self, page: Page, streamlit_url: str):
         page.goto(streamlit_url, wait_until="networkidle")
-        expect(page.get_by_label("Новый сотрудник — Москва", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Добавить строку", exact=True)).to_be_visible()
         expect(page.get_by_role("button", name="Сгенерировать расписание")).to_have_count(0)
         _upload(
             page,

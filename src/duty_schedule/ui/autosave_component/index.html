@@ -3,7 +3,7 @@
 <script>
 const label=document.getElementById('status');
 const lastKey='duty-schedule:last';
-let sent='',dirty=false,lastHash;
+let sent='',dirty=false,lastHash,ownToken;
 function send(data){const serialized=JSON.stringify(data);if(serialized===sent)return;sent=serialized;parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:data},'*');}
 function record(raw){const data=JSON.parse(raw);if(data.version!==1||typeof data.token!=='string'||typeof data.project!=='string')throw Error('Повреждённая или неподдерживаемая запись');JSON.parse(data.project);return data;}
 window.addEventListener('message',async event=>{
@@ -36,11 +36,12 @@ window.addEventListener('message',async event=>{
   const raw=localStorage.getItem(key);
   let current=raw?record(raw):null;
   if(current&&current.project===args.project){localStorage.setItem(lastKey,args.project_id);label.textContent=dirty?'Есть неприменённые правки формы':'Сохранено в этом браузере';send({status:'saved',token:current.token,hash:args.hash});return;}
-  if(current&&current.token!==args.expected_token){label.textContent='Конфликт: другая вкладка сохранила новую версию';send({status:'conflict',token:current.token,hash:args.hash});return;}
+  if(current&&current.token!==args.expected_token&&current.token!==ownToken){label.textContent='Конфликт: другая вкладка сохранила новую версию';send({status:'conflict',token:current.token,hash:args.hash});return;}
   label.textContent='Сохранение идёт…';
   const next={version:1,token:crypto.randomUUID(),project:args.project};
   if(raw)localStorage.setItem(key+':previous',raw);
   localStorage.setItem(key,JSON.stringify(next));
+  ownToken=next.token;
   localStorage.setItem(lastKey,args.project_id);
   label.textContent=dirty?'Есть неприменённые правки формы':'Сохранено в этом браузере';
   send({status:'saved',token:next.token,hash:args.hash});
