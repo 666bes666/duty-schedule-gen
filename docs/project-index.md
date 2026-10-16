@@ -1,7 +1,7 @@
 # Индекс проекта
 
 Генерируется `uv run python scripts/project_context.py --write`; ручные изменения запрещены.
-Версия приложения: 5.0.0. Файлов: 382. Полные symbols/imports/traceability: [JSON](project-index.json).
+Версия приложения: 5.0.0. Файлов: 383. Полные symbols/imports/traceability: [JSON](project-index.json).
 
 Холодный старт: [руководство](cold-start.md). Правила: [AGENTS](../AGENTS.md), [SDD](sdd.md), [конституция](../.specify/memory/constitution.md).
 
@@ -18,7 +18,7 @@
 | export | 5 |
 | project | 20 |
 | scheduler | 19 |
-| sdd_contract | 114 |
+| sdd_contract | 115 |
 | sdd_toolkit | 25 |
 | tests | 116 |
 | tooling | 8 |
@@ -39,7 +39,7 @@
 | [specs/008-workload-quality](../specs/008-workload-quality/spec.md) | complete | HOURS-001, HOURS-002, HOURS-003, HOURS-004, HOURS-005 |
 | [specs/009-schedule-revisions](../specs/009-schedule-revisions/spec.md) | complete | REV-001, REV-002, REV-003, REV-004, REV-005 |
 | [specs/010-ui-configuration](../specs/010-ui-configuration/spec.md) | complete | UIC-001, UIC-002, UIC-003, UIC-004, UIC-005, UIC-006 |
-| [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | complete | DEL-001, DEL-002, DEL-003, DEL-004 |
+| [specs/011-delivery-assurance](../specs/011-delivery-assurance/spec.md) | in-progress | DEL-001, DEL-002, DEL-003, DEL-004 |
 | [specs/012-project-audit](../specs/012-project-audit/spec.md) | complete | AUD-001, AUD-002, AUD-003, AUD-004, AUD-005, AUD-006, AUD-007 |
 | [specs/013-product-logic-audit](../specs/013-product-logic-audit/spec.md) | complete | PAUD-001, PAUD-002, PAUD-003, PAUD-004, PAUD-005 |
 | [specs/014-product-reliability](../specs/014-product-reliability/spec.md) | complete | DATA-001, DATA-002, DATA-003, DATA-004, DATA-005 |
@@ -217,6 +217,7 @@
 | [specs/010-ui-configuration/spec.md](../specs/010-ui-configuration/spec.md) | sdd_contract |
 | [specs/010-ui-configuration/tasks.md](../specs/010-ui-configuration/tasks.md) | sdd_contract |
 | [specs/010-ui-configuration/traceability.json](../specs/010-ui-configuration/traceability.json) | sdd_contract |
+| [specs/011-delivery-assurance/analysis.md](../specs/011-delivery-assurance/analysis.md) | sdd_contract |
 | [specs/011-delivery-assurance/evidence.md](../specs/011-delivery-assurance/evidence.md) | sdd_contract |
 | [specs/011-delivery-assurance/plan.md](../specs/011-delivery-assurance/plan.md) | sdd_contract |
 | [specs/011-delivery-assurance/spec.md](../specs/011-delivery-assurance/spec.md) | sdd_contract |

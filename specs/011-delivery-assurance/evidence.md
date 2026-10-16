@@ -140,3 +140,50 @@ Ruff check, Ruff format (164 файла), mypy (65 файлов), `git diff --ch
 | DEL-002 | `tests/unit/test_delivery_workflows.py::test_packaged_smoke_payload_generates_ready`, `tests/ui/test_project_journey.py`, `tests/unit/test_cli_project.py`, `tests/e2e/test_cli_workflow.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | DEL-003 | `tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit`, `tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates`, `tests/performance/test_scheduler_benchmark.py` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
 | DEL-004 | `tests/unit/test_delivery_workflows.py::test_release_verifies_same_sha_version_and_bytes`, `tests/unit/test_delivery_workflows.py::test_release_rejects_existing_tag_for_other_sha`, `tests/unit/test_delivery_workflows.py::test_release_graph_requires_all_verified_artifact_gates` | Связи проверены; результаты исходных прогонов сохранены выше. Актуальный повторный прогон: [аудит012](../012-project-audit/evidence.md). |
+
+
+## 2026-10-13 — macOS CI repair перед продвижением до main
+
+Поручение: «внедряй до main». PR67 dev→test смерженd926d72; PR68 test→main
+запущен. Main CI38385340188: обаMac Python3.12/3.13 exit139 в CFFI/WeasyPrint
+_dlopen при test_real_streamlit_project_edit_check_and_reopen, остальные доступные
+матрицы/UI/system/solver/security/performance прошли, build/container были skipped
+из-за Mac failure. Логиjobs115255614485/115255614561 прочитаны; исторический fail
+сохраняется, main пока не смержен.
+
+DEL-001/plan/tasks/traceability и analysis переоткрыты до CI/test изменений.
+Новая проверкаtest_macos_native_pdf_precedes_full_regression сначала RED
+(StopIteration: отсутствует nativeMac step), затем GREEN. Только macOS устанавливает
+Pango, передаёт brew library path черезDUTY_NATIVE_LIBRARY_PATH, экспортируетDYLD
+внутриshell передsmoke/pytest. РеальныйPDF smoke обязательный; исходные матрица,
+pytest аргументы, coverage>=80 и AppTest сохранены. Ни skip, ни stub не добавлены.
+
+Официальная рекомендация о native path:
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#missing-library
+
+Локально UV_PROJECT_ENVIRONMENT=/tmp/duty-specs-20261011,
+DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix)/lib:
+
+- Native HTML.write_pdf smoke: PASS,3823bytes, PDFheader/nonempty.
+- delivery workflows + исходный failing AppTest:14passed.
+- full non-UI876collected/passed, exit0, coverage88.26%.
+- Ruff/check/format, mypy71files, project_context/check_sdd/diff checks: PASS.
+- General и Python review APPROVE; E501 исправлен formatter до коммита.
+
+Настоящие Mac CI обоих Python остаются обязательным критерием T009; контракт
+покаin-progress. Исправление доставляется обычным dev→test→main без обхода CI.
+
+## 2026-10-16 — повторная проверка перед отправкой исправления
+
+После возобновления поручения «продолжай внедрение до main» выполнен `git fetch
+origin`: dev=d2871e0, test=d926d72, main=d713dc6. PR68 открыт; исходный macOS run
+38385340188 завершён с failure. Pending merge origin/test в dev сохранён.
+
+В новом изолированном окружении `/tmp/duty-main-20261016` выполнено
+`uv sync --locked --dev --extra solver --group ci-perf`. С
+`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` реальный PDF smoke дал 3823 bytes,
+а `uv run pytest tests/ -q --ignore=tests/ui --cov=duty_schedule --cov-report=term
+--cov-fail-under=80` завершился с exit 0: 876 тестов, покрытие 88.28%.
+Ruff check/format (187 файлов), mypy (71 файл), SDD `--base HEAD`, индекс и
+`git diff --check` прошли. Платформенный критерий T009 остаётся открытым до
+успешного исполнения исправленного macOS CI с обеими версиями Python.

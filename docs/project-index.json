@@ -745,6 +745,10 @@
       "role": "sdd_contract"
     },
     {
+      "path": "specs/011-delivery-assurance/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
       "path": "specs/011-delivery-assurance/evidence.md",
       "role": "sdd_contract"
     },
@@ -4090,6 +4094,7 @@
       "role": "tests",
       "symbols": [
         "_distribution",
+        "test_macos_native_pdf_precedes_full_regression",
         "test_main_release_compares_previous_success_and_promotes_after_all_gates",
         "test_packaged_smoke_payload_generates_ready",
         "test_packaged_smoke_payload_matches_public_model",
@@ -6442,7 +6447,7 @@
     {
       "path": "specs/011-delivery-assurance",
       "kind": "change",
-      "status": "complete",
+      "status": "in-progress",
       "requirements": [
         {
           "id": "DEL-001",
@@ -6450,7 +6455,8 @@
             "tests/unit/test_delivery_workflows.py::test_required_test_report_rejects_missing_or_unexecuted_tests",
             "tests/unit/test_solver.py",
             "tests/unit/test_planning_rules.py",
-            "tests/unit/test_search_outcomes.py"
+            "tests/unit/test_search_outcomes.py",
+            "tests/unit/test_delivery_workflows.py::test_macos_native_pdf_precedes_full_regression"
           ]
         },
         {
@@ -6542,7 +6548,10 @@
         "tests/unit/test_planning_rules.py",
         "tests/unit/test_search_outcomes.py",
         "tests/unit/test_solver.py",
-        "uv.lock"
+        "uv.lock",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/011-delivery-assurance/analysis.md"
       ]
     },
     {
