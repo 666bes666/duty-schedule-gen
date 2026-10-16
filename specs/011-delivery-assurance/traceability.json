@@ -1,6 +1,6 @@
 {
   "kind": "change",
-  "status": "in-progress",
+  "status": "complete",
   "requirements": [
     {
       "id": "DEL-001",
@@ -26,7 +26,13 @@
       "tests": [
         "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit",
         "tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates",
-        "tests/performance/test_scheduler_benchmark.py"
+        "tests/performance/test_scheduler_benchmark.py",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_fails_closed",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_requires_fresh_matching_result",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_bootstrap_needs_no_checkout",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_workflows_remeasure_previous_sha",
+        "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_rejects_invalid_records"
       ]
     },
     {

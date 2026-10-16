@@ -67,3 +67,24 @@ Regression shell сохраняет исходные pytest аргументы/c
 Нативный renderer и AppTest не заменяются test double. Новых Python зависимостей нет.
 Проверки: targeted workflow test red→green; native smoke + failing AppTest local;
 Ruff/mypy/index/SDD, весьnon-UI, независимоеreview; актуальныйCI всехOS до promotion.
+
+## 2026-10-16 — benchmark на одном runner
+
+Точные файлы реализации: `scripts/benchmark_baseline.py`,
+`tests/unit/test_delivery_workflows.py`, `.github/workflows/ci-test.yml`,
+`.github/workflows/ci-main.yml`; документы и generated index уже входят в files.
+Сначала negative/regression tests, затем opt-in CLI `--remeasure` в существующем
+baseline helper. Старый режим выбора имени отчёта сохраняется. SHA валидируется
+как полный hex Git object ID. Предыдущий SHA берётся из успешно продвинутого
+кэша, checkout создаётся через git worktree во временном каталоге. Subprocess
+использует argv без shell, отдельное uv окружение, frozen lock и текущий Python.
+Benchmark пишет в общую абсолютную storage; допускается только новый отчёт с
+правильным prior SHA. Вывод subprocess направляется в stderr, stdout CLI содержит
+только имя свежего отчёта для существующего compare flag. Worktree удаляется в
+finally. Ошибки не превращаются в bootstrap или сравнение старых времён.
+
+Performance jobs обоих workflow получают full Git history и `--remeasure`.
+Порог и граф promotion не меняются. Проверки: targeted RED→GREEN, unit failures и
+изоляция, реальный replay артефакта успешного CI d926d72 на локальной машине,
+текущее сравнение mean:10%, все локальные gates и независимое Python/CI ревью.
+Перед каждым продвижением обязателен зелёный CI соответствующего актуального SHA.

@@ -232,3 +232,68 @@ Checkpoint сохраняет синхронизацию origin/test в dev и �
 документы через dev→test, дождаться CI актуального PR68 SHA и слить в main.
 После main проверить его собственный CI, тег и релиз5.0.0. Запущенные GitHub
 проверки продолжат работу независимо от локальной перезагрузки.
+
+## 2026-10-16 — возобновление и сопоставимые benchmark
+
+После поручения «продолжай» live-проверка подтвердила: Main run38921862578 на
+4445e50 полностью success, включая installed wheel и Container API and UI Journeys.
+Test run38921853888 attempt2 снова failed на исходном mean:10%: standard
+96.0154 vs86.3358 ms (+11.2115%), large141.8143 vs128.5737 ms (+10.2980%).
+Оба повторных запуска использовали AMD вместо Intel сохранённой базы. Исторические
+неуспехи сохранены; дальнейших повторов ради зелёного статуса не запускали.
+
+До исходников уточнены DEL-003, plan/tasks/traceability/analysis. 11 новых
+регрессий сначала RED; после реализации и cleanup-исправления все 26 delivery
+тестов GREEN. Старый режим helper сохраняется, CI opt-in `--remeasure` исполняет
+выбранный успешный prior SHA в отдельном frozen окружении на текущем runner.
+Нужен ровно один свежий валидный отчёт того же SHA; ошибки не дают fallback.
+Оба performance jobs сохраняют mean:10% и прежний граф promotion.
+
+Реальный артефакт `benchmark-candidate` скачан из успешного run38385328594
+(d926d72). Replay выполнен Python3.12.12 через:
+
+```bash
+uv run python scripts/benchmark_baseline.py /tmp/duty-benchmark-quiet-20261016 --current-sha 5f2ff917e870a3b790952fb9469bfd2ff928a360 --remeasure
+uv run pytest tests/performance -q --benchmark-only --benchmark-storage /tmp/duty-benchmark-quiet-20261016 --benchmark-compare 0001_same_runner --benchmark-compare-fail=mean:10% --benchmark-save=verified_current --benchmark-min-rounds=2 --benchmark-max-time=15
+```
+
+Оба процесса exit0; текущая версия сравнивалась с новым отчётом prior SHA.
+Mean (prior→current, ms): minimal39.3067→38.9763, standard43.2551→44.0360,
+large64.5974→64.3994. Все различия <2%. Текущий scheduler, benchmark cases,
+conftest и lock совпадают с d926d72; изменены только CI/helper/SDD/regressions.
+`git worktree list` после replay содержит только исходный checkout.
+
+Перед этим первый интерактивный локальный compare завершился failure:
+minimal+21.8815%, standard+17.5460%; max923.8 ms при median39.0 ms. Это не PASS.
+Пара повторена без параллельных проверок на той же машине; указанные выше
+успешные результаты записаны отдельно, исходный failure не переопределяется.
+
+Независимый CI/general review: APPROVE. Python review нашёл MEDIUM cleanup edge:
+ошибка post-checkout hook могла оставить регистрацию worktree. Создание перенесено
+в try/finally, добавлен git_partial regression. Reviewer повторил реальный Git
+контрпример: ошибка распространяется, остаётся только исходный worktree. Итоговое
+Python review: APPROVE, нерешённых замечаний нет.
+
+Ruff/check/format (187 файлов), mypy (71 файл), SDD `--base HEAD`, индекс и diff
+checks прошли. Полный non-UI прогон запущен; результат будет добавлен перед commit.
+Поставку проверяем отдельно по CI актуального SHA перед каждым слиянием.
+
+## 2026-10-16 — завершение проверки реализации DEL-001..004
+
+Полный `uv run pytest tests/ -q --ignore=tests/ui --cov=duty_schedule
+--cov-report=term --cov-fail-under=80` завершился с exit0: 888 collected/passed,
+coverage88.28%. Окружение `/tmp/duty-main-20261016`, native path
+`/opt/homebrew/lib`. Ruff/check/format, mypy, SDD, индекс и diff checks: PASS.
+T009 закрыт по реальному macOS CI обеих версий Python и обновлённому индексу;
+T013 закрыт по реальному replay/compare, полному прогону и двум APPROVE.
+
+| ID | Подтверждение текущего bounded изменения |
+|---|---|
+| DEL-001 | Native smoke и вся macOS регрессия Python3.12/3.13 run38921862578 успешны; все шесть OS/Python jobs успешны; локальные888 тестов, coverage88.28%. |
+| DEL-002 | Все36 UI тестов, installed wheel и container API/UI journeys run38921862578 успешны; приложение в текущем изменении не менялось. |
+| DEL-003 | RED→GREEN regressions, ошибка частичного checkout устранена и воспроизведена reviewer; реальный prior SHA replay и current compare mean:10% успешны. |
+| DEL-004 | SHA/version/checksum и release dependency graph tests выполнены в полном прогоне; release workflow и manifest не менялись. Тег/релиз пока не создавались. |
+
+Статус complete относится к проверенной реализации контракта. Продвижение
+текущего коммита в test/main и публикация остаются отдельными проверяемыми
+состояниями: CI нового SHA обязателен перед слиянием, фактическая доставка ещё идёт.

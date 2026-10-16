@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
+import sys
 import tarfile
 import zipfile
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -100,6 +103,135 @@ def test_previous_sha_benchmark_is_selected_without_exact_cache_hit(tmp_path: Pa
         )
     )
     assert find_baseline(tmp_path, SOURCE_SHA) == "0001_baseline"
+
+
+def _benchmark_record(path: Path, sha: str | None = "b" * 40) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "datetime": "2026-10-10T12:00:00",
+                "commit_info": {"id": sha},
+                "benchmarks": [{"name": "generation", "stats": {"mean": 1.0}}],
+            }
+        )
+    )
+
+
+def test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import benchmark_baseline as baseline
+
+    _benchmark_record(tmp_path / "0001_baseline.json")
+    commands: list[tuple[list[str], dict[str, Any]]] = []
+    monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", "/current/environment")
+    monkeypatch.setenv("VIRTUAL_ENV", "/current/environment")
+    monkeypatch.setenv("PYTHONPATH", "/current/source")
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        commands.append((command, kwargs))
+        if command[:3] == ["git", "worktree", "add"]:
+            Path(command[-2]).mkdir()
+        if command[0] == "uv":
+            _benchmark_record(tmp_path / "0002_same_runner.json")
+
+    monkeypatch.setattr(baseline.subprocess, "run", run)
+    assert baseline.remeasure_baseline(tmp_path, SOURCE_SHA) == "0002_same_runner"
+    checkout, benchmark, cleanup = commands
+    assert checkout[0][:4] == ["git", "worktree", "add", "--detach"]
+    assert checkout[0][-1] == "b" * 40
+    assert benchmark[0][:2] == ["uv", "run"]
+    assert "--frozen" in benchmark[0] and "--benchmark-only" in benchmark[0]
+    assert benchmark[0][benchmark[0].index("--python") + 1] == sys.executable
+    assert benchmark[0][benchmark[0].index("--benchmark-storage") + 1] == str(tmp_path)
+    assert benchmark[1]["env"]["UV_PROJECT_ENVIRONMENT"] == str(benchmark[1]["cwd"] / ".venv")
+    assert "VIRTUAL_ENV" not in benchmark[1]["env"]
+    assert "PYTHONPATH" not in benchmark[1]["env"]
+    assert cleanup[0][:4] == ["git", "worktree", "remove", "--force"]
+    assert cleanup[0][-1] == checkout[0][-2] == str(benchmark[1]["cwd"])
+    assert all(kwargs["check"] and kwargs["stdout"] is sys.stderr for _, kwargs in commands)
+
+
+@pytest.mark.parametrize("failed_command", ["git", "git_partial", "uv"])
+def test_benchmark_remeasurement_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_command: str
+) -> None:
+    from scripts import benchmark_baseline as baseline
+
+    _benchmark_record(tmp_path / "0001_baseline.json")
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        if command[:3] == ["git", "worktree", "add"] and failed_command != "git":
+            Path(command[-2]).mkdir()
+            if failed_command == "git_partial":
+                raise subprocess.CalledProcessError(1, command)
+        if command[0] == failed_command and "remove" not in command:
+            raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(baseline.subprocess, "run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        baseline.remeasure_baseline(tmp_path, SOURCE_SHA)
+    assert any("remove" in command for command in commands) == (failed_command != "git")
+
+
+@pytest.mark.parametrize("fresh_sha", [None, "c" * 40])
+def test_benchmark_remeasurement_requires_fresh_matching_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_sha: str | None
+) -> None:
+    from scripts import benchmark_baseline as baseline
+
+    _benchmark_record(tmp_path / "0001_baseline.json")
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        if command[:3] == ["git", "worktree", "add"]:
+            Path(command[-2]).mkdir()
+        if command[0] == "uv" and fresh_sha is not None:
+            _benchmark_record(tmp_path / "0002_same_runner.json", fresh_sha)
+
+    monkeypatch.setattr(baseline.subprocess, "run", run)
+    with pytest.raises(ValueError, match="fresh|SHA"):
+        baseline.remeasure_baseline(tmp_path, SOURCE_SHA)
+    assert "remove" in commands[-1]
+
+
+def test_benchmark_remeasurement_bootstrap_needs_no_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import benchmark_baseline as baseline
+
+    def run(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("bootstrap must not execute a checkout or benchmark")
+
+    monkeypatch.setattr(baseline.subprocess, "run", run)
+    assert baseline.remeasure_baseline(tmp_path, SOURCE_SHA) == ""
+
+
+@pytest.mark.parametrize("sha", [None, "--exec=unexpected", "deadbeef"])
+def test_previous_sha_benchmark_rejects_invalid_records(tmp_path: Path, sha: str | None) -> None:
+    from scripts.benchmark_baseline import find_baseline
+
+    _benchmark_record(tmp_path / "0001_baseline.json", sha)
+    assert find_baseline(tmp_path, SOURCE_SHA) == ""
+
+
+@pytest.mark.parametrize("filename", ["ci-test.yml", "ci-main.yml"])
+def test_benchmark_workflows_remeasure_previous_sha(filename: str) -> None:
+    workflow = yaml.load(
+        (ROOT / ".github/workflows" / filename).read_text(), Loader=yaml.BaseLoader
+    )
+    steps = workflow["jobs"]["performance"]["steps"]
+    checkout = next(step for step in steps if step.get("uses") == "actions/checkout@v4")
+    assert checkout["with"]["fetch-depth"] == "0"
+    comparison = next(step for step in steps if "benchmark-compare-fail" in step.get("run", ""))
+    assert "--remeasure" in comparison["run"]
+    assert "--benchmark-compare-fail=mean:10%" in comparison["run"]
+    assert comparison["run"].index("scripts/benchmark_baseline.py") < comparison["run"].index(
+        "--benchmark-compare="
+    )
 
 
 def _distribution(folder: Path, version: str = "4.1.0") -> None:
