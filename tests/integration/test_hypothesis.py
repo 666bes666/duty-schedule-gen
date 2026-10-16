@@ -16,6 +16,7 @@ from duty_schedule.models import (
     VacationPeriod,
 )
 from duty_schedule.scheduler import ScheduleError, generate_schedule
+from tests.conftest import complete_config
 
 
 @st.composite
@@ -102,7 +103,7 @@ def config_strategy(draw: st.DrawFn) -> Config:
         )
         idx += 1
 
-    return Config(month=month, year=year, seed=seed, employees=employees)
+    return complete_config(Config(month=month, year=year, seed=seed, employees=employees))
 
 
 @given(cfg=config_strategy())
@@ -198,7 +199,7 @@ def test_consecutive_working_not_exceeded(cfg: Config) -> None:
 
 @given(cfg=config_strategy())
 @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.filter_too_much])
-def test_all_shifts_covered(cfg: Config) -> None:
+def test_ready_schedule_has_coverage_or_diagnostic_explains_gaps(cfg: Config) -> None:
     try:
         schedule = generate_schedule(cfg, set())
     except ScheduleError:
@@ -206,7 +207,9 @@ def test_all_shifts_covered(cfg: Config) -> None:
         return
 
     for day in schedule.days:
-        assert day.is_covered(), (
-            f"Day {day.date} not fully covered: "
-            f"morning={day.morning}, evening={day.evening}, night={day.night}"
-        )
+        if not day.is_covered():
+            assert schedule.status == "diagnostic"
+            assert any(d.code == "coverage" and d.date == day.date for d in schedule.diagnostics)
+    if schedule.status == "ready":
+        assert not schedule.diagnostics
+        assert all(day.is_covered() for day in schedule.days)

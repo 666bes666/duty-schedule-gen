@@ -1,0 +1,91 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "SEC-001",
+      "tests": [
+        "tests/unit/test_export_security.py::test_pdf_names_are_escaped_in_both_tables",
+        "tests/unit/test_export_security.py::test_pdf_fetcher_blocks_resources_before_opening",
+        "tests/unit/test_two_month_quality.py::test_xls_external_quality_source_id_is_plain_text"
+      ]
+    },
+    {
+      "id": "SEC-002",
+      "tests": [
+        "tests/contract/test_revision_api.py::test_bad_range_is_native_422_before_generation",
+        "tests/contract/test_revision_api.py::test_unknown_employee_quotes_and_newline_produce_json",
+        "tests/contract/test_api_strict_validation.py",
+        "tests/unit/test_api_errors.py",
+        "tests/contract/test_product_inputs.py::test_mismatched_calendar_is_422_without_search_or_network",
+        "tests/contract/test_product_inputs.py::test_unknown_nested_patch_is_422_without_search"
+      ]
+    },
+    {
+      "id": "SEC-003",
+      "tests": [
+        "tests/contract/test_revision_api.py::test_binary_export_media_types_are_documented",
+        "tests/contract/test_revision_api.py::test_forged_ready_schedule_cannot_be_exported",
+        "tests/contract/test_revision_api.py::test_control_characters_in_employee_name_export_as_escaped_calendar_text",
+        "tests/unit/test_export_security.py::test_archive_names_are_safe_unique_and_preserve_original_inputs"
+      ]
+    }
+  ],
+  "files": [
+    "specs/000-baseline/contracts/openapi.json",
+    "specs/003-secure-api-exports/evidence.md",
+    "specs/003-secure-api-exports/plan.md",
+    "specs/003-secure-api-exports/spec.md",
+    "specs/003-secure-api-exports/tasks.md",
+    "specs/003-secure-api-exports/traceability.json",
+    "src/duty_schedule/api/__init__.py",
+    "src/duty_schedule/api/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/auth.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/errors.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/planning.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/ratelimit.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/schemas.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/settings.cpython-312.pyc",
+    "src/duty_schedule/api/__pycache__/whatif_service.cpython-312.pyc",
+    "src/duty_schedule/api/auth.py",
+    "src/duty_schedule/api/errors.py",
+    "src/duty_schedule/api/planning.py",
+    "src/duty_schedule/api/ratelimit.py",
+    "src/duty_schedule/api/routes/__init__.py",
+    "src/duty_schedule/api/routes/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/api/routes/__pycache__/config.cpython-312.pyc",
+    "src/duty_schedule/api/routes/__pycache__/export.cpython-312.pyc",
+    "src/duty_schedule/api/routes/__pycache__/holidays.cpython-312.pyc",
+    "src/duty_schedule/api/routes/__pycache__/schedule.cpython-312.pyc",
+    "src/duty_schedule/api/routes/__pycache__/whatif.cpython-312.pyc",
+    "src/duty_schedule/api/routes/config.py",
+    "src/duty_schedule/api/routes/export.py",
+    "src/duty_schedule/api/routes/holidays.py",
+    "src/duty_schedule/api/routes/schedule.py",
+    "src/duty_schedule/api/routes/whatif.py",
+    "src/duty_schedule/api/schemas.py",
+    "src/duty_schedule/api/settings.py",
+    "src/duty_schedule/api/whatif_service.py",
+    "src/duty_schedule/export/__init__.py",
+    "src/duty_schedule/export/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/filenames.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/ics.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/pdf.cpython-312.pyc",
+    "src/duty_schedule/export/__pycache__/xls.cpython-312.pyc",
+    "src/duty_schedule/export/filenames.py",
+    "src/duty_schedule/export/ics.py",
+    "src/duty_schedule/export/pdf.py",
+    "src/duty_schedule/export/xls.py",
+    "src/duty_schedule/models.py",
+    "tests/contract/conftest.py",
+    "tests/contract/test_api_error_contract.py",
+    "tests/contract/test_api_response_schema_contract.py",
+    "tests/contract/test_api_strict_validation.py",
+    "tests/contract/test_product_inputs.py",
+    "tests/contract/test_revision_api.py",
+    "tests/integration/test_api_endpoints.py",
+    "tests/unit/test_api_errors.py",
+    "tests/unit/test_export_security.py",
+    "tests/unit/test_pdf_export.py"
+  ]
+}

@@ -1,0 +1,35 @@
+name: SDD Gate
+
+on:
+  push:
+    branches: [dev, test, main]
+  pull_request:
+    branches: [dev, test, main]
+
+permissions:
+  contents: read
+
+jobs:
+  sdd:
+    name: Specifications and API contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-python
+      - name: Validate specifications and implementation linkage
+        env:
+          SDD_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$SDD_BASE" ] && [ "$SDD_BASE" != "0000000000000000000000000000000000000000" ]; then
+            uv run python scripts/check_sdd.py --base "$SDD_BASE"
+          else
+            uv run python scripts/check_sdd.py
+          fi
+      - name: Verify complete project index
+        run: uv run python scripts/project_context.py --check
+      - run: uv run ruff check scripts/ tests/unit/test_sdd.py tests/contract/test_openapi_snapshot.py
+      - run: uv run ruff format --check scripts/ tests/unit/test_sdd.py tests/contract/test_openapi_snapshot.py
+      - run: uv run mypy src/ scripts/
+      - run: uv run pytest tests/unit/test_sdd.py tests/unit/test_project_context.py tests/contract/test_openapi_snapshot.py -q

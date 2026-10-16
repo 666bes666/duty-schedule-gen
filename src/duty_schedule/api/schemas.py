@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic_core import InitErrorDetails
+
+from duty_schedule.models import Config, Schedule, ScheduleDiagnostic
 
 
 class ConfigValidationResponse(BaseModel):
@@ -38,11 +41,24 @@ class EmployeeStatsSchema(BaseModel):
     paired_off: int
     total_hours: int
     cost_hours: float = 0.0
+    sick_leave: int = 0
+    calendar_hours: int = 0
+    absence_reduction_hours: int = 0
+    adjusted_hours: int = 0
+    selected_hours: int = 0
+    target_hours: int = 0
+    hours_delta: int = 0
+    boundary_max_streak_work: int = 0
+    boundary_max_streak_rest: int = 0
 
 
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
+class ScheduleNotReadyResponse(ErrorResponse):
+    diagnostics: list[ScheduleDiagnostic]
 
 
 class VariantPatch(BaseModel):
@@ -52,15 +68,43 @@ class VariantPatch(BaseModel):
     @field_validator("patch")
     @classmethod
     def forbid_month_year(cls, v: dict[str, Any]) -> dict[str, Any]:
-        forbidden = {"month", "year"} & v.keys()
-        if forbidden:
-            raise ValueError(f"Изменение {', '.join(sorted(forbidden))} в варианте запрещено")
-        return v
+        from duty_schedule.input_validation import validate_patch
+
+        return validate_patch(v)
 
 
 class WhatIfRequest(BaseModel):
     baseline: dict[str, Any]
     variants: list[VariantPatch]
+
+    @model_validator(mode="after")
+    def validate_merged_variants(self) -> WhatIfRequest:
+        try:
+            baseline = Config.model_validate(self.baseline)
+        except ValidationError:
+            return self
+        for index, variant in enumerate(self.variants):
+            try:
+                Config.model_validate({**baseline.model_dump(), **variant.patch})
+            except ValidationError as exc:
+                errors = exc.errors(include_url=False)
+                for error in errors:
+                    error["loc"] = ("variants", index, "patch", *error["loc"])
+                raise ValidationError.from_exception_data(
+                    "WhatIfRequest", cast(list[InitErrorDetails], errors)
+                ) from exc
+        return self
+
+    @field_validator("baseline")
+    @classmethod
+    def matching_calendar(cls, value: dict[str, Any]) -> dict[str, Any]:
+        calendar = value.get("production_calendar")
+        if isinstance(calendar, dict) and (calendar.get("year"), calendar.get("month")) != (
+            value.get("year"),
+            value.get("month"),
+        ):
+            raise ValueError("baseline.production_calendar: период не соответствует конфигурации")
+        return value
 
     @field_validator("variants")
     @classmethod
@@ -90,11 +134,15 @@ class SummaryMetrics(BaseModel):
     coverage_gaps: int
     isolated_off_total: int
     weekend_balance_stddev: float
+    quality_context: dict[str, Any] = {}
 
 
 class ScenarioResult(BaseModel):
     stats: list[EmployeeStatsSchema]
     summary: SummaryMetrics
+    status: str = "ready"
+    diagnostics: list[ScheduleDiagnostic] = []
+    schedule: Schedule | None = None
 
 
 class VariantResult(BaseModel):
@@ -104,6 +152,8 @@ class VariantResult(BaseModel):
     stats: list[EmployeeStatsSchema] | None = None
     summary: SummaryMetrics | None = None
     deltas: list[EmployeeDelta] | None = None
+    diagnostics: list[ScheduleDiagnostic] = []
+    schedule: Schedule | None = None
 
 
 class WhatIfResponse(BaseModel):
@@ -112,11 +162,11 @@ class WhatIfResponse(BaseModel):
 
 
 class MultiMonthRequest(BaseModel):
-    config: dict[str, Any]
+    config: Config
     start_month: int
-    start_year: int
+    start_year: int = Field(ge=2024, le=9999)
     end_month: int
-    end_year: int
+    end_year: int = Field(ge=2024, le=9999)
 
     @field_validator("start_month", "end_month")
     @classmethod
@@ -125,6 +175,12 @@ class MultiMonthRequest(BaseModel):
             raise ValueError("Месяц должен быть от 1 до 12")
         return v
 
+    @model_validator(mode="after")
+    def valid_order(self) -> MultiMonthRequest:
+        if (self.end_year, self.end_month) < (self.start_year, self.start_month):
+            raise ValueError("Конец диапазона должен быть не раньше начала")
+        return self
+
 
 class MultiMonthResponse(BaseModel):
-    schedules: list[dict[str, Any]]
+    schedules: list[Schedule]

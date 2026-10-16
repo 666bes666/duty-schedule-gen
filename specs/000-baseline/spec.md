@@ -1,0 +1,217 @@
+# Базовая спецификация существующего поведения
+
+Статус: `recorded`. Дата фиксации: 2026-10-10.
+
+Исходный коммит: `949b6bc53ba649d496d130545acb81a8dc6f656d`.
+
+Это описание действующей реализации перед переходом на Spec-Driven Development. Оно не утверждает, что все сочетания входных данных корректно обрабатываются или что все возможности проверены сквозными тестами. Поведение алгоритма ниже относится к `greedy`, если другой алгоритм не назван явно. Существующие ограничения и расхождения вынесены в [gaps.md](gaps.md); их фиксация не означает одобрение такого поведения как целевого.
+
+Связи требований с существующими тестами находятся в [traceability.json](traceability.json). Тестовая связь означает конкретное свидетельство, а не исчерпывающее доказательство требования. Для UI это особенно существенно: браузерные тесты проверяют загрузку страницы и видимость кнопки, но не весь пользовательский сценарий. Снимок [OpenAPI](contracts/openapi.json) фиксирует генерируемую схему; его ограничения описаны отдельно.
+
+## Проверенные изменения — 2026-10-11
+
+Разделы ниже сохраняют историческое наблюдение исходного коммита. Версия5 меняет
+часть этого поведения по подтверждённым требованиям изменений003–011:
+
+| Baseline ID | Проверенный текущий факт | Живой контракт |
+|---|---|---|
+| CFG-001..004 | Полный календарь/история, sick_leave, ID, подтверждения и выбор нормы; типизированные imports | [VALID](../004-scheduling-validity/spec.md), [UIC](../010-ui-configuration/spec.md) |
+| SCH-001..007, SCH-011 | Оба алгоритма имеют общий validator; ready требует покрытия и hard rules, иначе diagnostic | [VALID](../004-scheduling-validity/spec.md), [POST](../005-postprocess-integrity/spec.md) |
+| SCH-005, SCH-008..010 | Точная выбранная норма часов; фиксированный порядок качества и доступный пропорциональный пул | [HOURS](../008-workload-quality/spec.md) |
+| SCH-006, SCH-007 | Ручные пины сохраняются в range; перенос зависит от всей текущей цепочки месяцев | [HIST](../006-month-continuity/spec.md), [REV](../009-schedule-revisions/spec.md) |
+| EXP-001..004 | Публичные экспорты повторно проверяют график; ночь ICS8h, индивидуальный R без фиксированного конца, PDF без ресурсов | [TIME](../007-calendar-shift-model/spec.md), [SEC](../003-secure-api-exports/spec.md) |
+| API-001..003 | Plan/revision endpoints, native422, typed409/400, документированные media types и версия5 OpenAPI | [SEC](../003-secure-api-exports/spec.md), [REV](../009-schedule-revisions/spec.md) |
+| CLI-001..002, UI-001 | Portable project, edit/check/download/reopen и range проверены реальными сценариями | [UIC](../010-ui-configuration/spec.md), [DEL](../011-delivery-assurance/spec.md) |
+
+Результаты и ограничения приведены в [evidence](../011-delivery-assurance/evidence.md).
+Исторические ID сохраняются; изменённые критерии, источник истины для разработки
+и новые runtime тесты находятся в указанных feature-спецификациях.
+
+## Конфигурация
+
+### CFG-001 — Модели и формат конфигурации
+
+`Config` принимает месяц 1–12, год не меньше 2024 и список сотрудников. Число дежурных должно быть не меньше четырёх для Москвы и двух для Хабаровска; сотрудники с `on_duty=False` в эти минимумы не входят. Значения по умолчанию: `timezone=Europe/Moscow`, `seed=42`, `solver=greedy`. Допустимые значения solver: `greedy`, `cpsat`. YAML загружается через `yaml.safe_load` и проверяется моделью. Неизвестные поля текущая модель игнорирует; это отличается от строгого запрета дополнительных полей.
+
+Источник: [models.py](../../src/duty_schedule/models.py), `Config`; [cli.py](../../src/duty_schedule/cli.py), `_load_config`.
+
+### CFG-002 — Согласованность параметров сотрудника
+
+`morning_only` и `evening_only` нельзя включать одновременно. `always_on_duty` требует `on_duty=True`, города Москва и одного из двух ограничений смены. `preferred_shift` не может быть `vacation` или `day_off`. Явный `max_consecutive_working` должен быть не меньше одного, а дни `days_off_weekly` — от 0 до 6. Конец периода отпуска не может предшествовать началу; обе границы включены.
+
+Источник: [models.py](../../src/duty_schedule/models.py), `Employee.validate_flags`, `VacationPeriod`, `Employee.is_on_vacation`.
+
+### CFG-003 — Бизнес-проверки конфигурации
+
+`collect_config_issues` возвращает ошибки для повторяющихся имён, неизвестного сотрудника в пине, повторного пина сотрудника на тот же день и несовместимых с городом дежурных смен. Неизвестное имя в `carry_over` вызывает предупреждение. Назначение недежурного сотрудника пином на дежурную смену также вызывает предупреждение. Эти проверки вызываются точками входа и не встроены в конструктор `Config` или непосредственно в `generate_schedule`.
+
+Источник: [models.py](../../src/duty_schedule/models.py), `collect_config_issues`.
+
+### CFG-004 — Проверки перед генерацией
+
+`validate_pre_generation` отдельно выявляет несколько пинов на одну дежурную смену, конфликт пина с отпуском или недоступностью, городом и ограничением morning/evening-only. Недостаток общего числа доступных дежурных даёт предупреждение. UI и endpoint одиночной генерации используют эту проверку; CLI и ядро не обеспечивают идентичного вызова.
+
+Источник: [validation.py](../../src/duty_schedule/validation.py), `validate_pre_generation`; [app.py](../../app.py).
+
+## Построение расписания
+
+### SCH-001 — Покрытие месяца и обязательных смен
+
+Для успешно построенного greedy-расписания создаётся запись на каждую дату запрошенного месяца. Каждый день содержит хотя бы одного сотрудника в `morning`, `evening` и `night`. Финальная проверка считает отсутствие покрытия и несколько рабочих смен у одного сотрудника за день жёсткими нарушениями и прерывает генерацию через `ScheduleError`.
+
+Источник: [core.py](../../src/duty_schedule/scheduler/core.py), `_generate_schedule_impl`; [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py), `_check_coverage`, `_check_duplicates`, `validate_schedule_or_raise`.
+
+### SCH-002 — Распределение смен по городам
+
+При автоматическом назначении Москва обеспечивает утро и вечер, Хабаровск — ночь. Кандидаты для этих назначений берутся из сотрудников соответствующего города с `on_duty=True`. У Хабаровска обычный рабочий день может быть отдельным назначением. Несовместимые городские пины проверяются точками входа согласно CFG-003 и CFG-004.
+
+Источник: [greedy.py](../../src/duty_schedule/scheduler/greedy.py), `_build_day`; [solver.py](../../src/duty_schedule/scheduler/solver.py), `solve_schedule`.
+
+### SCH-003 — Недоступность и тип графика
+
+При подборе кандидатов greedy исключает отпуск, `unavailable_dates`, постоянный выходной по дню недели, а для 5/2 — субботу, воскресенье и переданные праздники. Утренние и вечерние назначения учитывают соответствующие флаги сотрудника. Отпуск в результате отмечается как `vacation`, вручную заблокированная дата — как `day_off`. Финальная проверка классифицирует работу в заблокированную дату как мягкое нарушение, поэтому это не универсальная гарантия отклонения любого результата с таким нарушением.
+
+Источник: [constraints.py](../../src/duty_schedule/scheduler/constraints.py), `_can_work`; [greedy.py](../../src/duty_schedule/scheduler/greedy.py), `_build_day`; [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py), `_check_blocked_dates`.
+
+### SCH-004 — Отдых после вечерней смены
+
+После вечерней смены сотрудник не назначается на утро или обычный рабочий день следующего дня. Финальная проверка внутри месяца считает такой переход жёстким нарушением. Greedy также использует `last_shift` из carry-over при назначениях первого дня. Ночная смена не означает обязательный выходной для хабаровского сотрудника на следующий день.
+
+Источник: [constraints.py](../../src/duty_schedule/scheduler/constraints.py), `_resting_after_evening`, `_had_evening_before`; [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py), `_check_evening_rest`; [core.py](../../src/duty_schedule/scheduler/core.py).
+
+### SCH-005 — Лимиты рабочих серий
+
+Если лимит сотрудника не задан, планирование использует 6 рабочих дней подряд. Явный лимит имеет приоритет. Постпроцессинг для гибких дежурных без morning-only, evening-only или always-on-duty использует ориентир 5; остальные сохраняют основной лимит. Финальная проверка превышений возвращает мягкие нарушения, а не обязательно отклоняет расписание.
+
+Источник: [constraints.py](../../src/duty_schedule/scheduler/constraints.py), `_max_cw`, `_max_cw_postprocess`; [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py), `_check_max_consecutive`.
+
+### SCH-006 — Фиксированные назначения
+
+Корректные пины задают сотрудника, дату и смену; greedy сохраняет их после постпроцессинга. Проверка потерянного пина внутри дат расписания является жёсткой. Модель запрещает пин `vacation`. Пины вне сгенерированного месяца финальная проверка пропускает; данный baseline не вводит их отклонение.
+
+Источник: [models.py](../../src/duty_schedule/models.py), `PinnedAssignment`; [core.py](../../src/duty_schedule/scheduler/core.py), `pins_by_date`, `pinned_on`; [validation.py](../../src/duty_schedule/scheduler/postprocess/validation.py), `_check_pinned`.
+
+### SCH-007 — Воспроизводимость greedy
+
+Повторная генерация greedy с одинаковыми конфигурацией, праздниками и seed воспроизводит назначения. В проверенных примерах разные seed меняют назначения. Гарантия не распространяется на CP-SAT или бинарную идентичность экспортированных файлов.
+
+Источник: [core.py](../../src/duty_schedule/scheduler/core.py), локальный `random.Random`.
+
+### SCH-008 — Выбор алгоритма и ошибки построения
+
+Greedy использует ограниченное число откатов и выдаёт `ScheduleError`, когда не может продолжить построение. При выборе CP-SAT без OR-Tools ядро переключается на greedy. Установленный CP-SAT возвращает результат при статусах OPTIMAL и FEASIBLE; другие статусы вызывают `ScheduleError`. Статус FEASIBLE не доказывает оптимальность. Набор поддерживаемых настроек алгоритмов различается, см. gaps.md.
+
+Источник: [core.py](../../src/duty_schedule/scheduler/core.py), `_generate_schedule_impl`; [solver.py](../../src/duty_schedule/scheduler/solver.py), `solve_schedule`.
+
+### SCH-009 — Постпроцессинг и приоритеты
+
+Greedy запускает последовательность стадий выравнивания нагрузки, вечерних смен, работы в выходные и уменьшения изолированных выходных. `optimization_priority` изменяет состав и интенсивность стадий. Существующие тесты сравнивают выбранные метрики с baseline на конкретной команде и проверяют сохранение покрытия и вечернего отдыха. Требование не обещает глобально оптимального или одинакового улучшения на всех входах.
+
+Источник: [pipeline.py](../../src/duty_schedule/scheduler/postprocess/pipeline.py), `build_default_pipeline`; [metrics.py](../../src/duty_schedule/scheduler/postprocess/metrics.py).
+
+### SCH-010 — Несколько месяцев и carry-over
+
+`generate_multimonth` строит месяцы включительно от начала до конца и обрабатывает переход декабря в январь. Для greedy состояние конца месяца из metadata передаётся следующему месяцу: последняя смена, серии работы, отдыха и одинаковой смены. Если начало позже конца, текущая функция возвращает пустой список. Непрерывность CP-SAT между месяцами не подтверждена и не реализована через аналогичные metadata.
+
+Источник: [multimonth.py](../../src/duty_schedule/scheduler/multimonth.py), `generate_multimonth`; [carry_over_calc.py](../../src/duty_schedule/scheduler/postprocess/carry_over_calc.py), `compute_carry_over`.
+
+### SCH-011 — Производственный календарь
+
+`fetch_holidays` запрашивает isdayoff.ru для России, преобразует коды нерабочих и сокращённых дней в множества дат и отклоняет ответ неверной длины или HTTP-ошибку через `CalendarError`. Ручные даты имеют формат ISO; даты другого месяца пропускаются. Норма рабочих дней в scheduler рассчитывается как будние даты вне переданных праздников. Работа в перенесённую рабочую субботу этой моделью не отражена.
+
+Источник: [calendar.py](../../src/duty_schedule/calendar.py), `fetch_holidays`, `parse_manual_holidays`; [constraints.py](../../src/duty_schedule/scheduler/constraints.py), `_calc_production_days`.
+
+## Экспорт и расчёты
+
+### EXP-001 — XLSX
+
+Экспорт создаёт `schedule_YYYY_MM.xlsx` с расписанием, статистикой, легендой и скрытым служебным листом. Итоги и часть статистики вычисляются формулами, для редактируемых смен задана проверка допустимых значений. Строки пользователя, начинающиеся с символов формул, экранируются. Тесты проверяют структуру файла и формул, но не запуск Excel 2016 или пересчёт формул в нём.
+
+Источник: [xls.py](../../src/duty_schedule/export/xls.py), `export_xls`, `_sanitize_cell`.
+
+### EXP-002 — ICS
+
+CLI создаёт четыре календаря по типам смен: `morning.ics`, `evening.ics`, `night.ics`, `workday.ics`. Функция персонального экспорта содержит только рабочие смены указанного сотрудника, категории и цвета. Обычный рабочий день хабаровского сотрудника использует Asia/Vladivostok, остальные события — `config.timezone`. Текущий ночной event заканчивается в 08:00 следующей даты при начале в 00:00 исходной; расхождение длительности отдельно зафиксировано в gaps.md.
+
+Источник: [ics.py](../../src/duty_schedule/export/ics.py), `export_ics`, `generate_employee_ics_bytes`, `_shift_times`.
+
+### EXP-003 — PDF
+
+`generate_schedule_pdf` возвращает байты PDF; размер по умолчанию A3, параметр сокращённых дней передаётся расчёту статистики. При отсутствующих системных библиотеках WeasyPrint импортный `OSError` преобразуется в `RuntimeError`. Проверки PDF подтверждают формат байтов, но не визуальную пригодность всех команд и месяцев для печати.
+
+Источник: [pdf.py](../../src/duty_schedule/export/pdf.py), `generate_schedule_pdf`.
+
+### EXP-004 — Импорт carry-over из XLSX
+
+Импорт распознаёт последний тип смены и конечные серии рабочих, выходных и одинаковых смен в экспортированном XLSX. Неизвестное обозначение ячейки интерпретируется как выходной. Пустые и повреждённые файлы вызывают `XlsImportError`. Roundtrip-тест проверяет генерацию следующего greedy-месяца после экспорта и импорта предыдущего.
+
+Источник: [xls_import.py](../../src/duty_schedule/xls_import.py), `parse_carry_over_from_xls`, `_build_carry_over`, `_resolve_shift`.
+
+### EXP-005 — Часы и стоимость
+
+Расчёт статистики считает рабочее назначение равным 8 часам, а при переданной сокращённой дате — 7. Стоимостная модель применяет настраиваемые множители для ночи, выходного и праздника. Это наблюдаемые правила арифметики; baseline не подтверждает соблюдение всех норм трудового права или совпадение длительности ICS-события с оплачиваемыми часами.
+
+Источник: [stats.py](../../src/duty_schedule/stats.py), `compute_stats`; [costs.py](../../src/duty_schedule/costs.py), `CostModel`, `compute_cost_hours`.
+
+## Точки входа
+
+### CLI-001 — Команды и форматы
+
+CLI предоставляет `generate`, `generate-range`, `validate`, `version` и справку. Одиночная генерация поддерживает `xls`, `ics`, `all`, каталог вывода и переопределение seed. Неизвестный формат после генерации выдаёт предупреждение без экспорта. `generate-range` экспортирует XLSX для каждого полученного месяца. `validate` проверяет модель и `collect_config_issues`, но не доказывает возможность построения расписания.
+
+Источник: [cli.py](../../src/duty_schedule/cli.py), `generate`, `generate_range`, `validate`, `version`.
+
+### CLI-002 — Ошибки и недоступность календаря
+
+Одиночная генерация сначала обращается к сервису календаря. Только при его ошибке использует `--holidays`, а без этого аргумента — выходные даты с предупреждением. `generate-range` преобразует `ScheduleError`, `ValidationError`, `CalendarError`, `ValueError` в коды завершения 1, 3, 4, 5 соответственно; неожиданные программные ошибки не маскируются этим каталогом.
+
+Источник: [cli.py](../../src/duty_schedule/cli.py), `_load_holidays`, `generate_range`.
+
+### UI-001 — Доступность и проверка конфигурации
+
+Streamlit-страница загружается и отображает кнопку генерации. Проверенные сообщения UI для конфликтующих флагов и недостатка дежурных согласованы с моделью. После ручного редактирования UI показывает найденные нарушения. Полнота редакторской проверки, выполнение генерации и скачивание файлов в браузере существующими UI-тестами не подтверждены.
+
+Источник: [app.py](../../app.py); [builders.py](../../src/duty_schedule/ui/builders.py), `_validate_config`, `_validate_edited_schedule`.
+
+### UI-002 — Сравнение расписаний
+
+`diff_schedules` возвращает изменившиеся назначения сотрудника по датам; одинаковые расписания дают пустой список изменений. UI предоставляет сравнение сохранённых версий и удерживает последние пять результатов генерации. Тесты подтверждают вычисление различий; управление историей через браузер подтверждено только чтением реализации.
+
+Источник: [stats.py](../../src/duty_schedule/stats.py), `diff_schedules`; [views.py](../../src/duty_schedule/ui/views.py), `_render_schedule_diff`; [app.py](../../app.py), `schedule_history`.
+
+### API-001 — Ответы и форматы HTTP API
+
+Префикс маршрутов — `/api/v1`. Зарегистрированы девять операций: POST `/schedule/generate`, `/schedule/stats`, `/schedule/generate-range`, `/config/validate`, `/export/xls`, `/export/pdf`, `/export/ics`, `/whatif/compare` и GET `/holidays/{year}/{month}`. Успешная одиночная генерация возвращает `config`, `days`, `metadata`; валидация — `valid`, `errors`, `warnings`; календарь — `year`, `month`, `holidays`, `short_days`; статистика — список данных сотрудников. Календарные даты сериализуются в ISO. XLSX имеет MIME `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`; персональный ICS — `text/calendar`, общий ICS-экспорт — ZIP. Нативная проверка запросов возвращает FastAPI 422; бизнес-ошибки генерации могут иметь отдельный формат `detail`. API PDF и диапазон зарегистрированы, но endpoint-тестов для них в исходном наборе нет.
+
+Источник: [routes](../../src/duty_schedule/api/routes/), [schemas.py](../../src/duty_schedule/api/schemas.py), [models.py](../../src/duty_schedule/models.py). Семантические ограничения снимка OpenAPI приведены в gaps.md.
+
+### API-002 — Ключи доступа и ограничение частоты
+
+По умолчанию аутентификация включена, список ключей пуст, лимит — `60/minute`. Принимается `X-API-Key` либо Bearer-токен, если явный заголовок ключа отсутствует. Отсутствующий ключ или отсутствие настроенных ключей даёт 401 с `error=auth_required`; неверный ключ — 403 с `error=auth_invalid`. Документация и OpenAPI открыты без ключа. Лимитер хранит скользящее окно в памяти процесса по API-ключу. Принятые запросы получают `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`; превышение даёт 429 и `Retry-After`. Отключение auth отключает и limiter. Распределённый общий лимит между процессами не реализован.
+
+Источник: [settings.py](../../src/duty_schedule/api/settings.py), `ApiSettings`; [auth.py](../../src/duty_schedule/api/auth.py), `verify_api_key`; [ratelimit.py](../../src/duty_schedule/api/ratelimit.py).
+
+### API-003 — What-if
+
+What-if принимает baseline и от одного до пяти вариантов. Изменение месяца или года верхнего уровня патчем запрещено. Успех возвращает `baseline` и `variants` с метриками и различиями; отдельный неуспешный вариант остаётся в ответе HTTP 200 со статусом `error` и пустыми полями результата. Неверный baseline даёт 400, неверное количество вариантов — 422, ошибка получения календаря — 502.
+
+Источник: [whatif.py](../../src/duty_schedule/api/routes/whatif.py), `compare_scenarios`; [whatif_service.py](../../src/duty_schedule/api/whatif_service.py), `run_whatif`, `apply_patch`; [schemas.py](../../src/duty_schedule/api/schemas.py), `WhatIfRequest`.
+
+## Граница этой фиксации
+
+Baseline фиксирует проверенные примеры и наблюдаемую реализацию, сохраняя различия greedy/CP-SAT, CLI/UI/API и строгости проверок. Исправление поведения оформляется отдельной спецификацией изменения с собственными критериями приёмки. В частности, перенос проекта на SDD сам по себе не меняет времена смен, алгоритмы, правила оплаты, API или поведение обработки ошибок.
+
+## 2026-10-11 — актуализация аудита012
+
+Исторические ссылки на `_build_day` выше относятся к исходному коммиту.
+Retired helper и три селектора удалены по AUD-006; traceability SCH-002/SCH-008
+теперь указывает на сценарии `TestBuildCandidate`, проверяющие действующий
+месячный генератор. Непокрытый день возвращает failed candidate/diagnostic,
+а не исключение старого helper. Это текущий факт, а не переписывание истории.
+Полная карта: [индекс](../../docs/project-index.md).
+
+## 2026-10-11 — вновь проверенное поведение 014–017
+
+Strict Config и внешний Schedule отвергают неизвестные поля; legacy team_lead мигрируется с явным предупреждением. Mismatched calendar и invalid merged what-if variants возвращают422 до поиска. Имена проходят UI/XLS без comma splitting. Неизменённая история сохраняет полные counters/source.
+
+UI поддерживает origin-local autosave/backup/conflict и явные неприменённые формы. Repair сохраняет baseline, не создаёт ревизию на no-op check и отличает bounded от proven minimum. Качество подписывает month_only/two_months и verified/missing/stale; source previous active revision проверяется по ID/config/days. PDF boundary table и XLS escaped source ID проверены на реальном renderer/export boundary. Исторический baseline выше не заменяет текущие evidence014–017.

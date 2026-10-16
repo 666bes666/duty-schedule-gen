@@ -64,7 +64,14 @@ def _config_pin_unknown_employee() -> Config:
 
 def _config_duplicate_employee_names() -> Config:
     emps = _base_employees()
-    emps.append(Employee(name="М0", city=City.MOSCOW, schedule_type=ScheduleType.FLEXIBLE))
+    emps.append(
+        Employee(
+            name="М0",
+            employee_id="second-m0",
+            city=City.MOSCOW,
+            schedule_type=ScheduleType.FLEXIBLE,
+        )
+    )
     return Config(month=3, year=2025, employees=emps)
 
 

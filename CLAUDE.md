@@ -1,5 +1,22 @@
 # Claude Code Instructions for duty-schedule-gen
 
+## SDD и общие инструкции
+
+Сначала прочитайте [AGENTS.md](AGENTS.md),
+[конституцию](.specify/memory/constitution.md), [руководство SDD](docs/sdd.md) и
+документы выбранного изменения в `specs/`. Общие правила SDD действуют вместе с
+инструкциями ниже. Claude skills находятся в `.claude/skills/` и вызываются как
+`/speckit-specify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze` и
+`/speckit-implement`. Feature-ветки не создаются; git extension не используется.
+
+## Запрет изменений вне SDD
+
+Все правила раздела «Обязательный SDD: запрет обхода» в AGENTS.md обязательны.
+Ни hotfix, ни рефакторинг, ни тесты/CI/docs не освобождаются от spec-first.
+До реализации нужны plan/tasks/traceability с точным `files`; перед коммитом
+проверяется staged snapshot. Для холодного старта используйте docs/cold-start.md
+и scripts/project_context.py.
+
 ## Branching Flow
 
 dev -> test -> main
@@ -29,9 +46,11 @@ NEVER push directly to main (except hotfixes).
 
 Run locally:
 ```
-uv run ruff check src/ tests/
-uv run ruff format --check src/ tests/
-uv run mypy src/
+uv run python scripts/check_sdd.py --base HEAD~1
+uv run python scripts/project_context.py --check
+uv run ruff check src/ tests/ scripts/
+uv run ruff format --check src/ tests/ scripts/
+uv run mypy src/ scripts/
 uv run pytest tests/ -q --ignore=tests/ui
 ```
 
@@ -41,7 +60,7 @@ Ensure CI on current branch is green.
 
 ## Code Rules
 
-- NO comments in source code (no `#`-comments). All notes go in NOTES.md
+- NO comments in source code (no `#`-comments). Decisions go in the selected spec and plan
 - No docstrings required
 - Coverage minimum: 80%. New features MUST include tests
 - Conventional Commits: feat:, fix:, docs:, test:, refactor:, ci:
@@ -73,6 +92,10 @@ Do NOT use Docker for cloud deployment — this is a local-only setup.
 | main | ci-main.yml | + 6 platforms, UI/Playwright, system, e2e, build | ~2min |
 | main (push) | ci-tag.yml | auto-create git tag on version change | ~5s |
 | tag v*.*.* | release.yml | build → draft release → tests → publish | ~1min |
+
+Дополнительно `sdd.yml` проверяет SDD-артефакты и OpenAPI snapshot на `dev`, `test` и
+`main`. Это структурная проверка; соответствие реализации требованиям подтверждают
+тесты и ревью.
 
 ### Streamlit healthcheck
 

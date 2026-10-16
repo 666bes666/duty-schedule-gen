@@ -1,0 +1,115 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "DEL-001",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_required_test_report_rejects_missing_or_unexecuted_tests",
+        "tests/unit/test_solver.py",
+        "tests/unit/test_planning_rules.py",
+        "tests/unit/test_search_outcomes.py",
+        "tests/unit/test_delivery_workflows.py::test_macos_native_pdf_precedes_full_regression"
+      ]
+    },
+    {
+      "id": "DEL-002",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_packaged_smoke_payload_generates_ready",
+        "tests/ui/test_project_journey.py",
+        "tests/unit/test_cli_project.py",
+        "tests/e2e/test_cli_workflow.py"
+      ]
+    },
+    {
+      "id": "DEL-003",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit",
+        "tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates",
+        "tests/performance/test_scheduler_benchmark.py",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_fails_closed",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_requires_fresh_matching_result",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_bootstrap_needs_no_checkout",
+        "tests/unit/test_delivery_workflows.py::test_benchmark_workflows_remeasure_previous_sha",
+        "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_rejects_invalid_records"
+      ]
+    },
+    {
+      "id": "DEL-004",
+      "tests": [
+        "tests/unit/test_delivery_workflows.py::test_release_verifies_same_sha_version_and_bytes",
+        "tests/unit/test_delivery_workflows.py::test_release_rejects_existing_tag_for_other_sha",
+        "tests/unit/test_delivery_workflows.py::test_release_graph_requires_all_verified_artifact_gates"
+      ]
+    }
+  ],
+  "files": [
+    ".github/actions/setup-python/action.yml",
+    ".github/actions/streamlit-smoke/action.yml",
+    ".github/workflows/ci-dev.yml",
+    ".github/workflows/ci-main.yml",
+    ".github/workflows/ci-tag.yml",
+    ".github/workflows/ci-test.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/sdd.yml",
+    ".github/workflows/solver-tests.yml",
+    "Dockerfile",
+    "docker-compose.yml",
+    "pyproject.toml",
+    "scripts/artifact_manifest.py",
+    "scripts/artifact_smoke.py",
+    "scripts/benchmark_baseline.py",
+    "scripts/check_junit.py",
+    "scripts/container_smoke.py",
+    "specs/011-delivery-assurance/evidence.md",
+    "specs/011-delivery-assurance/plan.md",
+    "specs/011-delivery-assurance/spec.md",
+    "specs/011-delivery-assurance/tasks.md",
+    "specs/011-delivery-assurance/traceability.json",
+    "src/duty_schedule/__init__.py",
+    "tests/e2e/__init__.py",
+    "tests/e2e/__pycache__/__init__.cpython-312.pyc",
+    "tests/e2e/__pycache__/conftest.cpython-312-pytest-9.1.0.pyc",
+    "tests/e2e/__pycache__/conftest.cpython-312-pytest-9.1.1.pyc",
+    "tests/e2e/__pycache__/test_cli_workflow.cpython-312-pytest-9.1.0.pyc",
+    "tests/e2e/__pycache__/test_cli_workflow.cpython-312-pytest-9.1.1.pyc",
+    "tests/e2e/__pycache__/test_streamlit_api.cpython-312-pytest-9.1.0.pyc",
+    "tests/e2e/__pycache__/test_streamlit_api.cpython-312-pytest-9.1.1.pyc",
+    "tests/e2e/conftest.py",
+    "tests/e2e/test_cli_workflow.py",
+    "tests/e2e/test_streamlit_api.py",
+    "tests/performance/__init__.py",
+    "tests/performance/__pycache__/__init__.cpython-312.pyc",
+    "tests/performance/__pycache__/test_large_team.cpython-312-pytest-9.1.0.pyc",
+    "tests/performance/__pycache__/test_large_team.cpython-312-pytest-9.1.1.pyc",
+    "tests/performance/__pycache__/test_scheduler_benchmark.cpython-312-pytest-9.1.0.pyc",
+    "tests/performance/__pycache__/test_scheduler_benchmark.cpython-312-pytest-9.1.1.pyc",
+    "tests/performance/test_large_team.py",
+    "tests/performance/test_scheduler_benchmark.py",
+    "tests/ui/__init__.py",
+    "tests/ui/__pycache__/__init__.cpython-312.pyc",
+    "tests/ui/__pycache__/conftest.cpython-312-pytest-9.1.1.pyc",
+    "tests/ui/__pycache__/fixtures.cpython-312.pyc",
+    "tests/ui/__pycache__/test_export_download.cpython-312-pytest-9.1.1.pyc",
+    "tests/ui/__pycache__/test_page_load.cpython-312-pytest-9.1.1.pyc",
+    "tests/ui/__pycache__/test_project_journey.cpython-312-pytest-9.1.1.pyc",
+    "tests/ui/__pycache__/test_project_journey.cpython-312.pyc",
+    "tests/ui/__pycache__/test_schedule_generation.cpython-312-pytest-9.1.1.pyc",
+    "tests/ui/conftest.py",
+    "tests/ui/fixtures.py",
+    "tests/ui/test_export_download.py",
+    "tests/ui/test_page_load.py",
+    "tests/ui/test_project_journey.py",
+    "tests/ui/test_schedule_generation.py",
+    "tests/unit/test_cli_project.py",
+    "tests/unit/test_delivery_workflows.py",
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_search_outcomes.py",
+    "tests/unit/test_solver.py",
+    "uv.lock",
+    "docs/project-index.md",
+    "docs/project-index.json",
+    "specs/011-delivery-assurance/analysis.md"
+  ]
+}

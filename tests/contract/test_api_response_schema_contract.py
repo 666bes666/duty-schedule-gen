@@ -14,7 +14,16 @@ from tests.contract.conftest import (
 
 CONFIG_VALIDATE_FIELDS = {"valid", "errors", "warnings"}
 HOLIDAYS_FIELDS = {"year", "month", "holidays", "short_days"}
-SCHEDULE_TOP_FIELDS = {"config", "days", "metadata"}
+SCHEDULE_TOP_FIELDS = {
+    "config",
+    "days",
+    "metadata",
+    "status",
+    "diagnostics",
+    "search_status",
+    "revision_id",
+    "monthly_targets",
+}
 DAY_SCHEDULE_FIELDS = {
     "date",
     "is_holiday",
@@ -24,6 +33,8 @@ DAY_SCHEDULE_FIELDS = {
     "workday",
     "day_off",
     "vacation",
+    "sick_leave",
+    "workday_hours",
 }
 EMPLOYEE_STATS_FIELDS = {
     "name",
@@ -44,6 +55,15 @@ EMPLOYEE_STATS_FIELDS = {
     "paired_off",
     "total_hours",
     "cost_hours",
+    "sick_leave",
+    "calendar_hours",
+    "absence_reduction_hours",
+    "adjusted_hours",
+    "selected_hours",
+    "target_hours",
+    "hours_delta",
+    "boundary_max_streak_work",
+    "boundary_max_streak_rest",
 }
 SUMMARY_FIELDS = {
     "fairness_score",
@@ -51,12 +71,22 @@ SUMMARY_FIELDS = {
     "coverage_gaps",
     "isolated_off_total",
     "weekend_balance_stddev",
+    "quality_context",
 }
-VARIANT_FIELDS = {"name", "status", "error", "stats", "summary", "deltas"}
+VARIANT_FIELDS = {
+    "name",
+    "status",
+    "error",
+    "stats",
+    "summary",
+    "deltas",
+    "diagnostics",
+    "schedule",
+}
 EMPLOYEE_DELTA_FIELDS = {"name", "metrics"}
 METRIC_DELTA_FIELDS = {"baseline", "variant", "delta", "direction"}
 WHATIF_TOP_FIELDS = {"baseline", "variants"}
-SCENARIO_RESULT_FIELDS = {"stats", "summary"}
+SCENARIO_RESULT_FIELDS = {"stats", "summary", "status", "diagnostics", "schedule"}
 
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 

@@ -82,17 +82,17 @@ class TestGreedyPlanningUsesDefault:
         assert _max_cw(emp) == MAX_CONSECUTIVE_WORKING_DEFAULT
 
 
-class TestPostprocessUsesFlex:
+class TestPostprocessUsesMandatoryLimit:
     """_max_cw_postprocess == FLEX (=5) для гибких дежурных без override."""
 
-    def test_flex_duty_returns_flex(self):
+    def test_flex_duty_keeps_soft_five_separate_from_mandatory_six(self):
         emp = _emp(
             schedule_type=ScheduleType.FLEXIBLE,
             on_duty=True,
             max_consecutive_working=None,
         )
-        assert _max_cw_postprocess(emp) == MAX_CONSECUTIVE_WORKING_FLEX
-        assert _max_cw_postprocess(emp) == 5
+        assert _max_cw_postprocess(emp) == MAX_CONSECUTIVE_WORKING_DEFAULT
+        assert _max_cw_postprocess(emp) == 6
 
     def test_five_two_returns_default(self):
         emp = _emp(
@@ -151,14 +151,24 @@ class TestNoLiteralFiveInPlanningPaths:
     """Регрессионный тест: ни UI builders, ни CP-SAT не используют литерал 5."""
 
     def test_ui_builders_imports_default(self):
-        import inspect
+        import pandas as pd
 
         from duty_schedule.ui import builders
 
-        src = inspect.getsource(builders)
-        assert "MAX_CONSECUTIVE_WORKING_DEFAULT" in src, (
-            "ui/builders.py должен импортировать MAX_CONSECUTIVE_WORKING_DEFAULT"
+        frame = pd.DataFrame(
+            [
+                {
+                    "Имя": "Гибкий",
+                    "Город": "Москва",
+                    "График": "Гибкий",
+                    "Дежурный": True,
+                    "Макс. подряд": None,
+                }
+            ]
         )
+        employees, errors = builders._build_employees(frame)
+        assert not errors
+        assert _max_cw(employees[0]) == 6
 
     def test_solver_imports_default(self):
         import inspect
@@ -182,8 +192,8 @@ class TestEntryPointsAgreeOnLimit:
     @pytest.mark.parametrize(
         "name,city,schedule_type,on_duty,expected_planning,expected_postprocess",
         [
-            ("FlexMoscowDuty", City.MOSCOW, ScheduleType.FLEXIBLE, True, 6, 5),
-            ("FlexKhabDuty", City.KHABAROVSK, ScheduleType.FLEXIBLE, True, 6, 5),
+            ("FlexMoscowDuty", City.MOSCOW, ScheduleType.FLEXIBLE, True, 6, 6),
+            ("FlexKhabDuty", City.KHABAROVSK, ScheduleType.FLEXIBLE, True, 6, 6),
             ("FlexMoscowNonDuty", City.MOSCOW, ScheduleType.FLEXIBLE, False, 6, 6),
             ("FiveTwoMoscowDuty", City.MOSCOW, ScheduleType.FIVE_TWO, True, 6, 6),
         ],

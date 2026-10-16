@@ -12,4 +12,9 @@ output/
 *.ics
 .env
 .hypothesis/
-frontend/
+.ruff_cache/
+.mypy_cache/
+.benchmarks/
+test-results/
+playwright-report/
+*-results.xml

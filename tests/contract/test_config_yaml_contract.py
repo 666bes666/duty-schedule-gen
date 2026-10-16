@@ -6,6 +6,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from duty_schedule.input_validation import migrate_legacy_config
 from duty_schedule.models import Config
 
 EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "config.example.yaml"
@@ -14,7 +15,7 @@ EXAMPLE_CONFIG = Path(__file__).resolve().parents[2] / "config.example.yaml"
 class TestConfigYamlContract:
     def test_example_config_loads(self):
         raw = yaml.safe_load(EXAMPLE_CONFIG.read_text(encoding="utf-8"))
-        cfg = Config.model_validate(raw)
+        cfg = Config.model_validate(migrate_legacy_config(raw))
         assert cfg.month > 0
         assert len(cfg.employees) > 0
 
@@ -53,7 +54,7 @@ employees:
         assert cfg.month == 1
         assert cfg.seed == 42
 
-    def test_unknown_fields_ignored(self):
+    def test_unknown_fields_rejected(self):
         yaml_str = """
 month: 1
 year: 2025
@@ -80,8 +81,8 @@ employees:
     schedule_type: flexible
 """
         raw = yaml.safe_load(yaml_str)
-        cfg = Config.model_validate(raw)
-        assert cfg.month == 1
+        with pytest.raises(ValidationError, match="unknown_field"):
+            Config.model_validate(migrate_legacy_config(raw))
 
     def test_missing_employees_raises(self):
         yaml_str = """

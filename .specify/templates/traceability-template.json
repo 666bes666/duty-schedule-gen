@@ -1,0 +1,11 @@
+{
+  "kind": "change",
+  "status": "draft",
+  "files": ["src/duty_schedule/feature.py", "tests/unit/test_feature.py"],
+  "requirements": [
+    {
+      "id": "FR-001",
+      "tests": ["tests/unit/test_feature.py::test_acceptance"]
+    }
+  ]
+}

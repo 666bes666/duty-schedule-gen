@@ -1,0 +1,81 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "files": [
+    "app.py",
+    "src/duty_schedule/ui/onboarding.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/state.py",
+    "src/duty_schedule/ui/mappings.py",
+    "src/duty_schedule/ui/autosave.py",
+    "src/duty_schedule/ui/autosave_component/index.html",
+    "tests/unit/test_personnel_onboarding.py",
+    "tests/unit/test_ui_autosave.py",
+    "tests/ui/test_personnel_onboarding.py",
+    "tests/ui/test_first_month_journey.py",
+    "tests/ui/test_product_recovery.py",
+    "docs/scheduling-workflow.md",
+    "docs/project-index.md",
+    "docs/project-index.json",
+    "specs/018-personnel-onboarding/analysis.md",
+    "tests/ui/test_schedule_generation.py",
+    "tests/ui/conftest.py",
+    "tests/unit/test_product_integrity.py",
+    "tests/unit/test_ui_workflow.py",
+    "tests/ui/test_project_journey.py"
+  ],
+  "requirements": [
+    {
+      "id": "STAFF-001",
+      "tests": [
+        "tests/ui/test_personnel_onboarding.py::test_schedule_and_duty_are_independent",
+        "tests/unit/test_personnel_onboarding.py::test_config_validation_remains_enforced"
+      ]
+    },
+    {
+      "id": "STAFF-002",
+      "tests": [
+        "tests/ui/test_personnel_onboarding.py::test_empty_start_and_city_lists_create_actual_roster",
+        "tests/unit/test_personnel_onboarding.py::test_city_lists_preserve_names_and_reject_duplicates_atomically",
+        "tests/unit/test_personnel_onboarding.py::test_native_personnel_operations_are_atomic_and_preserve_ids"
+      ]
+    },
+    {
+      "id": "STAFF-003",
+      "tests": [
+        "tests/ui/test_personnel_onboarding.py::test_partial_group_roles_and_independent_city_counts"
+      ]
+    },
+    {
+      "id": "STAFF-004",
+      "tests": [
+        "tests/unit/test_personnel_onboarding.py::test_incomplete_roles_never_start_search",
+        "tests/ui/test_personnel_onboarding.py::test_invalid_team_preserves_draft_and_explains_fix",
+        "tests/ui/test_personnel_onboarding.py::test_onboarding_to_first_month_without_all_cell_pins"
+      ]
+    },
+    {
+      "id": "STAFF-005",
+      "tests": [
+        "tests/unit/test_personnel_onboarding.py::test_reapplying_and_reordering_preserve_employee_ids",
+        "tests/ui/test_personnel_onboarding.py::test_partial_draft_reload_and_backup",
+        "tests/unit/test_ui_autosave.py::test_draft_failure_conflict_and_transition_preserve_backup",
+        "tests/ui/test_personnel_onboarding.py::test_draft_two_tabs_conflict_preserves_newer_snapshot",
+        "tests/ui/test_personnel_onboarding.py::test_draft_quota_and_transition_failure_preserve_backup",
+        "tests/ui/test_personnel_onboarding.py::test_corrupt_draft_recovers_previous_snapshot",
+        "tests/unit/test_personnel_onboarding.py::test_rename_and_explicit_unset_preserve_identity",
+        "tests/ui/test_personnel_onboarding.py::test_native_rows_edit_remove_and_reload"
+      ]
+    },
+    {
+      "id": "STAFF-006",
+      "tests": [
+        "tests/ui/test_personnel_onboarding.py::test_existing_project_and_yaml_bypass_onboarding_without_loss",
+        "tests/unit/test_personnel_onboarding.py::test_invalid_import_preserves_draft_and_old_snapshots_restore",
+        "tests/unit/test_product_integrity.py::test_ui_period_change_selects_new_calendar_before_validation",
+        "tests/unit/test_ui_workflow.py::test_real_streamlit_project_edit_check_and_reopen",
+        "tests/ui/test_personnel_onboarding.py::test_new_project_starts_empty_without_deleting_old_snapshot"
+      ]
+    }
+  ]
+}

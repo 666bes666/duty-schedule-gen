@@ -1,0 +1,738 @@
+[
+  {
+    "name": "absl-py",
+    "before": [
+      "2.4.0"
+    ],
+    "after": [
+      "2.5.1"
+    ]
+  },
+  {
+    "name": "altair",
+    "before": [
+      "6.2.1"
+    ],
+    "after": [
+      "6.3.0"
+    ]
+  },
+  {
+    "name": "annotated-doc",
+    "before": [
+      "0.0.4"
+    ],
+    "after": [
+      "0.0.5"
+    ]
+  },
+  {
+    "name": "annotated-types",
+    "before": [
+      "0.7.0"
+    ],
+    "after": [
+      "0.8.0"
+    ]
+  },
+  {
+    "name": "anyio",
+    "before": [
+      "4.13.0"
+    ],
+    "after": [
+      "4.15.1"
+    ]
+  },
+  {
+    "name": "ast-serialize",
+    "before": [
+      "0.5.0"
+    ],
+    "after": [
+      "0.12.1"
+    ]
+  },
+  {
+    "name": "blinker",
+    "before": [
+      "1.9.0"
+    ],
+    "after": []
+  },
+  {
+    "name": "brotlicffi",
+    "before": [
+      "1.2.0.1"
+    ],
+    "after": [
+      "1.2.0.2"
+    ]
+  },
+  {
+    "name": "cachetools",
+    "before": [
+      "7.1.4"
+    ],
+    "after": []
+  },
+  {
+    "name": "certifi",
+    "before": [
+      "2026.5.20"
+    ],
+    "after": [
+      "2026.7.22"
+    ]
+  },
+  {
+    "name": "cffi",
+    "before": [
+      "2.0.0"
+    ],
+    "after": [
+      "2.1.1"
+    ]
+  },
+  {
+    "name": "charset-normalizer",
+    "before": [
+      "3.4.7"
+    ],
+    "after": [
+      "3.5.2"
+    ]
+  },
+  {
+    "name": "click",
+    "before": [
+      "8.4.1"
+    ],
+    "after": [
+      "8.5.0"
+    ]
+  },
+  {
+    "name": "coverage",
+    "before": [
+      "7.14.1"
+    ],
+    "after": [
+      "7.16.2"
+    ]
+  },
+  {
+    "name": "cssselect2",
+    "before": [
+      "0.9.0"
+    ],
+    "after": [
+      "0.10.1"
+    ]
+  },
+  {
+    "name": "cyclonedx-python-lib",
+    "before": [
+      "11.10.0"
+    ],
+    "after": [
+      "11.12.0"
+    ]
+  },
+  {
+    "name": "fastapi",
+    "before": [
+      "0.136.3"
+    ],
+    "after": [
+      "0.143.0"
+    ]
+  },
+  {
+    "name": "filelock",
+    "before": [
+      "3.29.4"
+    ],
+    "after": [
+      "4.1.0"
+    ]
+  },
+  {
+    "name": "fonttools",
+    "before": [
+      "4.63.0"
+    ],
+    "after": [
+      "4.66.1"
+    ]
+  },
+  {
+    "name": "gitdb",
+    "before": [
+      "4.0.12"
+    ],
+    "after": []
+  },
+  {
+    "name": "gitpython",
+    "before": [
+      "3.1.50"
+    ],
+    "after": []
+  },
+  {
+    "name": "greenlet",
+    "before": [
+      "3.5.1"
+    ],
+    "after": [
+      "3.5.6"
+    ]
+  },
+  {
+    "name": "httptools",
+    "before": [
+      "0.8.0"
+    ],
+    "after": [
+      "0.9.0"
+    ]
+  },
+  {
+    "name": "hypothesis",
+    "before": [
+      "6.155.2"
+    ],
+    "after": [
+      "6.168.5"
+    ]
+  },
+  {
+    "name": "icalendar",
+    "before": [
+      "7.1.2"
+    ],
+    "after": [
+      "7.3.0"
+    ]
+  },
+  {
+    "name": "identify",
+    "before": [
+      "2.6.19"
+    ],
+    "after": [
+      "2.6.20"
+    ]
+  },
+  {
+    "name": "idna",
+    "before": [
+      "3.18"
+    ],
+    "after": [
+      "3.20"
+    ]
+  },
+  {
+    "name": "iniconfig",
+    "before": [
+      "2.3.0"
+    ],
+    "after": [
+      "2.3.1"
+    ]
+  },
+  {
+    "name": "librt",
+    "before": [
+      "0.11.0"
+    ],
+    "after": [
+      "0.16.0"
+    ]
+  },
+  {
+    "name": "markupsafe",
+    "before": [
+      "3.0.3"
+    ],
+    "after": [
+      "3.0.4"
+    ]
+  },
+  {
+    "name": "msgpack",
+    "before": [
+      "1.2.0"
+    ],
+    "after": [
+      "1.2.3"
+    ]
+  },
+  {
+    "name": "mypy",
+    "before": [
+      "2.1.0"
+    ],
+    "after": [
+      "2.4.0"
+    ]
+  },
+  {
+    "name": "narwhals",
+    "before": [
+      "2.22.1"
+    ],
+    "after": [
+      "2.26.0"
+    ]
+  },
+  {
+    "name": "nodeenv",
+    "before": [
+      "1.10.0"
+    ],
+    "after": [
+      "1.11.0"
+    ]
+  },
+  {
+    "name": "numpy",
+    "before": [
+      "2.4.6"
+    ],
+    "after": [
+      "2.5.3"
+    ]
+  },
+  {
+    "name": "opentelemetry-api",
+    "before": [],
+    "after": [
+      "1.45.1"
+    ]
+  },
+  {
+    "name": "packaging",
+    "before": [
+      "26.2"
+    ],
+    "after": [
+      "26.3"
+    ]
+  },
+  {
+    "name": "pandas",
+    "before": [
+      "3.0.3"
+    ],
+    "after": [
+      "3.0.6"
+    ]
+  },
+  {
+    "name": "pandas-stubs",
+    "before": [
+      "3.0.3.260530"
+    ],
+    "after": [
+      "3.0.5.260914"
+    ]
+  },
+  {
+    "name": "pillow",
+    "before": [
+      "12.2.0"
+    ],
+    "after": [
+      "12.3.0"
+    ]
+  },
+  {
+    "name": "pip",
+    "before": [
+      "26.1.2"
+    ],
+    "after": [
+      "26.2.1"
+    ]
+  },
+  {
+    "name": "pip-api",
+    "before": [
+      "0.0.34"
+    ],
+    "after": [
+      "0.0.35"
+    ]
+  },
+  {
+    "name": "platformdirs",
+    "before": [
+      "4.10.0"
+    ],
+    "after": [
+      "4.12.4"
+    ]
+  },
+  {
+    "name": "playwright",
+    "before": [
+      "1.60.0"
+    ],
+    "after": [
+      "1.63.0"
+    ]
+  },
+  {
+    "name": "pre-commit",
+    "before": [
+      "4.6.0"
+    ],
+    "after": [
+      "4.6.2"
+    ]
+  },
+  {
+    "name": "py-cpuinfo",
+    "before": [
+      "9.0.0"
+    ],
+    "after": []
+  },
+  {
+    "name": "py-cpuinfo2",
+    "before": [],
+    "after": [
+      "10.1.1"
+    ]
+  },
+  {
+    "name": "pyarrow",
+    "before": [
+      "24.0.0"
+    ],
+    "after": [
+      "25.0.1"
+    ]
+  },
+  {
+    "name": "pycparser",
+    "before": [
+      "3.0"
+    ],
+    "after": [
+      "3.11"
+    ]
+  },
+  {
+    "name": "pydantic",
+    "before": [
+      "2.13.4"
+    ],
+    "after": [
+      "2.14.0"
+    ]
+  },
+  {
+    "name": "pydantic-core",
+    "before": [
+      "2.46.4"
+    ],
+    "after": [
+      "2.50.0"
+    ]
+  },
+  {
+    "name": "pydantic-settings",
+    "before": [
+      "2.14.1"
+    ],
+    "after": [
+      "2.15.0"
+    ]
+  },
+  {
+    "name": "pydeck",
+    "before": [
+      "0.9.2"
+    ],
+    "after": [
+      "0.9.3"
+    ]
+  },
+  {
+    "name": "pygments",
+    "before": [
+      "2.20.0"
+    ],
+    "after": [
+      "2.21.0"
+    ]
+  },
+  {
+    "name": "pyparsing",
+    "before": [
+      "3.3.2"
+    ],
+    "after": [
+      "3.3.3"
+    ]
+  },
+  {
+    "name": "pyphen",
+    "before": [
+      "0.17.2"
+    ],
+    "after": [
+      "0.18.1"
+    ]
+  },
+  {
+    "name": "pytest",
+    "before": [
+      "9.1.0"
+    ],
+    "after": [
+      "9.1.1"
+    ]
+  },
+  {
+    "name": "pytest-base-url",
+    "before": [
+      "2.1.0"
+    ],
+    "after": []
+  },
+  {
+    "name": "pytest-benchmark",
+    "before": [
+      "5.2.3"
+    ],
+    "after": [
+      "5.3.0"
+    ]
+  },
+  {
+    "name": "pytest-playwright",
+    "before": [
+      "0.8.0"
+    ],
+    "after": [
+      "0.10.0"
+    ]
+  },
+  {
+    "name": "python-discovery",
+    "before": [
+      "1.4.2"
+    ],
+    "after": [
+      "1.6.1"
+    ]
+  },
+  {
+    "name": "python-dotenv",
+    "before": [
+      "1.2.2"
+    ],
+    "after": [
+      "1.2.4"
+    ]
+  },
+  {
+    "name": "python-slugify",
+    "before": [
+      "8.0.4"
+    ],
+    "after": [
+      "9.1.3"
+    ]
+  },
+  {
+    "name": "rpds-py",
+    "before": [
+      "2026.5.1"
+    ],
+    "after": [
+      "2026.9.1"
+    ]
+  },
+  {
+    "name": "ruff",
+    "before": [
+      "0.15.17"
+    ],
+    "after": [
+      "0.17.0"
+    ]
+  },
+  {
+    "name": "smmap",
+    "before": [
+      "5.0.3"
+    ],
+    "after": []
+  },
+  {
+    "name": "starlette",
+    "before": [
+      "1.3.1"
+    ],
+    "after": [
+      "1.7.0"
+    ]
+  },
+  {
+    "name": "stevedore",
+    "before": [
+      "5.8.0"
+    ],
+    "after": [
+      "5.9.1"
+    ]
+  },
+  {
+    "name": "streamlit",
+    "before": [
+      "1.58.0"
+    ],
+    "after": [
+      "1.65.0"
+    ]
+  },
+  {
+    "name": "tenacity",
+    "before": [
+      "9.1.4"
+    ],
+    "after": []
+  },
+  {
+    "name": "tomli",
+    "before": [
+      "2.4.1"
+    ],
+    "after": [
+      "2.5.0"
+    ]
+  },
+  {
+    "name": "typer",
+    "before": [
+      "0.26.7"
+    ],
+    "after": [
+      "0.27.3"
+    ]
+  },
+  {
+    "name": "types-openpyxl",
+    "before": [
+      "3.1.5.20260518"
+    ],
+    "after": [
+      "3.1.5.20260827"
+    ]
+  },
+  {
+    "name": "typing-extensions",
+    "before": [
+      "4.15.0"
+    ],
+    "after": [
+      "4.16.0"
+    ]
+  },
+  {
+    "name": "typing-inspection",
+    "before": [
+      "0.4.2"
+    ],
+    "after": [
+      "0.4.4"
+    ]
+  },
+  {
+    "name": "tzdata",
+    "before": [
+      "2026.2"
+    ],
+    "after": [
+      "2026.5"
+    ]
+  },
+  {
+    "name": "urllib3",
+    "before": [
+      "2.7.0"
+    ],
+    "after": [
+      "2.8.0"
+    ]
+  },
+  {
+    "name": "uvicorn",
+    "before": [
+      "0.49.0"
+    ],
+    "after": [
+      "0.54.0"
+    ]
+  },
+  {
+    "name": "uvloop",
+    "before": [
+      "0.22.1"
+    ],
+    "after": [
+      "0.23.0"
+    ]
+  },
+  {
+    "name": "virtualenv",
+    "before": [
+      "21.5.0"
+    ],
+    "after": [
+      "21.14.6"
+    ]
+  },
+  {
+    "name": "watchfiles",
+    "before": [
+      "1.2.0"
+    ],
+    "after": [
+      "1.3.0"
+    ]
+  },
+  {
+    "name": "weasyprint",
+    "before": [
+      "69.0"
+    ],
+    "after": [
+      "70.0"
+    ]
+  },
+  {
+    "name": "webencodings",
+    "before": [
+      "0.5.1"
+    ],
+    "after": [
+      "0.6.1"
+    ]
+  },
+  {
+    "name": "websockets",
+    "before": [
+      "16.0"
+    ],
+    "after": [
+      "17.2"
+    ]
+  }
+]

@@ -7,12 +7,24 @@ from duty_schedule.api.auth import AuthInvalidError, AuthMissingError
 from duty_schedule.api.ratelimit import RateLimitExceeded
 from duty_schedule.calendar import CalendarError
 from duty_schedule.logging import get_logger
+from duty_schedule.project import ExportBlockedError
 from duty_schedule.scheduler.core import ScheduleError
 
 logger = get_logger(__name__)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ExportBlockedError)
+    async def handle_export_blocked(request: Request, exc: ExportBlockedError) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "schedule_not_ready",
+                "detail": str(exc),
+                "diagnostics": [item.model_dump(mode="json") for item in exc.diagnostics],
+            },
+        )
+
     @app.exception_handler(AuthMissingError)
     async def handle_auth_missing(request: Request, exc: AuthMissingError) -> JSONResponse:
         return JSONResponse(
@@ -54,5 +66,5 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.error("unhandled_exception", path=str(request.url.path), error=str(exc))
         return JSONResponse(
             status_code=500,
-            content={"error": "internal_error", "detail": str(exc)},
+            content={"error": "internal_error", "detail": "An internal error occurred"},
         )

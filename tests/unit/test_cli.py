@@ -9,6 +9,8 @@ import yaml
 from typer.testing import CliRunner
 
 from duty_schedule.cli import app
+from duty_schedule.models import Config
+from tests.conftest import complete_config
 
 runner = CliRunner()
 
@@ -30,7 +32,10 @@ def config_yaml(tmp_path: Path) -> Path:
         ],
     }
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.dump(cfg, allow_unicode=True), encoding="utf-8")
+    typed = complete_config(Config.model_validate(cfg))
+    path.write_text(
+        yaml.safe_dump(typed.model_dump(mode="json"), allow_unicode=True), encoding="utf-8"
+    )
     return path
 
 

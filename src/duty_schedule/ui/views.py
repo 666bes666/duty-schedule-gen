@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import asdict
 from typing import Any
 
 import altair as alt
@@ -7,6 +10,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from duty_schedule.calendar import CalendarError
 from duty_schedule.export.ics import generate_employee_ics_bytes
 from duty_schedule.models import City, Schedule, ScheduleType
 from duty_schedule.stats import EmployeeStats, diff_schedules
@@ -32,11 +36,14 @@ def _schedule_to_calendar_df(schedule: Schedule) -> pd.DataFrame:
         for nm in d.night:
             emp_days.setdefault(nm, {})[header] = "Н"
         for nm in d.workday:
-            emp_days.setdefault(nm, {})[header] = "Р"
+            hours = d.workday_hours.get(nm)
+            emp_days.setdefault(nm, {})[header] = f"Р ({hours}ч)" if hours is not None else "Р"
         for nm in d.day_off:
             emp_days.setdefault(nm, {})[header] = "–"
         for nm in d.vacation:
             emp_days.setdefault(nm, {})[header] = "О"
+        for nm in d.sick_leave:
+            emp_days.setdefault(nm, {})[header] = "Б"
 
     _city_order = {City.MOSCOW: 0, City.KHABAROVSK: 1}
     _sched_order = {ScheduleType.FIVE_TWO: 0, ScheduleType.FLEXIBLE: 1}
@@ -61,7 +68,8 @@ def _schedule_to_calendar_df(schedule: Schedule) -> pd.DataFrame:
 
 
 def _style_calendar_cell(val: object) -> str:
-    color = _CAL_SHIFT_COLORS.get(str(val), "#FFFFFF")
+    code = "Р" if str(val).startswith("Р (") else str(val)
+    color = _CAL_SHIFT_COLORS.get(code, "#D9E2F3" if code == "Б" else "#FFFFFF")
     return f"background-color: {color}; color: #1a1a1a; text-align: center; font-size: 0.85em;"
 
 
@@ -84,6 +92,7 @@ def _render_calendar(schedule: Schedule) -> None:
         _badge("Р", "рабочий"),
         _badge("–", "выходной"),
         _badge("О", "отпуск"),
+        _badge("Б", "больничный"),
     ]
     st.markdown(" &nbsp;·&nbsp; ".join(items), unsafe_allow_html=True)
     height = min(600, 35 * (len(cal_df) + 2))
@@ -98,9 +107,9 @@ def _render_red_flags(stats_list: list[EmployeeStats]) -> None:
             flags.append(f"**{s.name}**: серия работы {s.max_streak_work} дней подряд")
         if s.isolated_off > 2:
             flags.append(f"**{s.name}**: {s.isolated_off} изолированных выходных")
-        delta = s.total_working - s.target
-        if abs(delta) > 2:
-            flags.append(f"**{s.name}**: отклонение от нормы {delta:+d} дн.")
+        delta = s.hours_delta
+        if delta:
+            flags.append(f"**{s.name}**: отклонение от выбранной нормы {delta:+d} ч")
 
     weekend_counts = [s.weekend_work for s in stats_list if s.weekend_work > 0]
     if weekend_counts and len(weekend_counts) >= 2:
@@ -111,7 +120,7 @@ def _render_red_flags(stats_list: list[EmployeeStats]) -> None:
     if flags:
         st.warning("\n".join([f"- {f}" for f in flags]))
     else:
-        st.success("Качество расписания в норме")
+        st.caption("По показателям качества дополнительных замечаний нет")
 
 
 def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
@@ -126,33 +135,39 @@ def _stats_to_dataframe(stats_list: list[EmployeeStats]) -> pd.DataFrame:
                 "Всего смен": s.morning + s.evening + s.night,
                 "Выходных": s.day_off,
                 "Отпуск": s.vacation,
+                "Больничный": s.sick_leave,
                 "Часы": s.total_hours,
                 "Часы с надб.": s.cost_hours,
                 "Вых.раб.": s.weekend_work,
                 "Празд.раб.": s.holiday_work,
                 "Макс.серия": s.max_streak_work,
+                "Макс.серия с границей": s.boundary_max_streak_work,
                 "Изол.вых.": s.isolated_off,
                 "Парн.вых.": s.paired_off,
-                "Норма дн.": s.target,
-                "Факт дн.": s.total_working,
-                "Δ": s.total_working - s.target,
+                "Календарная норма, ч": s.calendar_hours,
+                "После отсутствий, ч": s.adjusted_hours,
+                "Выбранная цель, ч": s.selected_hours,
+                "Факт дней": s.total_working,
+                "Δ ч": s.hours_delta,
             }
         )
     return pd.DataFrame(rows, index=[s.name for s in stats_list])
 
 
-def _render_balance_metrics(stats_list: list[EmployeeStats]) -> None:
-    deltas = np.array([s.total_working - s.target for s in stats_list], dtype=float)
-    weekends = np.array([s.weekend_work for s in stats_list], dtype=float)
-    nights = np.array([s.night for s in stats_list if s.night > 0 or s.morning > 0], dtype=float)
+def _render_balance_metrics(stats_list: list[EmployeeStats], schedule: Schedule) -> None:
+    from duty_schedule.api.whatif_service import compute_summary
 
+    summary = compute_summary(stats_list, schedule)
+    st.caption(
+        f"Окно качества: {summary.quality_context['window']}; "
+        f"история: {summary.quality_context['history']}; "
+        f"источник: {summary.quality_context['source']}; "
+        f"версия: {summary.quality_context['source_revision_id'] or 'без ID'}"
+    )
     c1, c2, c3 = st.columns(3)
-    c1.metric("Разброс нагрузки (σ)", f"{np.std(deltas):.2f}")
-    c2.metric("Разброс выходных (σ)", f"{np.std(weekends):.2f}")
-    if len(nights) >= 2:
-        c3.metric("Разброс ночных (σ)", f"{np.std(nights):.2f}")
-    else:
-        c3.metric("Разброс ночных (σ)", "—")
+    c1.metric("Баланс дежурств", f"{summary.fairness_score:.4f}")
+    c2.metric("Баланс выходных", f"{summary.weekend_balance_stddev:.4f}")
+    c3.metric("Отклонение часов (σ)", f"{np.std([s.hours_delta for s in stats_list]):.2f}")
 
 
 def _render_shift_structure_chart(stats_list: list[EmployeeStats]) -> None:
@@ -208,31 +223,26 @@ def _render_shift_structure_chart(stats_list: list[EmployeeStats]) -> None:
 
 def _render_norm_vs_fact_chart(stats_list: list[EmployeeStats]) -> None:
     rows = []
-    for s in stats_list:
-        rows.append({"Сотрудник": s.name, "Тип": "Норма", "Дней": s.target})
-        rows.append({"Сотрудник": s.name, "Тип": "Факт", "Дней": s.total_working})
-
+    for item in stats_list:
+        for label, hours in (
+            ("Календарная", item.calendar_hours),
+            ("После отсутствий", item.adjusted_hours),
+            ("Выбранная цель", item.selected_hours),
+            ("Факт", item.total_hours),
+        ):
+            rows.append({"Сотрудник": item.name, "Тип": label, "Часы": hours})
     if not rows:
         return
-
-    st.subheader("Норма vs Факт")
-    df = pd.DataFrame(rows)
-
-    sort_order = [s.name for s in sorted(stats_list, key=lambda x: x.total_working - x.target)]
-
+    st.subheader("Норма и фактические часы")
     chart = (
-        alt.Chart(df)
+        alt.Chart(pd.DataFrame(rows))
         .mark_bar()
         .encode(
-            y=alt.Y("Сотрудник:N", sort=sort_order, title=None),
-            x=alt.X("Дней:Q", title="Рабочих дней"),
-            color=alt.Color(
-                "Тип:N",
-                scale=alt.Scale(domain=["Норма", "Факт"], range=["#90A4AE", "#009688"]),
-                title="Тип",
-            ),
+            y=alt.Y("Сотрудник:N", sort=[item.name for item in stats_list], title=None),
+            x=alt.X("Часы:Q", title="Рабочие часы"),
+            color=alt.Color("Тип:N", title="Норма"),
             yOffset="Тип:N",
-            tooltip=["Сотрудник", "Тип", "Дней"],
+            tooltip=["Сотрудник", "Тип", "Часы"],
         )
     )
     st.altair_chart(chart, use_container_width=True)
@@ -242,7 +252,7 @@ def _render_coverage_chart(schedule: Schedule) -> None:
     rows = []
     for d in schedule.days:
         day_label = f"{d.date.day} {_WEEKDAY_RU[d.date.weekday()]}"
-        is_weekend = d.date.weekday() >= 5
+        is_weekend = d.is_holiday
         for shift, names in [
             ("Утро", d.morning),
             ("Вечер", d.evening),
@@ -344,7 +354,6 @@ def _render_weekend_holiday_chart(stats_list: list[EmployeeStats]) -> None:
 
 def _render_load_dashboard(
     schedule: Schedule,
-    employees_df: pd.DataFrame,
     stats_list: list[EmployeeStats] | None = None,
 ) -> None:
     if stats_list is not None and len(stats_list) > 0:
@@ -372,6 +381,7 @@ def _render_load_dashboard(
         "Всего смен",
         "Выходных",
         "Отпуск",
+        "Больничный",
         "Часы",
         "Часы с надб.",
         "Вых.раб.",
@@ -379,9 +389,11 @@ def _render_load_dashboard(
         "Макс.серия",
         "Изол.вых.",
         "Парн.вых.",
-        "Норма дн.",
-        "Факт дн.",
-        "Δ",
+        "Календарная норма, ч",
+        "После отсутствий, ч",
+        "Выбранная цель, ч",
+        "Факт дней",
+        "Δ ч",
     ]
     table_df = show_df[display_cols]
 
@@ -415,13 +427,13 @@ def _render_load_dashboard(
         return ""
 
     styled = (
-        table_df.style.map(_delta_style, subset=["Δ"])
+        table_df.style.map(_delta_style, subset=["Δ ч"])
         .map(_streak_style, subset=["Макс.серия"])
         .map(_isolated_style, subset=["Изол.вых."])
     )
     st.dataframe(styled, use_container_width=True)
 
-    _render_balance_metrics(_stats)
+    _render_balance_metrics(_stats, schedule)
     _render_shift_structure_chart(_stats)
     _render_norm_vs_fact_chart(_stats)
     _render_coverage_chart(schedule)
@@ -429,39 +441,49 @@ def _render_load_dashboard(
 
 
 def _render_changelog(schedule: Schedule) -> None:
-    from duty_schedule.scheduler.changelog import ChangeLog
-
-    cl: ChangeLog | None = schedule.metadata.get("changelog")
-    if not cl or not cl.entries:
-        st.info("Лог оптимизации пуст — постобработка не внесла изменений.")
-        return
-
-    emp_names = sorted({e.employee for e in cl.entries})
-    selected = st.selectbox(
-        "Фильтр по сотруднику",
-        ["Все"] + emp_names,
-        key="changelog_filter",
+    changelog = schedule.metadata.get("changelog")
+    entries = (
+        changelog.get("entries", [])
+        if isinstance(changelog, dict)
+        else [asdict(entry) for entry in changelog.entries]
+        if changelog
+        else []
     )
-
-    entries = cl.entries if selected == "Все" else cl.filter_by_employee(selected)
-
-    rows = []
-    for e in entries:
-        rows.append(
-            {
-                "Этап": e.stage,
-                "Действие": e.action,
-                "Сотрудник": e.employee,
-                "Дата": e.day.isoformat(),
-                "Детали": e.detail,
-            }
+    provenance = schedule.metadata.get("optimization")
+    if provenance:
+        st.write(
+            f"Оптимизация: {provenance['status']}; изменённых ячеек: {provenance['changed_cells']}"
         )
-
-    if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        st.caption(f"Всего записей: {len(rows)}")
+        st.dataframe(
+            pd.DataFrame(
+                {
+                    "Показатель (меньше лучше)": provenance["quality_labels"],
+                    "До": provenance["quality_before"],
+                    "После": provenance["quality_after"],
+                }
+            ),
+            hide_index=True,
+        )
+        st.caption("Ограниченный поиск; глобальный оптимум не доказан.")
     else:
-        st.info("Нет записей для выбранного фильтра.")
+        st.info("log_unavailable: данные об изменениях оптимизации недоступны.")
+    if not entries:
+        return
+    names = sorted({entry["employee"] for entry in entries})
+    selected = st.selectbox("Фильтр по сотруднику", ["Все"] + names, key="changelog_filter")
+    rows = [
+        {
+            "Этап": entry["stage"],
+            "Действие": entry["action"],
+            "Сотрудник": entry["employee"],
+            "Дата": str(entry["day"]),
+            "Детали": entry.get("detail", ""),
+        }
+        for entry in entries
+        if selected == "Все" or entry["employee"] == selected
+    ]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.caption(f"Всего записей: {len(rows)}")
 
 
 SHIFT_LABEL_MAP = {
@@ -471,7 +493,21 @@ SHIFT_LABEL_MAP = {
     "workday": "Рабочий",
     "day_off": "Выходной",
     "vacation": "Отпуск",
+    "sick_leave": "Больничный",
 }
+
+
+def _diff_workday_hours(schedule: Schedule, difference: dict[str, Any], field: str) -> int | None:
+    if difference[f"{field}_shift"] != "workday":
+        return None
+    hours = difference.get(f"{field}_hours")
+    if hours is not None:
+        return int(hours)
+    day = next((day for day in schedule.days if day.date.isoformat() == difference["date"]), None)
+    if day is None:
+        return None
+    calendar = schedule.config.production_calendar
+    return (calendar.hours(day.date) or 8) if calendar else 8
 
 
 def _render_schedule_diff(schedule: Schedule) -> None:
@@ -507,14 +543,16 @@ def _render_schedule_diff(schedule: Schedule) -> None:
 
     rows = []
     for d in diffs:
-        rows.append(
-            {
-                "Дата": d["date"],
-                "Сотрудник": d["employee"],
-                "Было": SHIFT_LABEL_MAP.get(d["old_shift"], d["old_shift"]),
-                "Стало": SHIFT_LABEL_MAP.get(d["new_shift"], d["new_shift"]),
-            }
-        )
+        row = {
+            "Дата": d["date"],
+            "Сотрудник": d["employee"],
+            "Было": SHIFT_LABEL_MAP.get(d["old_shift"], d["old_shift"]),
+            "Стало": SHIFT_LABEL_MAP.get(d["new_shift"], d["new_shift"]),
+        }
+        if "old_hours" in d:
+            row["Было, ч"] = _diff_workday_hours(sched_a, d, "old")
+            row["Стало, ч"] = _diff_workday_hours(sched_b, d, "new")
+        rows.append(row)
 
     st.caption(f"Изменений: {len(rows)}")
 
@@ -529,127 +567,104 @@ def _render_schedule_diff(schedule: Schedule) -> None:
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
-def _render_whatif_panel(
-    schedule: Schedule,
-    holidays: set,
-    short_days: set,
-) -> None:
+def _render_whatif_panel(schedule: Schedule, holidays: set, short_days: set) -> None:
+    from duty_schedule.api.schemas import EmployeeStatsSchema, VariantPatch
     from duty_schedule.api.whatif_service import (
         apply_patch,
         compute_deltas,
+        compute_summary,
         generate_scenario,
     )
-    from duty_schedule.scheduler.core import ScheduleError
+    from duty_schedule.ui.components import WHATIF_PARAMETERS
 
-    config = schedule.config
-
-    st.caption("Создайте до 5 вариантов с изменёнными параметрами и сравните результат с текущим.")
-
+    st.caption("Изменения относятся к текущему месяцу. Другой период рассчитывается диапазоном.")
+    with st.expander("Доступные параметры"):
+        st.write(", ".join(WHATIF_PARAMETERS))
     if "whatif_variants" not in st.session_state:
-        st.session_state["whatif_variants"] = [{"name": "Вариант 1", "patch": {}}]
-
+        st.session_state["whatif_variants"] = [{"name": "Вариант 1", "patch": {"seed": 99}}]
     variants: list[dict] = st.session_state["whatif_variants"]
-
-    _param_options = ["seed", "month", "year"]
-
-    for idx, var in enumerate(variants):
-        with st.expander(var.get("name", f"Вариант {idx + 1}"), expanded=True):
-            var["name"] = st.text_input(
-                "Название", value=var.get("name", f"Вариант {idx + 1}"), key=f"wi_name_{idx}"
+    for index, variant in enumerate(variants):
+        with st.expander(variant["name"], expanded=True):
+            variant["name"] = st.text_input(
+                "Название", value=variant["name"], key=f"wi_name_{index}"
             )
-            _param = st.selectbox(
-                "Параметр",
-                _param_options,
-                key=f"wi_param_{idx}",
+            raw = st.text_area(
+                "Изменения JSON",
+                value=json.dumps(variant["patch"], ensure_ascii=False, indent=2),
+                key=f"wi_patch_{index}",
             )
-            _val = st.number_input("Значение", value=99, key=f"wi_val_{idx}")
-            var["patch"] = {_param: int(_val)}
-
-    _c1, _c2 = st.columns(2)
-    if _c1.button("+ Добавить вариант", disabled=len(variants) >= 5, key="wi_add"):
-        variants.append({"name": f"Вариант {len(variants) + 1}", "patch": {}})
+            try:
+                patch = VariantPatch(name=variant["name"], patch=json.loads(raw))
+                if set(patch.patch) - set(WHATIF_PARAMETERS):
+                    raise ValueError("Изменения содержат неизвестные параметры")
+                variant["patch"] = patch.patch
+                if not patch.patch:
+                    st.caption("Этот вариант не изменяет параметры")
+                variant.pop("error", None)
+            except ValueError as exc:
+                variant["error"] = str(exc)
+                st.error(str(exc))
+    c1, c2 = st.columns(2)
+    if c1.button("+ Добавить вариант", disabled=len(variants) >= 5, key="wi_add"):
+        variants.append({"name": f"Вариант {len(variants) + 1}", "patch": {"seed": 99}})
         st.rerun()
-    if _c2.button("Удалить последний", disabled=len(variants) <= 1, key="wi_remove"):
+    if c2.button("Удалить последний", disabled=len(variants) <= 1, key="wi_remove"):
         variants.pop()
         st.rerun()
+    if st.button("Симулировать", key="wi_run"):
+        from duty_schedule.stats import build_assignments, compute_stats
 
-    if st.button("Симулировать", type="primary", key="wi_run"):
-        try:
-            baseline_stats, baseline_summary, _ = generate_scenario(config, holidays, short_days)
-        except (ScheduleError, Exception) as exc:
-            st.error(f"Ошибка baseline: {exc}")
-            return
-
-        baseline_targets = {s.name: s.target for s in baseline_stats}
-
-        for var in variants:
-            name = var.get("name", "?")
-            patch = var.get("patch", {})
-            if not patch:
-                st.warning(f"{name}: пустой патч")
+        calendar = schedule.config.production_calendar
+        production_days = sum(day.kind != "off" for day in calendar.days) if calendar else 0
+        baseline_raw = compute_stats(
+            schedule, build_assignments(schedule), production_days, short_days=short_days
+        )
+        baseline_stats = [EmployeeStatsSchema.model_validate(asdict(item)) for item in baseline_raw]
+        baseline_summary = compute_summary(baseline_raw, schedule)
+        baseline_targets = {item.name: item.target for item in baseline_stats}
+        for variant in variants:
+            if variant.get("error"):
                 continue
-
             try:
-                variant_config = apply_patch(config, patch)
-                v_stats, v_summary, _ = generate_scenario(variant_config, holidays, short_days)
-            except Exception as exc:
-                st.error(f"{name}: {exc}")
+                config = apply_patch(schedule.config, variant["patch"])
+                stats, summary, generated = generate_scenario(config, holidays, short_days)
+            except (CalendarError, ValueError) as exc:
+                st.error(f"{variant['name']}: {exc}")
                 continue
-
-            variant_targets = {s.name: s.target for s in v_stats}
-            deltas = compute_deltas(baseline_stats, v_stats, baseline_targets, variant_targets)
-
-            st.subheader(name)
-
-            sc1, sc2, sc3 = st.columns(3)
-            sc1.metric(
-                "Fairness",
-                f"{v_summary.fairness_score:.4f}",
-                delta=f"{v_summary.fairness_score - baseline_summary.fairness_score:.4f}",
+            st.subheader(variant["name"])
+            if generated.status != "ready":
+                st.warning("Вариант остаётся диагностическим")
+                st.write([item.detail for item in generated.diagnostics])
+            st.metric(
+                "Баланс дежурств",
+                f"{summary.fairness_score:.4f}",
+                delta=f"{summary.fairness_score - baseline_summary.fairness_score:.4f}",
                 delta_color="inverse",
             )
-            sc2.metric(
-                "Покрытие (пробелы)",
-                v_summary.coverage_gaps,
-                delta=v_summary.coverage_gaps - baseline_summary.coverage_gaps,
-                delta_color="inverse",
+            differences = compute_deltas(
+                baseline_stats, stats, baseline_targets, {item.name: item.target for item in stats}
             )
-            sc3.metric(
-                "Изол. выходных",
-                v_summary.isolated_off_total,
-                delta=v_summary.isolated_off_total - baseline_summary.isolated_off_total,
-                delta_color="inverse",
-            )
-
-            if deltas:
-                delta_rows = []
-                for d in deltas:
-                    for metric_name, m in d.metrics.items():
-                        if m.delta != 0:
-                            delta_rows.append(
-                                {
-                                    "Сотрудник": d.name,
-                                    "Метрика": metric_name,
-                                    "Было": m.baseline,
-                                    "Стало": m.variant,
-                                    "Δ": m.delta,
-                                    "Оценка": m.direction,
-                                }
-                            )
-                if delta_rows:
-                    st.dataframe(
-                        pd.DataFrame(delta_rows),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                else:
-                    st.info("Различий в метриках нет")
+            rows = [
+                {
+                    "Сотрудник": item.name,
+                    "Метрика": metric,
+                    "Было": value.baseline,
+                    "Стало": value.variant,
+                    "Δ": value.delta,
+                }
+                for item in differences
+                for metric, value in item.metrics.items()
+                if value.delta
+            ]
+            if rows:
+                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 
 def render_employee_ics_downloads(schedule: Schedule) -> None:
     year = schedule.config.year
     month = schedule.config.month
-    cache_key = f"ics_cache_{year}_{month}_{id(schedule)}"
+    digest = hashlib.sha256(schedule.model_dump_json().encode()).hexdigest()
+    cache_key = f"ics_cache_{digest}"
 
     if cache_key not in st.session_state:
         st.session_state[cache_key] = {}

@@ -1,0 +1,96 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "requirements": [
+    {
+      "id": "VALID-001",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_all_states_checked_and_absences_not_fabricated",
+        "tests/unit/test_planning_rules.py::test_engines_return_ready_only_with_exact_hours_and_shared_rules",
+        "tests/unit/test_planning_rules.py::test_empty_night_pool_returns_diagnostic_not_false_success",
+        "tests/integration/test_hypothesis.py"
+      ]
+    },
+    {
+      "id": "VALID-002",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_unavailable_sick_leave_and_workday_on_off_are_hard",
+        "tests/unit/test_planning_rules.py::test_role_limits_are_preserved_by_both_engines",
+        "tests/unit/test_planning_rules.py::test_previous_month_evening_and_stale_history"
+      ]
+    },
+    {
+      "id": "VALID-003",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_streak_approval_is_date_employee_value_specific_and_never_allows_eight",
+        "tests/unit/test_planning_rules.py::test_solver_streak_approvals_are_order_independent",
+        "tests/unit/test_planning_rules.py::test_solver_cannot_apply_unmatched_streak_approval",
+        "tests/unit/test_planning_rules.py::test_solver_streak_approval_cannot_reduce_normal_limit"
+      ]
+    },
+    {
+      "id": "VALID-004",
+      "tests": [
+        "tests/unit/test_planning_rules.py::test_validator_rejects_forged_ready_and_missing_calendar_history",
+        "tests/unit/test_search_outcomes.py",
+        "tests/contract/test_revision_api.py::test_plan_returns_diagnostics_but_legacy_generate_rejects_them"
+      ]
+    }
+  ],
+  "files": [
+    "specs/004-scheduling-validity/evidence.md",
+    "specs/004-scheduling-validity/plan.md",
+    "specs/004-scheduling-validity/spec.md",
+    "specs/004-scheduling-validity/tasks.md",
+    "specs/004-scheduling-validity/traceability.json",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/scheduler/__init__.py",
+    "src/duty_schedule/scheduler/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/changelog.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/constraints.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/core.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/greedy.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/multimonth.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/rules.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/solver.cpython-312.pyc",
+    "src/duty_schedule/scheduler/__pycache__/validation.cpython-312.pyc",
+    "src/duty_schedule/scheduler/changelog.py",
+    "src/duty_schedule/scheduler/constraints.py",
+    "src/duty_schedule/scheduler/core.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/multimonth.py",
+    "src/duty_schedule/scheduler/postprocess/__init__.py",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/__init__.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/balance.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/carry_over_calc.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/helpers.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/isolation.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/metrics.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/pipeline.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/quality.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/target.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/__pycache__/validation.cpython-312.pyc",
+    "src/duty_schedule/scheduler/postprocess/balance.py",
+    "src/duty_schedule/scheduler/postprocess/carry_over_calc.py",
+    "src/duty_schedule/scheduler/postprocess/helpers.py",
+    "src/duty_schedule/scheduler/postprocess/isolation.py",
+    "src/duty_schedule/scheduler/postprocess/metrics.py",
+    "src/duty_schedule/scheduler/postprocess/pipeline.py",
+    "src/duty_schedule/scheduler/postprocess/quality.py",
+    "src/duty_schedule/scheduler/postprocess/target.py",
+    "src/duty_schedule/scheduler/postprocess/validation.py",
+    "src/duty_schedule/scheduler/rules.py",
+    "src/duty_schedule/scheduler/solver.py",
+    "src/duty_schedule/scheduler/validation.py",
+    "src/duty_schedule/validation.py",
+    "tests/conftest.py",
+    "tests/contract/test_revision_api.py",
+    "tests/integration/test_full_schedule.py",
+    "tests/integration/test_hypothesis.py",
+    "tests/unit/test_failure_modes.py",
+    "tests/unit/test_max_consecutive_constants.py",
+    "tests/unit/test_models.py",
+    "tests/unit/test_planning_rules.py",
+    "tests/unit/test_search_outcomes.py"
+  ]
+}

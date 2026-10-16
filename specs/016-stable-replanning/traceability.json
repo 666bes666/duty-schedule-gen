@@ -1,0 +1,44 @@
+{
+  "kind": "change",
+  "status": "complete",
+  "files": [
+    "docs/project-index.json",
+    "docs/project-index.md",
+    "specs/016-stable-replanning/evidence.md",
+    "specs/016-stable-replanning/plan.md",
+    "specs/016-stable-replanning/spec.md",
+    "specs/016-stable-replanning/tasks.md",
+    "specs/016-stable-replanning/traceability.json",
+    "src/duty_schedule/models.py",
+    "src/duty_schedule/project.py",
+    "src/duty_schedule/scheduler/core.py",
+    "src/duty_schedule/scheduler/greedy.py",
+    "src/duty_schedule/scheduler/postprocess/quality.py",
+    "src/duty_schedule/scheduler/solver.py",
+    "src/duty_schedule/ui/components.py",
+    "src/duty_schedule/ui/views.py",
+    "tests/integration/test_replanning.py",
+    "tests/ui/test_replanning_journey.py",
+    "tests/unit/test_replanning.py"
+  ],
+  "requirements": [
+    {
+      "id": "REPAIR-001",
+      "tests": [
+        "tests/integration/test_replanning.py::test_both_engines_preserve_valid_baseline_and_pins",
+        "tests/unit/test_replanning.py::test_hours_and_rename_count_by_identity",
+        "tests/unit/test_replanning.py::test_nonzero_repair_matches_exhaustive_oracle",
+        "tests/unit/test_replanning.py::test_nonzero_repair_without_optional_solver_preserves_cells",
+        "tests/unit/test_replanning.py::test_small_repair_matches_independent_minimum_oracle"
+      ]
+    },
+    {
+      "id": "REPAIR-002",
+      "tests": [
+        "tests/ui/test_replanning_journey.py::test_default_repair_and_explicit_rebuild_show_changed_cells",
+        "tests/unit/test_replanning.py::test_failed_repair_does_not_replace_current_version",
+        "tests/unit/test_replanning.py::test_noop_check_preserves_revision_id"
+      ]
+    }
+  ]
+}

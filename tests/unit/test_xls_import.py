@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from openpyxl import Workbook
 
-from duty_schedule.export.xls import export_xls
+from duty_schedule.export.xls import _write_xls
 from duty_schedule.models import (
     City,
     Config,
@@ -61,7 +61,7 @@ def _make_schedule_with_shifts(
 
 def _schedule_to_xls_bytes(schedule: Schedule) -> bytes:
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = export_xls(schedule, Path(tmpdir))
+        path = _write_xls(schedule, Path(tmpdir))
         return path.read_bytes()
 
 
@@ -95,7 +95,7 @@ class TestParseEmptyFile:
 
 
 class TestUnknownLabels:
-    def test_unknown_label_becomes_day_off(self):
+    def test_unknown_label_is_rejected(self):
         wb = Workbook()
         ws = wb.active
         ws.title = "График дежурств"
@@ -114,13 +114,8 @@ class TestUnknownLabels:
         buf = BytesIO()
         wb.save(buf)
 
-        result = parse_carry_over_from_xls(buf.getvalue())
-        assert len(result) == 1
-        co = result[0]
-        assert co.employee_name == "Тест Тестов"
-        assert co.last_shift is None
-        assert co.consecutive_off == 10
-        assert co.consecutive_working == 0
+        with pytest.raises(XlsImportError, match="Неизвестная ячейка"):
+            parse_carry_over_from_xls(buf.getvalue())
 
 
 class TestConsecutiveWorkingAtEnd:
@@ -162,7 +157,7 @@ class TestConsecutiveOffAtEnd:
         co = co_map["Москва 1"]
         assert co.consecutive_off == 2
         assert co.consecutive_working == 0
-        assert co.last_shift is None
+        assert co.last_shift == ShiftType.DAY_OFF
 
 
 class TestConsecutiveSameShift:
@@ -233,5 +228,5 @@ class TestLastShiftDetection:
         result = parse_carry_over_from_xls(xls_bytes)
 
         co_map = {co.employee_name: co for co in result}
-        assert co_map["Москва 1"].last_shift is None
+        assert co_map["Москва 1"].last_shift == ShiftType.DAY_OFF
         assert co_map["Москва 1"].consecutive_off == 10

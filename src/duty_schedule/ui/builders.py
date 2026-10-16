@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 import pandas as pd
 from pydantic import ValidationError
 
 from duty_schedule._errors_fmt import format_validation_errors
-from duty_schedule.constants import MAX_CONSECUTIVE_WORKING_DEFAULT
 from duty_schedule.models import (
     City,
     Config,
@@ -15,10 +13,8 @@ from duty_schedule.models import (
     Employee,
     Schedule,
     ScheduleType,
-    VacationPeriod,
 )
 from duty_schedule.ui.mappings import (
-    _RU_TO_SHIFT,
     _WEEKDAY_RU,
 )
 
@@ -27,62 +23,12 @@ def _build_employees(
     df: pd.DataFrame,
     employee_dates: dict | None = None,
 ) -> tuple[list[Employee], list[str]]:
-    employees: list[Employee] = []
-    errors: list[str] = []
-    ed = employee_dates or {}
+    from duty_schedule.ui.config_io import employees_from_table
 
-    for _, row in df.iterrows():
-        name = str(row["Имя"]).strip()
-        if not name:
-            continue
-
-        city = City.MOSCOW if row["Город"] == "Москва" else City.KHABAROVSK
-        stype = ScheduleType.FLEXIBLE if row["График"] == "Гибкий" else ScheduleType.FIVE_TWO
-
-        cfg = ed.get(name, {"vacations": [], "unavailable": []})
-        vacations: list[VacationPeriod] = []
-        for s, e in cfg.get("vacations", []):
-            try:
-                vacations.append(VacationPeriod(start=s, end=e))
-            except Exception as ex:
-                errors.append(f"«{name}»: {ex}")
-        unavailable: list[date] = list(cfg.get("unavailable", []))
-
-        pref_shift_ru = str(row.get("Предпочт. смена", "")).strip()
-        preferred_shift = _RU_TO_SHIFT.get(pref_shift_ru) if pref_shift_ru else None
-
-        days_off_weekly: list[int] = cfg.get("days_off_weekly", [])
-
-        def _parse_limit(val: Any) -> int | None:
-            try:
-                v = int(val)  # type: ignore[arg-type]
-                return v if v > 0 else None
-            except (ValueError, TypeError):
-                return None
-
-        max_cw = _parse_limit(row.get("Макс. подряд"))
-
-        try:
-            employees.append(
-                Employee(
-                    name=name,
-                    city=city,
-                    schedule_type=stype,
-                    on_duty=bool(row["Дежурный"]),
-                    always_on_duty=bool(row.get("Всегда на деж.", False)),
-                    morning_only=bool(row["Только утро"]),
-                    evening_only=bool(row["Только вечер"]),
-                    vacations=vacations,
-                    unavailable_dates=unavailable,
-                    preferred_shift=preferred_shift,
-                    days_off_weekly=days_off_weekly,
-                    max_consecutive_working=max_cw,
-                )
-            )
-        except Exception as e:
-            errors.append(f"«{name}»: {e}")
-
-    return employees, errors
+    try:
+        return employees_from_table(df, employee_dates), []
+    except (ValueError, TypeError) as exc:
+        return [], [str(exc)]
 
 
 def _schedule_to_edit_df(schedule: Schedule) -> pd.DataFrame:
@@ -91,10 +37,10 @@ def _schedule_to_edit_df(schedule: Schedule) -> pd.DataFrame:
         rows.append(
             {
                 "Дата": f"{d.date.day:02d}.{d.date.month:02d} {_WEEKDAY_RU[d.date.weekday()]}",
-                "Утро 08–17": ", ".join(d.morning),
-                "Вечер 15–00": ", ".join(d.evening),
-                "Ночь 00–08": ", ".join(d.night),
-                "Рабочий день": ", ".join(d.workday),
+                "Утро 08–17": list(d.morning),
+                "Вечер 15–00": list(d.evening),
+                "Ночь 00–08": list(d.night),
+                "Рабочий день": list(d.workday),
             }
         )
     return pd.DataFrame(rows)
@@ -110,8 +56,16 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
         _row = row
 
         def _names(col: str, _r: Any = _row) -> list[str]:
-            val = str(_r.get(col, "")).strip()
-            return [n.strip() for n in val.split(",") if n.strip()] if val else []
+            value = _r.get(col, [])
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                value = []
+            if isinstance(value, str):
+                value = [value] if value else []
+            names = list(value)
+            known = {employee.name for employee in schedule.config.employees}
+            if any(name not in known for name in names):
+                raise ValueError(f"{col}: выберите сотрудника из состава")
+            return names
 
         all_assigned = set(
             _names("Утро 08–17")
@@ -126,11 +80,18 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
             + orig_day.workday
             + orig_day.day_off
             + orig_day.vacation
+            + orig_day.sick_leave
         )
         day_off = [n for n in orig_day.day_off if n not in all_assigned]
-        vacation = [n for n in orig_day.vacation if n not in all_assigned]
+        vacation = list(orig_day.vacation)
+        sick_leave = list(orig_day.sick_leave)
         unassigned = [
-            n for n in orig_all if n not in all_assigned and n not in day_off and n not in vacation
+            n
+            for n in orig_all
+            if n not in all_assigned
+            and n not in day_off
+            and n not in vacation
+            and n not in sick_leave
         ]
         day_off.extend(unassigned)
 
@@ -144,6 +105,12 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
                 workday=_names("Рабочий день"),
                 day_off=day_off,
                 vacation=vacation,
+                sick_leave=sick_leave,
+                workday_hours={
+                    name: hours
+                    for name, hours in orig_day.workday_hours.items()
+                    if name in _names("Рабочий день")
+                },
             )
         )
 
@@ -155,58 +122,9 @@ def _edit_df_to_schedule(df: pd.DataFrame, schedule: Schedule) -> Schedule:
 
 
 def _validate_edited_schedule(schedule: Schedule) -> list[str]:
-    violations: list[str] = []
-    emp_map = {e.name: e for e in schedule.config.employees}
-    days = schedule.days
+    from duty_schedule.scheduler.validation import validate_schedule_result
 
-    for i, day in enumerate(days):
-        if not day.morning:
-            violations.append(f"{day.date}: нет назначений на утреннюю смену")
-        if not day.evening:
-            violations.append(f"{day.date}: нет назначений на вечернюю смену")
-        if not day.night:
-            violations.append(f"{day.date}: нет назначений на ночную смену")
-
-        for name in day.evening:
-            if i + 1 < len(days):
-                next_day = days[i + 1]
-                if name in next_day.morning or name in next_day.workday:
-                    violations.append(
-                        f"{day.date}: {name} работает вечер, "
-                        f"а на {next_day.date} назначен на утро/день"
-                    )
-
-        for name in day.night:
-            emp = emp_map.get(name)
-            if emp and emp.city == City.MOSCOW:
-                violations.append(f"{day.date}: {name} (Москва) назначен на ночную смену")
-
-        for name in day.morning + day.evening:
-            emp = emp_map.get(name)
-            if emp and emp.city == City.KHABAROVSK:
-                violations.append(f"{day.date}: {name} (Хабаровск) назначен на утро/вечер")
-
-    for emp in schedule.config.employees:
-        streak = 0
-        max_cw = emp.max_consecutive_working or MAX_CONSECUTIVE_WORKING_DEFAULT
-        for day in days:
-            working = (
-                emp.name in day.morning
-                or emp.name in day.evening
-                or emp.name in day.night
-                or emp.name in day.workday
-            )
-            if working:
-                streak += 1
-                if streak > max_cw:
-                    violations.append(
-                        f"{emp.name}: серия работы {streak} дней подряд "
-                        f"(макс. {max_cw}) на {day.date}"
-                    )
-            else:
-                streak = 0
-
-    return violations
+    return [item.detail for item in validate_schedule_result(schedule).diagnostics]
 
 
 def _validate_config(df: pd.DataFrame) -> tuple[list[str], list[str]]:

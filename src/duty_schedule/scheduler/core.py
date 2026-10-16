@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-import copy
-import random
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 import structlog
 
 from duty_schedule.constants import (
     MAX_BACKTRACK_ATTEMPTS,
-    MAX_BACKTRACK_DAYS,
 )
 from duty_schedule.logging import get_logger
 from duty_schedule.models import (
     Config,
-    DaySchedule,
     Schedule,
     ShiftType,
 )
@@ -99,7 +95,8 @@ class EmployeeState:
 
 def generate_schedule(
     config: Config,
-    holidays: set[date],
+    holidays: set[date] | None = None,
+    baseline: Schedule | None = None,
 ) -> Schedule:
     ctx_vars = structlog.contextvars.get_contextvars()
     owns_context = "request_id" not in ctx_vars and "operation_id" not in ctx_vars
@@ -107,7 +104,48 @@ def generate_schedule(
         structlog.contextvars.bind_contextvars(operation_id=uuid.uuid4().hex[:8])
 
     try:
-        return _generate_schedule_impl(config, holidays)
+        if baseline is not None:
+            from duty_schedule.scheduler.postprocess.quality import changed_cells, repair_metadata
+            from duty_schedule.scheduler.validation import validate_schedule_result
+
+            names = {e.employee_id: e.name for e in config.employees}
+            rename = {e.name: names.get(e.employee_id, e.name) for e in baseline.config.employees}
+            preserved = baseline.model_copy(deep=True)
+            preserved.config = config.model_copy(deep=True)
+            for day in preserved.days:
+                for shift in ShiftType:
+                    setattr(
+                        day,
+                        shift.value,
+                        [rename.get(name, name) for name in getattr(day, shift.value)],
+                    )
+                day.workday_hours = {
+                    rename.get(name, name): hours for name, hours in day.workday_hours.items()
+                }
+            preserved = validate_schedule_result(preserved)
+            if preserved.status == "ready" and not changed_cells(baseline, preserved):
+                from duty_schedule.scheduler.postprocess.quality import optimization_provenance
+
+                preserved.search_status = "preserved_baseline"
+                preserved.metadata["repair"] = repair_metadata(baseline, preserved, "proven_zero")
+                preserved.metadata["optimization"] = optimization_provenance(
+                    baseline, preserved, "preserved_baseline"
+                )
+                from duty_schedule.quality_history import quality_report
+
+                preserved.metadata["quality"] = quality_report(preserved)
+                return preserved
+        result = _generate_schedule_impl(config, holidays, baseline)
+        if baseline is not None:
+            from duty_schedule.scheduler.postprocess.quality import repair_metadata
+
+            result.metadata["repair"] = repair_metadata(
+                baseline, result, result.metadata.get("repair_optimality", "heuristic")
+            )
+        from duty_schedule.quality_history import quality_report
+
+        result.metadata["quality"] = quality_report(result)
+        return result
     finally:
         if owns_context:
             structlog.contextvars.unbind_contextvars("operation_id")
@@ -115,230 +153,129 @@ def generate_schedule(
 
 def _generate_schedule_impl(
     config: Config,
-    holidays: set[date],
+    holidays: set[date] | None = None,
+    baseline: Schedule | None = None,
 ) -> Schedule:
-    if config.solver == "cpsat":
+    from duty_schedule.calendar import calendar_for_config
+    from duty_schedule.scheduler.greedy import build_candidate
+    from duty_schedule.scheduler.validation import validate_schedule_result
+    from duty_schedule.workload import assignment_hours
+
+    calendar = calendar_for_config(config, holidays)
+    working_config = config.model_copy(deep=True, update={"production_calendar": calendar})
+    logger.info(
+        "schedule_generation_start",
+        year=config.year,
+        month=config.month,
+        employees=len(config.employees),
+        solver=config.solver,
+    )
+    logger.debug(
+        "scheduler_config", seed=config.seed, max_backtrack_attempts=MAX_BACKTRACK_ATTEMPTS
+    )
+    started = time.monotonic()
+    candidates: list[Schedule] = []
+    context_codes = {
+        "calendar_unverified",
+        "history_missing",
+        "history_stale",
+        "history_unverified",
+        "history_invalid",
+        "history_duplicate",
+    }
+
+    def acceptable(schedule: Schedule, pending: bool = False) -> bool:
+        allowed = context_codes | ({"approval_required"} if pending else set())
+        return all(item.code in allowed for item in schedule.diagnostics)
+
+    def rank(schedule: Schedule) -> tuple[int, int, int]:
+        errors = sum(
+            item.code not in context_codes | {"monthly_hours", "approval_required"}
+            for item in schedule.diagnostics
+        )
+        deficit = sum(
+            abs(
+                sum(assignment_hours(day, name, calendar) for day in schedule.days)
+                - target.selected_hours
+            )
+            for name, target in schedule.monthly_targets.items()
+        )
+        pending = sum(item.code == "approval_required" for item in schedule.diagnostics)
+        return errors, deficit, pending
+
+    if config.solver == "cpsat" or baseline is not None:
         from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
 
         try:
-            return solve_schedule(config, holidays)
+            result = solve_schedule(working_config, baseline=baseline)
+            candidates.append(result)
+            if not acceptable(result) and result.search_status == "infeasible":
+                pending = solve_schedule(working_config, allow_pending=True, baseline=baseline)
+                candidates.append(pending)
+                if acceptable(pending, pending=True):
+                    result = pending
         except SolverUnavailableError:
             logger.warning("cpsat_unavailable_greedy_fallback")
-
-    from duty_schedule.calendar import get_all_days
-    from duty_schedule.scheduler.changelog import ChangeLog
-    from duty_schedule.scheduler.constraints import (
-        _calc_blocked_working_days,
-        _calc_production_days,
-        _is_working_on_day,
-    )
-    from duty_schedule.scheduler.greedy import _build_day
-
-    rng = random.Random(config.seed)
-    all_days = get_all_days(config.year, config.month)
-    employees = config.employees
-
-    pins_by_date: dict[date, dict[str, ShiftType]] = {}
-    for pin in config.pins:
-        pins_by_date.setdefault(pin.date, {})[pin.employee_name] = pin.shift
-    pinned_on: set[tuple[date, str]] = {(p.date, p.employee_name) for p in config.pins}
-
-    production_days = _calc_production_days(config.year, config.month, holidays)
-    logger.info(
-        "schedule_generation_start",
-        month=config.month,
-        year=config.year,
-        employees=len(employees),
-        solver=config.solver,
-        production_days=production_days,
-    )
-    logger.debug(
-        "scheduler_config",
-        seed=config.seed,
-        max_backtrack_attempts=MAX_BACKTRACK_ATTEMPTS,
-        max_backtrack_days=MAX_BACKTRACK_DAYS,
-    )
-
-    states: dict[str, EmployeeState] = {}
-    for emp in employees:
-        vac_days = _calc_blocked_working_days(emp, config.year, config.month)
-        target = production_days
-        states[emp.name] = EmployeeState(
-            target_working_days=target,
-            vacation_days=vac_days,
-        )
-
-    carry_over_by_name = {c.employee_name: c for c in config.carry_over}
-    for emp in employees:
-        if emp.name in carry_over_by_name:
-            co = carry_over_by_name[emp.name]
-            if co.last_shift is not None:
-                states[emp.name].last_shift = co.last_shift
-            states[emp.name].consecutive_working = co.consecutive_working
-            states[emp.name].consecutive_off = co.consecutive_off
-            if co.consecutive_same_shift > 0 and co.last_shift is not None:
-                if co.last_shift == ShiftType.MORNING:
-                    states[emp.name].consecutive_morning = co.consecutive_same_shift
-                elif co.last_shift == ShiftType.EVENING:
-                    states[emp.name].consecutive_evening = co.consecutive_same_shift
-                elif co.last_shift == ShiftType.WORKDAY:
-                    states[emp.name].consecutive_workday = co.consecutive_same_shift
-
-    initial_cw: dict[str, int] = {
-        emp.name: states[emp.name].consecutive_working for emp in employees
-    }
-    initial_last_shift: dict[str, ShiftType] = {
-        emp.name: ls for emp in employees if (ls := states[emp.name].last_shift) is not None
-    }
-
-    days: list[DaySchedule] = []
-    backtrack_stack: list[tuple[date, dict[str, EmployeeState]]] = []
-
-    day_idx = 0
-    total_backtracks = 0
-
-    t_greedy = time.monotonic()
-    while day_idx < len(all_days):
-        day = all_days[day_idx]
-        saved_states = copy.deepcopy(states)
-        remaining_days = len(all_days) - day_idx
-
-        try:
-            _next_day = day + timedelta(days=1)
-            ds = _build_day(
-                day,
-                employees,
-                states,
-                holidays,
-                rng,
-                remaining_days,
-                pins_today=pins_by_date.get(day),
-                pins_tomorrow=pins_by_date.get(_next_day),
+            result = None
+        if result is not None:
+            logger.info(
+                "schedule_generated", status=result.status, days=len(result.days), solver="cpsat"
             )
-            days.append(ds)
-            backtrack_stack.append((day, saved_states))
-            day_idx += 1
+            return result
 
-        except ScheduleError as exc:
-            logger.warning(
-                "shift_assignment_backtrack",
-                day=str(day),
-                reason=str(exc),
-                backtrack_number=total_backtracks + 1,
-                steps_back=min(MAX_BACKTRACK_DAYS, len(backtrack_stack)),
+    best: Schedule | None = None
+    for allow_pending in (False, True):
+        for attempt in range(4):
+            days, successful = build_candidate(
+                working_config,
+                calendar,
+                config.seed + attempt * 1009,
+                allow_pending,
+                baseline,
             )
-            total_backtracks += 1
-
-            if total_backtracks > MAX_BACKTRACK_ATTEMPTS or len(backtrack_stack) < 1:
-                logger.error(
-                    "schedule_build_failed",
-                    total_backtracks=total_backtracks,
-                    last_day=str(day),
+            candidate = validate_schedule_result(
+                Schedule(
+                    config=working_config,
+                    days=days,
+                    search_status="candidate" if successful else "heuristic_exhausted",
+                    metadata={"solver": "greedy", "attempts": attempt + 1},
                 )
-                raise ScheduleError(
-                    f"Расписание не может быть построено: {exc}\n"
-                    f"Откатов всего: {total_backtracks}. Проверьте параметры сотрудников."
-                ) from exc
+            )
+            candidates.append(candidate)
+            best = min(candidates, key=rank)
+            if successful and acceptable(candidate, pending=allow_pending):
+                candidate.search_status = (
+                    "pending_approval"
+                    if any(item.code == "approval_required" for item in candidate.diagnostics)
+                    else "heuristic_solution"
+                )
+                best = candidate
+                break
+        if best is not None and acceptable(best, pending=allow_pending):
+            break
+        if not allow_pending:
+            from duty_schedule.scheduler.solver import SolverUnavailableError, solve_schedule
 
-            steps_back = min(MAX_BACKTRACK_DAYS, len(backtrack_stack))
-            for _ in range(steps_back):
-                if backtrack_stack:
-                    _, states = backtrack_stack.pop()
-                    days.pop()
-                    day_idx -= 1
+            try:
+                repaired = solve_schedule(working_config, timeout=3, allow_pending=False)
+                repaired.metadata["solver"] = "greedy"
+                repaired.metadata["repair_solver"] = "cpsat"
+                candidates.append(repaired)
+                if acceptable(repaired):
+                    best = repaired
+                    break
+            except SolverUnavailableError:
+                pass
+    if best is None:
+        best = min(candidates, key=rank)
+    if acceptable(best):
+        from duty_schedule.scheduler.postprocess.quality import optimize_candidate
 
-            rng = random.Random(config.seed + total_backtracks * 1000 + day_idx)
-
+        best = optimize_candidate(best, baseline=baseline)
     logger.info(
         "greedy_phase_done",
-        duration_ms=round((time.monotonic() - t_greedy) * 1000, 1),
-        backtracks=total_backtracks,
+        duration_ms=round((time.monotonic() - started) * 1000, 1),
+        attempts=len(candidates),
     )
-
-    changelog = ChangeLog()
-
-    from duty_schedule.scheduler.postprocess.pipeline import (
-        PipelineContext,
-        build_default_pipeline,
-    )
-
-    ctx = PipelineContext(
-        days=days,
-        employees=employees,
-        holidays=holidays,
-        pinned_on=pinned_on,
-        carry_over_cw=initial_cw,
-        carry_over_last_shift=initial_last_shift,
-        states=states,
-        changelog=changelog,
-    )
-
-    duty_count = sum(1 for e in employees if e.on_duty)
-    pipeline = build_default_pipeline(config.optimization_priority, small_team=(duty_count <= 4))
-
-    t_postprocess = time.monotonic()
-    days = pipeline.run(ctx)
-    logger.info(
-        "postprocess_phase_done",
-        duration_ms=round((time.monotonic() - t_postprocess) * 1000, 1),
-        stages=len(pipeline.stages),
-    )
-
-    for emp in employees:
-        states[emp.name].total_working = sum(1 for d in days if _is_working_on_day(emp.name, d))
-
-    from duty_schedule.scheduler.postprocess.validation import validate_schedule_or_raise
-
-    soft_violations = validate_schedule_or_raise(
-        days, employees, holidays, pins=config.pins, carry_over_cw=initial_cw
-    )
-    for v in soft_violations:
-        logger.warning(
-            "schedule_soft_violation",
-            employee=v.employee,
-            date=str(v.date),
-            constraint=v.constraint,
-            detail=v.detail,
-        )
-
-    duty_employees = [e for e in employees if e.on_duty]
-    ev_counts = {e.name: sum(1 for d in days if e.name in d.evening) for e in duty_employees}
-    if ev_counts:
-        max_ev, min_ev = max(ev_counts.values()), min(ev_counts.values())
-        logger.info("evening_shift_balance", max=max_ev, min=min_ev, diff=max_ev - min_ev)
-
-    total_nights = sum(len(d.night) for d in days)
-    total_mornings = sum(len(d.morning) for d in days)
-    total_evenings = sum(len(d.evening) for d in days)
-
-    working_days_report: dict[str, int] = {
-        emp.name: states[emp.name].total_working for emp in employees
-    }
-    logger.info(
-        "schedule_generated",
-        days=len(days),
-        nights=total_nights,
-        mornings=total_mornings,
-        evenings=total_evenings,
-        production_days=production_days,
-        working_days_per_employee=working_days_report,
-    )
-
-    from duty_schedule.scheduler.postprocess.carry_over_calc import compute_carry_over
-
-    final_carry_over = compute_carry_over(days, employees)
-
-    return Schedule(
-        config=config,
-        days=days,
-        metadata={
-            "total_nights": total_nights,
-            "total_mornings": total_mornings,
-            "total_evenings": total_evenings,
-            "holidays_count": len(holidays),
-            "production_working_days": production_days,
-            "working_days_per_employee": working_days_report,
-            "carry_over": final_carry_over,
-            "changelog": changelog,
-        },
-    )
+    logger.info("schedule_generated", status=best.status, days=len(best.days), solver="greedy")
+    return validate_schedule_result(best)

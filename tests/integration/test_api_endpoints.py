@@ -16,6 +16,7 @@ from duty_schedule.models import (
     ScheduleType,
 )
 from duty_schedule.scheduler import generate_schedule
+from tests.contract.conftest import config_payload, production_calendar
 
 JSON_HEADERS = {"Content-Type": "application/json"}
 
@@ -29,19 +30,13 @@ def _emp(
 
 
 def _make_config(month: int = 3, year: int = 2025) -> Config:
-    return Config(
+    data = config_payload()
+    data.update(
         month=month,
         year=year,
-        seed=42,
-        employees=[
-            _emp("Иванов Иван"),
-            _emp("Петров Пётр"),
-            _emp("Сидоров Сидор"),
-            _emp("Козлов Коля"),
-            _emp("Дальнев Дмитрий", City.KHABAROVSK),
-            _emp("Востоков Виктор", City.KHABAROVSK),
-        ],
+        production_calendar=production_calendar(year, month).model_dump(mode="json"),
     )
+    return Config.model_validate(data)
 
 
 SAMPLE_HOLIDAYS: set[date] = {date(2025, 3, 8), date(2025, 3, 10)}
@@ -64,8 +59,8 @@ async def client(app):
 
 def _patch_fetch():
     return patch(
-        "duty_schedule.api.routes.schedule.fetch_holidays",
-        return_value=(SAMPLE_HOLIDAYS, SAMPLE_SHORT_DAYS),
+        "duty_schedule.api.planning.fetch_production_calendar",
+        return_value=production_calendar(),
     )
 
 
@@ -78,8 +73,8 @@ def _patch_fetch_holidays():
 
 def _patch_export_fetch():
     return patch(
-        "duty_schedule.api.routes.export.fetch_holidays",
-        return_value=(SAMPLE_HOLIDAYS, SAMPLE_SHORT_DAYS),
+        "duty_schedule.api.planning.fetch_production_calendar",
+        return_value=production_calendar(),
     )
 
 
