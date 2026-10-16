@@ -395,15 +395,23 @@
       "path": "scripts/benchmark_baseline.py",
       "role": "tooling",
       "symbols": [
+        "_baseline_file",
         "find_baseline",
-        "main"
+        "main",
+        "remeasure_baseline"
       ],
       "imports": [
         "__future__",
         "argparse",
+        "collections.abc",
         "json",
         "math",
-        "pathlib"
+        "os",
+        "pathlib",
+        "re",
+        "subprocess",
+        "sys",
+        "tempfile"
       ]
     },
     {
@@ -4093,12 +4101,23 @@
       "path": "tests/unit/test_delivery_workflows.py",
       "role": "tests",
       "symbols": [
+        "_benchmark_record",
         "_distribution",
+        "test_benchmark_remeasurement_bootstrap_needs_no_checkout",
+        "test_benchmark_remeasurement_bootstrap_needs_no_checkout.run",
+        "test_benchmark_remeasurement_fails_closed",
+        "test_benchmark_remeasurement_fails_closed.run",
+        "test_benchmark_remeasurement_requires_fresh_matching_result",
+        "test_benchmark_remeasurement_requires_fresh_matching_result.run",
+        "test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime",
+        "test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime.run",
+        "test_benchmark_workflows_remeasure_previous_sha",
         "test_macos_native_pdf_precedes_full_regression",
         "test_main_release_compares_previous_success_and_promotes_after_all_gates",
         "test_packaged_smoke_payload_generates_ready",
         "test_packaged_smoke_payload_matches_public_model",
         "test_previous_sha_benchmark_is_selected_without_exact_cache_hit",
+        "test_previous_sha_benchmark_rejects_invalid_records",
         "test_release_graph_requires_all_verified_artifact_gates",
         "test_release_graph_requires_all_verified_artifact_gates.dependencies",
         "test_release_rejects_existing_tag_for_other_sha",
@@ -4119,11 +4138,15 @@
         "json",
         "pathlib",
         "pytest",
+        "scripts",
         "scripts.artifact_manifest",
         "scripts.artifact_smoke",
         "scripts.benchmark_baseline",
         "scripts.check_junit",
+        "subprocess",
+        "sys",
         "tarfile",
+        "typing",
         "yaml",
         "zipfile"
       ]
@@ -6447,7 +6470,7 @@
     {
       "path": "specs/011-delivery-assurance",
       "kind": "change",
-      "status": "in-progress",
+      "status": "complete",
       "requirements": [
         {
           "id": "DEL-001",
@@ -6473,7 +6496,13 @@
           "tests": [
             "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_is_selected_without_exact_cache_hit",
             "tests/unit/test_delivery_workflows.py::test_main_release_compares_previous_success_and_promotes_after_all_gates",
-            "tests/performance/test_scheduler_benchmark.py"
+            "tests/performance/test_scheduler_benchmark.py",
+            "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_uses_previous_sha_and_isolated_runtime",
+            "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_fails_closed",
+            "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_requires_fresh_matching_result",
+            "tests/unit/test_delivery_workflows.py::test_benchmark_remeasurement_bootstrap_needs_no_checkout",
+            "tests/unit/test_delivery_workflows.py::test_benchmark_workflows_remeasure_previous_sha",
+            "tests/unit/test_delivery_workflows.py::test_previous_sha_benchmark_rejects_invalid_records"
           ]
         },
         {

@@ -21,4 +21,11 @@ T001 -> T002 -> T003 -> T004 -> T005. Независимые тесты можн
 - [x] T006 Зафиксировать failure и planned критерии/traceability до CI изменений.
 - [x] T007 Regression wiring test и native runtime preparation/smoke перед pytest.
 - [x] T008 Native smoke/AppTest, общие gates и независимое review.
-- [ ] T009 Обновить evidence/index и закрыть после зелёного macOS CI обоихPython.
+- [x] T009 Обновить evidence/index и закрыть после зелёного macOS CI обоихPython.
+
+## Сопоставимость benchmark — 2026-10-16
+
+- [x] T010 Проверить повторный failure и уточнить DEL-003, plan/traceability/analysis до кода.
+- [x] T011 Regression tests: prior SHA, fresh report, isolated runtime, cleanup, fail closed, оба workflow.
+- [x] T012 Opt-in remeasurement helper и full-history wiring обоих performance jobs.
+- [x] T013 Реальный replay + compare, общие локальные gates, независимое ревью и evidence.

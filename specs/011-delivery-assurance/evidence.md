@@ -187,3 +187,113 @@ origin`: dev=d2871e0, test=d926d72, main=d713dc6. PR68 открыт; исход�
 Ruff check/format (187 файлов), mypy (71 файл), SDD `--base HEAD`, индекс и
 `git diff --check` прошли. Платформенный критерий T009 остаётся открытым до
 успешного исполнения исправленного macOS CI с обеими версиями Python.
+
+## 2026-10-16 — доставка исправления и проверка платформ
+
+Коммит e417946 отправлен в dev после staged/committed SDD gates. CI Dev
+38920495692, CI Test PR69 38920527763 и оба SDD gates завершились успешно.
+PR69 смержен через GitHub в test: 4445e50. Деревья e417946 и 4445e50 совпадают
+(7fbb5e7a84cafc52d5b5ffa2de825a678ed14a6c). PR68 обновлён до этого test SHA.
+
+CI Main 38921862578: настоящий PDF smoke обоих macOS Python 3.12/3.13 прошёл;
+полная регрессия на момент записи ещё выполняется. T009 пока открыт.
+
+Отдельный CI Test push 38921853888: job117043498836 Performance Benchmarks
+завершился failure. Standard-team mean 95.0511 ms против 86.3358 ms в сохранённой
+базе d926d72: 10.094575652% при пороге 10%. Лог предупреждает о разных CPU:
+текущий AMD EPYC 7763, база Intel Xeon Platinum 8370C. Между d926d72 и e417946
+нет diff в scheduler, tests/performance, benchmark_baseline.py и ci-test.yml;
+PR69 benchmark и текущий Main benchmark прошли. Это основание для одного
+повторного исполнения исходного job после завершения run; пороги и базу не
+меняем. Попытка rerun ещё выполняющегося workflow отклонена GitHub.
+
+## 2026-10-16 — безопасная остановка по просьбе пользователя
+
+Поручение: приостановить работу для перезагрузки ПК. Продвижение в main
+приостановлено; PR68 остаётся открытым, автоматическое слияние не включено.
+
+Подтверждено до остановки:
+
+- CI Main 38921862578 на test SHA4445e50: все шесть OS/Python jobs успешны.
+- macOS/Python3.12 job117043529106 и macOS/Python3.13 job117043529524:
+  настоящий PDF smoke и вся регрессия успешны, покрытие 88.28% в обоих заданиях.
+- UI Tests: 36 браузерных тестов успешны; security, solver, system, lint и
+  release benchmark успешны. Build and Installed Artifact job117047555392 успешен.
+- Container API and UI Journeys job117047807785 ещё выполняется.
+- CI Test push38921853888 завершил все платформенные проверки; после завершения
+  run запущен `gh run rerun 38921853888 --failed`. Повторный benchmark
+  job117047852276 ещё выполняется; исходный failure сохранён выше.
+- main остаётся d713dc6; PR69 смержен в test, PR68 пока не смержен.
+
+Checkpoint сохраняет синхронизацию origin/test в dev и эти результаты. T009 и
+статус in-progress оставлены открытыми до окончательной записи evidence/index.
+При возобновлении: fetch origin, проверить актуальные PR/run SHA и результаты
+обоих run; при зелёном CI закрыть T009/контракт, обновить индекс, доставить
+документы через dev→test, дождаться CI актуального PR68 SHA и слить в main.
+После main проверить его собственный CI, тег и релиз5.0.0. Запущенные GitHub
+проверки продолжат работу независимо от локальной перезагрузки.
+
+## 2026-10-16 — возобновление и сопоставимые benchmark
+
+После поручения «продолжай» live-проверка подтвердила: Main run38921862578 на
+4445e50 полностью success, включая installed wheel и Container API and UI Journeys.
+Test run38921853888 attempt2 снова failed на исходном mean:10%: standard
+96.0154 vs86.3358 ms (+11.2115%), large141.8143 vs128.5737 ms (+10.2980%).
+Оба повторных запуска использовали AMD вместо Intel сохранённой базы. Исторические
+неуспехи сохранены; дальнейших повторов ради зелёного статуса не запускали.
+
+До исходников уточнены DEL-003, plan/tasks/traceability/analysis. 11 новых
+регрессий сначала RED; после реализации и cleanup-исправления все 26 delivery
+тестов GREEN. Старый режим helper сохраняется, CI opt-in `--remeasure` исполняет
+выбранный успешный prior SHA в отдельном frozen окружении на текущем runner.
+Нужен ровно один свежий валидный отчёт того же SHA; ошибки не дают fallback.
+Оба performance jobs сохраняют mean:10% и прежний граф promotion.
+
+Реальный артефакт `benchmark-candidate` скачан из успешного run38385328594
+(d926d72). Replay выполнен Python3.12.12 через:
+
+```bash
+uv run python scripts/benchmark_baseline.py /tmp/duty-benchmark-quiet-20261016 --current-sha 5f2ff917e870a3b790952fb9469bfd2ff928a360 --remeasure
+uv run pytest tests/performance -q --benchmark-only --benchmark-storage /tmp/duty-benchmark-quiet-20261016 --benchmark-compare 0001_same_runner --benchmark-compare-fail=mean:10% --benchmark-save=verified_current --benchmark-min-rounds=2 --benchmark-max-time=15
+```
+
+Оба процесса exit0; текущая версия сравнивалась с новым отчётом prior SHA.
+Mean (prior→current, ms): minimal39.3067→38.9763, standard43.2551→44.0360,
+large64.5974→64.3994. Все различия <2%. Текущий scheduler, benchmark cases,
+conftest и lock совпадают с d926d72; изменены только CI/helper/SDD/regressions.
+`git worktree list` после replay содержит только исходный checkout.
+
+Перед этим первый интерактивный локальный compare завершился failure:
+minimal+21.8815%, standard+17.5460%; max923.8 ms при median39.0 ms. Это не PASS.
+Пара повторена без параллельных проверок на той же машине; указанные выше
+успешные результаты записаны отдельно, исходный failure не переопределяется.
+
+Независимый CI/general review: APPROVE. Python review нашёл MEDIUM cleanup edge:
+ошибка post-checkout hook могла оставить регистрацию worktree. Создание перенесено
+в try/finally, добавлен git_partial regression. Reviewer повторил реальный Git
+контрпример: ошибка распространяется, остаётся только исходный worktree. Итоговое
+Python review: APPROVE, нерешённых замечаний нет.
+
+Ruff/check/format (187 файлов), mypy (71 файл), SDD `--base HEAD`, индекс и diff
+checks прошли. Полный non-UI прогон запущен; результат будет добавлен перед commit.
+Поставку проверяем отдельно по CI актуального SHA перед каждым слиянием.
+
+## 2026-10-16 — завершение проверки реализации DEL-001..004
+
+Полный `uv run pytest tests/ -q --ignore=tests/ui --cov=duty_schedule
+--cov-report=term --cov-fail-under=80` завершился с exit0: 888 collected/passed,
+coverage88.28%. Окружение `/tmp/duty-main-20261016`, native path
+`/opt/homebrew/lib`. Ruff/check/format, mypy, SDD, индекс и diff checks: PASS.
+T009 закрыт по реальному macOS CI обеих версий Python и обновлённому индексу;
+T013 закрыт по реальному replay/compare, полному прогону и двум APPROVE.
+
+| ID | Подтверждение текущего bounded изменения |
+|---|---|
+| DEL-001 | Native smoke и вся macOS регрессия Python3.12/3.13 run38921862578 успешны; все шесть OS/Python jobs успешны; локальные888 тестов, coverage88.28%. |
+| DEL-002 | Все36 UI тестов, installed wheel и container API/UI journeys run38921862578 успешны; приложение в текущем изменении не менялось. |
+| DEL-003 | RED→GREEN regressions, ошибка частичного checkout устранена и воспроизведена reviewer; реальный prior SHA replay и current compare mean:10% успешны. |
+| DEL-004 | SHA/version/checksum и release dependency graph tests выполнены в полном прогоне; release workflow и manifest не менялись. Тег/релиз пока не создавались. |
+
+Статус complete относится к проверенной реализации контракта. Продвижение
+текущего коммита в test/main и публикация остаются отдельными проверяемыми
+состояниями: CI нового SHA обязателен перед слиянием, фактическая доставка ещё идёт.

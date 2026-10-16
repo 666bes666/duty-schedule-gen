@@ -80,6 +80,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-python
         with:
           extra-groups: ci-perf
@@ -98,7 +100,7 @@ jobs:
         run: |
           duty_benchmark_args=(--benchmark-save=baseline --benchmark-min-rounds=2 --benchmark-max-time=15)
           if [ -n "$DUTY_MATCHED_KEY" ]; then
-            DUTY_PREVIOUS_BENCHMARK=$(uv run python scripts/benchmark_baseline.py .benchmarks --current-sha "$DUTY_CURRENT_SHA")
+            DUTY_PREVIOUS_BENCHMARK=$(uv run python scripts/benchmark_baseline.py .benchmarks --current-sha "$DUTY_CURRENT_SHA" --remeasure)
             if [ -n "$DUTY_PREVIOUS_BENCHMARK" ]; then
               duty_benchmark_args+=(--benchmark-compare="$DUTY_PREVIOUS_BENCHMARK" --benchmark-compare-fail=mean:10%)
             fi
