@@ -53,7 +53,27 @@ jobs:
           python-version: ${{ matrix.python }}
           extra-groups: ci-perf
           extras: solver
-      - run: uv run pytest tests/unit tests/integration tests/contract tests/e2e tests/system tests/performance -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
+      - name: Prepare and verify native PDF on macOS
+        id: macos_pdf
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install pango
+          duty_pdf_library_path="$(brew --prefix)/lib"
+          echo "DUTY_NATIVE_LIBRARY_PATH=$duty_pdf_library_path" >> "$GITHUB_ENV"
+          export DYLD_FALLBACK_LIBRARY_PATH="$duty_pdf_library_path"
+          uv run python - <<'PY'
+          from weasyprint import HTML
+          pdf = HTML(string="<p>Native PDF smoke</p>").write_pdf()
+          assert pdf.startswith(b"%PDF") and len(pdf) > 100
+          PY
+      - name: Run full regression
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            export DYLD_FALLBACK_LIBRARY_PATH="$DUTY_NATIVE_LIBRARY_PATH"
+          fi
+          uv run pytest tests/unit tests/integration tests/contract tests/e2e tests/system tests/performance -q --cov=duty_schedule --cov-report=xml --cov-fail-under=80
       - uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         with:

@@ -14,3 +14,11 @@ T001 -> T002 -> T003 -> T004 -> T005. Независимые тесты можн
 мутации одного файла координируются одним владельцем. Нет непроверенных завершённых
 задач. Модель/контракт предшествуют адаптерам, финальная проверка — экспорту.
 
+
+
+## macOS gate — 2026-10-13
+
+- [x] T006 Зафиксировать failure и planned критерии/traceability до CI изменений.
+- [x] T007 Regression wiring test и native runtime preparation/smoke перед pytest.
+- [x] T008 Native smoke/AppTest, общие gates и независимое review.
+- [ ] T009 Обновить evidence/index и закрыть после зелёного macOS CI обоихPython.

@@ -54,3 +54,16 @@ Runtime проверки и ограничения собраны в [общем
 Это уточнение области уже реализованных требований, не изменение смысла ID.
 Результаты исходной реализации сохраняются; новый scoped gate и полный повторный
 прогон отражены в evidence012.
+
+
+## 2026-10-13 — восстановление macOS gate при продвижении
+
+Сначала regression test проверяет, что macOS native preparation и PDF smoke
+предшествуют pytest. Затем test-all macOS устанавливает Pango через Homebrew,
+сохраняет абсолютный brew library path как DUTY_NATIVE_LIBRARY_PATH, применяет
+DYLD_FALLBACK_LIBRARY_PATH внутри выполняемого shell до uv/Python. Это избегает
+потери DYLD при запуске нового системного shell. Smoke генерирует настоящиеPDF bytes.
+Regression shell сохраняет исходные pytest аргументы/coverage для всей матрицы.
+Нативный renderer и AppTest не заменяются test double. Новых Python зависимостей нет.
+Проверки: targeted workflow test red→green; native smoke + failing AppTest local;
+Ruff/mypy/index/SDD, весьnon-UI, независимоеreview; актуальныйCI всехOS до promotion.

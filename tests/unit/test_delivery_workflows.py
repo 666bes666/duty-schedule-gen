@@ -224,3 +224,32 @@ def test_sdd_gate_covers_all_branches_index_and_staged_snapshot() -> None:
     hook = next(hook for repo in hooks["repos"] for hook in repo["hooks"] if hook["id"] == "sdd")
     assert hook["entry"] == "uv run python scripts/check_sdd.py --staged"
     assert hook["always_run"] and not hook["pass_filenames"]
+
+
+def test_macos_native_pdf_precedes_full_regression() -> None:
+    workflow = yaml.load(
+        (ROOT / ".github/workflows/ci-main.yml").read_text(), Loader=yaml.BaseLoader
+    )
+    steps = workflow["jobs"]["test-all"]["steps"]
+    native = next(step for step in steps if step.get("id") == "macos_pdf")
+    regression = next(step for step in steps if "uv run pytest" in step.get("run", ""))
+    assert steps.index(native) < steps.index(regression)
+    assert native["if"] == "runner.os == 'macOS'"
+    assert native["shell"] == regression["shell"] == "bash"
+    assert "brew install pango" in native["run"]
+    assert "$(brew --prefix)/lib" in native["run"]
+    assert "DUTY_NATIVE_LIBRARY_PATH" in native["run"]
+    assert "GITHUB_ENV" in native["run"]
+    assert "from weasyprint import HTML" in native["run"]
+    assert ".write_pdf()" in native["run"] and 'b"%PDF"' in native["run"]
+    assert '"$RUNNER_OS" = "macOS"' in regression["run"]
+    assert 'DYLD_FALLBACK_LIBRARY_PATH="$DUTY_NATIVE_LIBRARY_PATH"' in regression["run"]
+    assert regression["run"].index("DYLD_FALLBACK_LIBRARY_PATH") < regression["run"].index(
+        "uv run pytest"
+    )
+    assert "--cov-fail-under=80" in regression["run"]
+    assert set(workflow["jobs"]["test-all"]["strategy"]["matrix"]["os"]) == {
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest",
+    }
