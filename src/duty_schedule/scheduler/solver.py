@@ -292,8 +292,9 @@ def solve_schedule(
     ]
     if baseline is not None:
         layers.insert(1, sum(changes))
+    layer_time_limit = max(timeout / len(layers), 0.01)
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max(timeout / len(layers), 0.01)
+    solver.parameters.max_time_in_seconds = layer_time_limit
     solver.parameters.random_seed = config.seed
     solver.parameters.num_search_workers = 1
     best_days: list[DaySchedule] | None = None
@@ -302,10 +303,23 @@ def solve_schedule(
     objective_values: list[int] = []
     elapsed = 0.0
     repair_proven = False
+    first_solution_retry = False
     for layer_index, layer in enumerate(layers):
+        if first_solution_retry:
+            remaining = timeout - elapsed
+            if remaining <= 0.01:
+                break
+            solver.parameters.max_time_in_seconds = min(
+                layer_time_limit, remaining / (len(layers) - layer_index)
+            )
         model.minimize(layer)
         status = solver.solve(model)
         elapsed += solver.wall_time
+        if status == cp_model.UNKNOWN and best_days is None and timeout - elapsed > 0.01:
+            first_solution_retry = True
+            solver.parameters.max_time_in_seconds = timeout - elapsed
+            status = solver.solve(model)
+            elapsed += solver.wall_time
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             if best_days is None:
                 final_status = (
@@ -374,6 +388,7 @@ def solve_schedule(
                 "repair_optimality": "proven_minimum" if repair_proven else "bounded_search",
                 "objective_values": objective_values,
                 "duration_ms": round(elapsed * 1000, 1),
+                "first_solution_retry": first_solution_retry,
             },
         )
     )
