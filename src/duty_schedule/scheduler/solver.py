@@ -305,6 +305,13 @@ def solve_schedule(
     repair_proven = False
     first_solution_retry = False
     for layer_index, layer in enumerate(layers):
+        if first_solution_retry:
+            remaining = timeout - elapsed
+            if remaining <= 0.01:
+                break
+            solver.parameters.max_time_in_seconds = min(
+                layer_time_limit, remaining / (len(layers) - layer_index)
+            )
         model.minimize(layer)
         status = solver.solve(model)
         elapsed += solver.wall_time
@@ -313,7 +320,6 @@ def solve_schedule(
             solver.parameters.max_time_in_seconds = timeout - elapsed
             status = solver.solve(model)
             elapsed += solver.wall_time
-            solver.parameters.max_time_in_seconds = layer_time_limit
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             if best_days is None:
                 final_status = (

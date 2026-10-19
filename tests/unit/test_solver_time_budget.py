@@ -21,7 +21,9 @@ def _config() -> Config:
     return complete_config(Config(year=2026, month=4, seed=7, employees=employees))
 
 
-def _recording_solver(unknown_calls: set[int]) -> tuple[type, list[float]]:
+def _recording_solver(
+    unknown_calls: set[int], consume_full_limit: bool = False
+) -> tuple[type, list[float]]:
     real_solver_class = cp_model.CpSolver
     limits: list[float] = []
 
@@ -41,7 +43,9 @@ def _recording_solver(unknown_calls: set[int]) -> tuple[type, list[float]]:
 
         @property
         def wall_time(self) -> float:
-            return limits[-1] if self._simulated else self._real.wall_time
+            if self._simulated or consume_full_limit:
+                return limits[-1]
+            return self._real.wall_time
 
         @property
         def objective_value(self) -> float:
@@ -66,9 +70,24 @@ def test_first_layer_timeout_retries_with_remaining_budget(
     slice_limit = limits[0]
     assert slice_limit < 6
     assert limits[1] == pytest.approx(6 - slice_limit)
-    assert all(limit == pytest.approx(slice_limit) for limit in limits[2:])
+    assert all(limit <= slice_limit + 1e-9 for limit in limits[2:])
     assert schedule.metadata["first_solution_retry"] is True
     assert schedule.search_status in {"optimal", "feasible"}
+    assert schedule.status == "ready"
+
+
+def test_retry_keeps_total_time_within_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    from duty_schedule.scheduler import solver as solver_module
+
+    recording, limits = _recording_solver({0}, consume_full_limit=True)
+    monkeypatch.setattr(solver_module.cp_model, "CpSolver", recording)
+
+    schedule = solver_module.solve_schedule(_config(), timeout=6)
+
+    assert len(limits) == 2
+    assert sum(limits) == pytest.approx(6)
+    assert schedule.metadata["duration_ms"] <= 6000
+    assert schedule.metadata["first_solution_retry"] is True
     assert schedule.status == "ready"
 
 
