@@ -981,6 +981,30 @@
       "role": "sdd_contract"
     },
     {
+      "path": "specs/021-solver-time-budget/analysis.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/021-solver-time-budget/evidence.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/021-solver-time-budget/plan.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/021-solver-time-budget/spec.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/021-solver-time-budget/tasks.md",
+      "role": "sdd_contract"
+    },
+    {
+      "path": "specs/021-solver-time-budget/traceability.json",
+      "role": "sdd_contract"
+    },
+    {
       "path": "src/duty_schedule/__init__.py",
       "role": "domain",
       "symbols": [],
@@ -4973,6 +4997,33 @@
       ]
     },
     {
+      "path": "tests/unit/test_solver_time_budget.py",
+      "role": "tests",
+      "symbols": [
+        "_config",
+        "_recording_solver",
+        "_recording_solver.RecordingSolver",
+        "_recording_solver.RecordingSolver.__init__",
+        "_recording_solver.RecordingSolver.objective_value",
+        "_recording_solver.RecordingSolver.solve",
+        "_recording_solver.RecordingSolver.value",
+        "_recording_solver.RecordingSolver.wall_time",
+        "test_budget_exhausted_by_first_layer_keeps_timeout_status",
+        "test_first_layer_timeout_retries_with_remaining_budget",
+        "test_found_first_solution_keeps_layer_slices",
+        "test_later_layer_timeout_does_not_retry",
+        "test_retry_keeps_total_time_within_budget"
+      ],
+      "imports": [
+        "__future__",
+        "duty_schedule.models",
+        "duty_schedule.scheduler",
+        "pytest",
+        "tests.conftest",
+        "typing"
+      ]
+    },
+    {
       "path": "tests/unit/test_stats.py",
       "role": "tests",
       "symbols": [
@@ -7246,6 +7297,42 @@
         "src/duty_schedule/ui/autosave.py",
         "tests/ui/test_schedule_generation.py",
         "src/duty_schedule/ui/autosave_component/index.html"
+      ]
+    },
+    {
+      "path": "specs/021-solver-time-budget",
+      "kind": "change",
+      "status": "complete",
+      "requirements": [
+        {
+          "id": "BUDGET-001",
+          "tests": [
+            "tests/unit/test_solver_time_budget.py::test_first_layer_timeout_retries_with_remaining_budget",
+            "tests/unit/test_solver_time_budget.py::test_budget_exhausted_by_first_layer_keeps_timeout_status",
+            "tests/unit/test_solver_time_budget.py::test_retry_keeps_total_time_within_budget"
+          ]
+        },
+        {
+          "id": "BUDGET-002",
+          "tests": [
+            "tests/unit/test_solver_time_budget.py::test_found_first_solution_keeps_layer_slices",
+            "tests/unit/test_solver_time_budget.py::test_later_layer_timeout_does_not_retry"
+          ]
+        },
+        {
+          "id": "BUDGET-003",
+          "tests": [
+            "tests/unit/test_solver_time_budget.py::test_first_layer_timeout_retries_with_remaining_budget",
+            "tests/unit/test_solver_time_budget.py::test_found_first_solution_keeps_layer_slices"
+          ]
+        }
+      ],
+      "files": [
+        "src/duty_schedule/scheduler/solver.py",
+        "tests/unit/test_solver_time_budget.py",
+        "docs/project-index.md",
+        "docs/project-index.json",
+        "specs/021-solver-time-budget/analysis.md"
       ]
     }
   ],
